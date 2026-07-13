@@ -1,0 +1,47 @@
+NOTICE
+
+This application includes open source and third-party libraries:
+
+1. AndroidX Libraries (AppCompat, Activity, ConstraintLayout, DocumentFile) (https://developer.android.com/jetpack/androidx)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : The Android Open Source Project
+
+2. Material Components for Android (https://github.com/material-components/material-components-android)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : Google LLC
+
+3. OkHttp (https://github.com/square/okhttp)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : Square, Inc.
+
+4. Gson (https://github.com/google/gson)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : Google LLC
+
+5. SLF4J (https://www.slf4j.org/)
+   Licensed under the MIT License.
+   Copyright © : QOS.ch
+
+6. Logback (https://logback.qos.ch/)
+   Licensed under the Eclipse Public License 1.0.
+   Copyright © : QOS.ch
+
+7. SQLite JDBC (https://github.com/xerial/sqlite-jdbc)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : Taro L. Saito
+
+8. HikariCP (https://github.com/brettwooldridge/HikariCP)
+   Licensed under the Apache License, Version 2.0.
+   Copyright © : Brett Wooldridge
+
+9. Glide (https://github.com/bumptech/glide)
+   Licensed under the BSD License.
+   Copyright © : Google LLC, Bumptech Inc.
+
+10. Espresso & Android Test Extensions (https://developer.android.com/training/testing/espresso)
+    Licensed under the Apache License, Version 2.0.
+    Copyright © : The Android Open Source Project
+
+11. JUnit 4 (https://github.com/junit-team/junit4)
+    Licensed under the Eclipse Public License 1.0.
+    Copyright © : JUnit Team

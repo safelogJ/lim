@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="72dp"
+    android:background="@color/main_background"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Круглая подложка для иконки или аватара -->
+    <View
+        android:id="@+id/avatarBackground"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:background="@drawable/fielder_background"
+        android:clickable="true"
+        android:contentDescription="@string/user_icon_desc"
+        android:focusable="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/chatIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:contentDescription="@string/chat_icon_desc"
+        android:src="@drawable/add_comment_48px"
+        app:layout_constraintBottom_toBottomOf="@id/avatarBackground"
+        app:layout_constraintEnd_toEndOf="@id/avatarBackground"
+        app:layout_constraintStart_toStartOf="@id/avatarBackground"
+        app:layout_constraintTop_toTopOf="@id/avatarBackground"
+        app:tint="@color/light_gray" />
+
+    <!-- Имя чата / "Начать новый чат" -->
+    <TextView
+        android:id="@+id/chatName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/start_new_chat"
+        android:textColor="@color/green_400"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/lastMessage"
+        app:layout_constraintEnd_toStartOf="@+id/timeText"
+        app:layout_constraintStart_toEndOf="@id/avatarBackground"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed" />
+
+    <!-- Последнее сообщение / Подсказка -->
+    <TextView
+        android:id="@+id/lastMessage"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:text="@string/find_user"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="@id/chatName"
+        app:layout_constraintStart_toStartOf="@id/chatName"
+        app:layout_constraintTop_toBottomOf="@id/chatName" />
+
+    <!-- Время (для обычных чатов) -->
+    <TextView
+        android:id="@+id/timeText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toBottomOf="@id/chatName"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/chatName"
+        tools:text="12:45" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

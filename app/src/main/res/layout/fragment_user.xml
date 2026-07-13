@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/inner_user"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/main_background"
+    tools:context=".MainActivity">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/innerFielder"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/transparent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+
+        <HorizontalScrollView
+            android:id="@+id/certTextScroll"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/fielder_background_tr"
+            android:fillViewport="true"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:scrollbars="none"
+            app:layout_constraintBottom_toBottomOf="@+id/addCertButton"
+            app:layout_constraintEnd_toStartOf="@+id/addCertButton"
+            app:layout_constraintStart_toStartOf="@+id/fielder"
+            app:layout_constraintTop_toTopOf="@+id/addCertButton">
+
+            <TextView
+                android:id="@+id/certTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical|end"
+                android:textColor="@color/light_gray"
+                android:textSize="20sp" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/addCertButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="32dp"
+            android:layout_marginEnd="32dp"
+            android:background="@drawable/btn_add_cert"
+            android:clickable="true"
+            android:contentDescription="@string/cert_btn_text"
+            android:focusable="true"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/fielder"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/fielder_background_tr"
+            android:contentDescription="@string/user_fields"
+            android:padding="8dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/addCertButton">
+
+            <LinearLayout
+                android:id="@+id/secureLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:filterTouchesWhenObscured="true"
+                android:importantForAccessibility="noHideDescendants"
+                android:orientation="vertical">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/addressInputLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="@string/server_ip"
+                    android:textColorHint="@color/light_gray"
+                    app:boxStrokeColor="@color/text_input_stroke_color"
+                    app:boxStrokeErrorColor="@color/pink120"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/light_gray"
+                    app:errorEnabled="true"
+                    app:errorIconDrawable="@null"
+                    app:errorIconTint="@null"
+                    app:errorTextColor="@color/pink120"
+                    app:helperText="@string/server_ip_help"
+                    app:helperTextTextColor="@color/green_200"
+                    app:hintTextColor="@color/text_input_hint_color"
+                    app:passwordToggleTint="@color/light_gray">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/addressEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/light_gray" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/loginInputLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="@string/login"
+                    android:textColorHint="@color/light_gray"
+                    app:boxStrokeColor="@color/text_input_stroke_color"
+                    app:boxStrokeErrorColor="@color/pink120"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/light_gray"
+                    app:errorEnabled="true"
+                    app:errorIconDrawable="@null"
+                    app:errorIconTint="@null"
+                    app:errorTextColor="@color/pink120"
+                    app:helperText="@string/login_help"
+                    app:helperTextTextColor="@color/green_200"
+                    app:hintTextColor="@color/text_input_hint_color"
+                    app:passwordToggleTint="@color/light_gray">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/loginEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/light_gray" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/passwordInputLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="@string/password"
+                    android:textColorHint="@color/light_gray"
+                    app:boxStrokeColor="@color/text_input_stroke_color"
+                    app:boxStrokeErrorColor="@color/pink120"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/light_gray"
+                    app:errorEnabled="true"
+                    app:errorIconDrawable="@null"
+                    app:errorIconTint="@null"
+                    app:errorTextColor="@color/pink120"
+                    app:helperText="@string/password_help"
+                    app:helperTextTextColor="@color/green_200"
+                    app:hintTextColor="@color/text_input_hint_color"
+                    app:passwordToggleTint="@color/light_gray">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/passwordEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/light_gray" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/displayNameInputLayout"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="@string/display_name"
+                    android:textColorHint="@color/light_gray"
+                    app:boxStrokeColor="@color/text_input_stroke_color"
+                    app:boxStrokeErrorColor="@color/pink120"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/light_gray"
+                    app:errorEnabled="true"
+                    app:errorIconDrawable="@null"
+                    app:errorIconTint="@null"
+                    app:errorTextColor="@color/pink120"
+                    app:helperText="@string/display_name_help"
+                    app:helperTextTextColor="@color/green_200"
+                    app:hintTextColor="@color/text_input_hint_color"
+                    app:passwordToggleTint="@color/light_gray">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/displayNameEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/light_gray" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/resultTextScroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/fielder_background_tr"
+        android:fillViewport="true"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toBottomOf="@+id/regBtn"
+        app:layout_constraintEnd_toStartOf="@+id/regBtn"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/regBtn">
+
+        <TextView
+            android:id="@+id/resultTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical|end"
+            android:textColor="@color/light_gray"
+            android:textSize="20sp" />
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/regBtn"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="32dp"
+        android:background="@drawable/btn_send_reg"
+        android:clickable="true"
+        android:contentDescription="@string/reg_btn_text"
+        android:focusable="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/innerFielder" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

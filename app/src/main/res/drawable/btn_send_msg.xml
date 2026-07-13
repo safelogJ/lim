@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- При нажатии -->
+    <item android:state_pressed="true">
+        <layer-list>
+            <!-- Фон (ваш shape) -->
+            <item>
+                <shape>
+                    <solid android:color="@color/main_background"/>
+                    <stroke android:width="3dp" android:color="@color/main_background_hard"/>
+                    <corners android:radius="4dp"/>
+                </shape>
+            </item>
+            <!-- Иконка (центрирована) -->
+            <item android:drawable="@drawable/send_48px"
+                android:gravity="center"/>
+        </layer-list>
+    </item>
+
+    <!-- Обычное состояние -->
+    <item>
+        <layer-list>
+            <!-- Фон -->
+            <item>
+                <shape>
+                    <solid android:color="@color/main_background"/>
+                    <stroke android:width="1dp" android:color="@color/main_background_hard"/>
+                    <corners android:radius="4dp"/>
+                </shape>
+            </item>
+            <!-- Иконка -->
+            <item android:drawable="@drawable/send_48px"
+                android:gravity="center"/>
+        </layer-list>
+    </item>
+</selector>

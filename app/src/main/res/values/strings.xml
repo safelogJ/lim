@@ -1,0 +1,49 @@
+<resources>
+    <string name="app_name">Lim</string>
+    <string name="cert_import_error">certificate import error</string>
+    <string name="date_cert_before_error">error: the device date is earlier than the certificate issue date</string>
+    <string name="date_cert_after_error">error: the certificate has expired</string>
+    <string name="public_key_cert_error">error: certificate public keys do not match</string>
+    <string name="sign_cert_error">error: certificate signature verification failed</string>
+    <string name="main_cert_error">error: certificate verification failed</string>
+
+    <string name="server_ip" translatable="false">192.168.10.10</string>
+    <string name="server_ip_help">server ip</string>
+    <string name="login" translatable="false">user</string>
+    <string name="login_help">login</string>
+    <string name="password" translatable="false">yv45IuniNiH6nInIniiOIn</string>
+    <string name="password_help">password</string>
+    <string name="display_name" translatable="false">^-^</string>
+    <string name="display_name_help">display name</string>
+    <string name="next_email" translatable="false">https://cloud.example.com/remote.php/dav/files/username/</string>
+    <string name="next_email_help">nextcloud login or folder link</string>
+    <string name="next_pass" translatable="false">nAg3o-5vR6W-282u4-gliml-P8RqY</string>
+    <string name="next_pass_help">application password in nextcloud</string>
+    <string name="reg_btn_text">register</string>
+    <string name="youtube_btn_text">youtube</string>
+    <string name="cert_btn_text">add certificate</string>
+    <string name="send_login">send login</string>
+    <string name="send_msg">send message</string>
+
+    <string name="login_error">invalid username format (3–20 chars, lowercase Latin and digits)</string>
+    <string name="pass_error">invalid password format (6–20 chars)</string>
+    <string name="ip_error">invalid ip format (only local)</string>
+    <string name="display_name_error">invalid display name format (3–20 chars)</string>
+    <string name="display_name_reserved">remove reserved</string>
+    <string name="reinstall">reinstall the app or remove account for a new login or new server.</string>
+    <string name="chat_icon_desc">chat icon</string>
+    <string name="user_icon_desc">user icon</string>
+    <string name="add_file_btn_text">add file</string>
+    <string name="remove_file_btn_text">remove file</string>
+    <string name="send_icon_desc">send icon</string>
+    <string name="user_fields">user fields</string>
+    <string name="start_new_chat">start new chat</string>
+    <string name="find_user">find user by login</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="yesterday">yesterday</string>
+    <string name="big_file_error">The file is too large (maximum 50MB)</string>
+    <string name="select_file_error">no file selected for sending</string>
+    <string name="image">image preview</string>
+
+
+</resources>

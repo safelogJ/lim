@@ -1,0 +1,77 @@
+# --- Android Studio & IntelliJ ---
+.idea/
+*.iml
+*.iws
+/out/
+
+# --- Build Files ---
+build/
+/build/
+*/build/
+app/build/
+limserver/build/
+bin/
+out/
+gen/
+
+# --- Server Specific (Важно!) ---
+# Не пускаем в Git базу данных и медиа-файлы с вашего локального сервера
+
+db/
+media/
+server.properties
+Rules
+AGENTS.md
+
+# --- Client Specific ---
+app/src/androidTest/
+app/src/test/
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+
+
+# Local and generated configurations
+local.properties
+*.log
+*.swp
+*~
+.externalNativeBuild
+.navigation/
+
+# Generated files
+*.apk
+*.aab
+*.dex
+*.class
+captures/
+
+# NDK and native builds
+.cxx
+obj/
+
+# Keystore files
+*.jks
+*.keystore
+*.pkcs12
+*.p12
+*.crt
+
+# Eclipse legacy files
+.classpath
+.project
+.settings/
+.mtj.tmp/
+
+# Logs and crash reports
+hs_err_pid*
+
+# Plugin-specific files
+crashlytics.properties
+fabric.properties
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar

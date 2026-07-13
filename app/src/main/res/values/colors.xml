@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="black2">#333333</color>
+    <color name="black3">#666666</color>
+    <color name="light_gray">#D6D6D6</color>
+    <color name="light_gray_fieldsender">#E6E6E6</color>
+    <color name="light_gray_aaa">#AAAAAA</color>
+    <color name="gray700">#616161</color>
+    <color name="gray400">#757575</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="redA400">#FFFF1744</color>
+    <color name="redA200">#FFFF5252</color>
+    <color name="pink120">#FFF8BBD0</color>
+    <color name="green_100">#B9F6CA</color>
+    <color name="green_200">#A5D6A7</color>
+    <color name="green_400">#66BB6A</color>
+    <color name="green_600">#43A047</color>
+    <color name="green_600t">#01BF0B</color>
+    <color name="green_a700">#00695C</color>
+    <color name="transparent">#00FFFFFF</color>
+    <color name="main_background">#01457A</color>
+    <color name="main_background_hard">#00335B</color>
+</resources>

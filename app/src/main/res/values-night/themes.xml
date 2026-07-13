@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Base.Theme.Lim" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/main_background</item>
+    </style>
+
+    <style name="Theme.Lim" parent="Base.Theme.Lim">
+
+    </style>
+
+    <!-- СТИЛЬ ДЛЯ СКРУГЛЕНИЯ КАРТИНОК В ЧАТЕ -->
+    <style name="RoundedImageView" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+</resources>
