@@ -1,0 +1,56 @@
+Privacy Policy for the Lim Application
+Last Updated: July 24, 2026
+
+This Privacy Policy describes the principles of operation of the Lim application (hereinafter referred to as the Application) and the LimServer server module, and informs you about how your data is processed.
+
+The main feature of the Application is complete autonomy. We do not use centralized cloud servers. All data exchange occurs within your local network.
+
+1. Interpretation and Definitions
+• Application: The "Lim" mobile software installed on your Device.
+• Server (LimServer): A software module installed by the user or administrator independently (for example, in a Docker container on Mikrotik CHR).
+• Developer: Private person Evgenii Chekmazov (Email: simlog-app@yandex.ru).
+• You: The person using the Application for communication.
+
+2. Collection and Use of Data
+The Application is designed so that the Developer has no technical ability to access your data.
+
+Types of Processed Data:
+• Authorization Data: Login, password, and your local server address. This data is entered by you independently to connect to your server.
+• Messages and Media Files: Text messages and files that you send to other users of your server.
+• Technical Information: SSL certificate settings (.p12) created by your administrator to ensure a secure HTTPS connection.
+
+3. Data Storage
+On the mobile Device (Client):
+• Credentials: Login, password, name, and server address are stored in a protected internal directory of the Application in an encrypted file.
+• Local Database: Message history is stored in the Application's internal memory.
+• Downloaded Files: Files received from other users are saved in folders chosen by you on the Device. The Application may store links (Uri) to files downloaded by the user to the device to ensure quick access to them.
+
+On the Server (LimServer):
+• The database and media files are stored on equipment controlled by your administrator (on a router/server).
+• File Security: Files are temporarily stored on the Server and are automatically deleted immediately after the recipient has successfully downloaded them.
+
+4. Security and Encryption
+We apply multi-layered data protection:
+• HTTPS: All data between the Device and the Server is transmitted over the encrypted HTTPS protocol using TLS certificates.
+• Certificate Import: The Application allows importing a server certificate file (.crt) for enhanced connection verification. In the absence of an imported certificate, the Application performs only a validity date check of the server certificate. Imported data is stored in an encrypted file on the Device.
+• Password Protection: The account password is hashed on the Application side before being sent and re-hashed on the Server side. Passwords are not stored in the database in plain text.
+• Message Encryption: Message text undergoes an end-to-end encryption (E2EE) procedure, which prevents anyone except the sender and recipient from reading them.
+
+5. Transfer of Data to Third Parties
+The Application does not transfer information to the Developer or any third-party companies. All data exchange occurs exclusively between your Device and your local Server.
+
+6. Responsibility
+Since the Server (LimServer) is installed and configured by the user or network administrator independently:
+• The Developer is not responsible for the security of the data on the Server.
+• The security of the server.properties configuration file and the .p12 certificate on the Server side is the responsibility of the Server administrator.
+
+7. Data Deletion
+• Account Deletion: Performed through the Application interface. The message database on the device is cleared. On the Server, a "soft delete" is applied (login is blocked, password is cleared, profile data is anonymized).
+• Application Deletion: When the Application is deleted from the Device, all local data (including encrypted settings and the database) is deleted automatically.
+
+8. Changes to this Privacy Policy
+We may update this Policy. The current version is always available in the Application or on the official project page on GitHub. https://github.com/safelogJ/lim/tree/master/privacy
+
+9. Contact Us
+If you have any questions about this Privacy Policy, you can contact the Developer:
+• Email: simlog-app@yandex.ru
