@@ -41,4 +41,10 @@ glidecompiler = { group = "com.github.bumptech.glide", name = "compiler", versio
 android-application = { id = "com.android.application", version.ref = "agp" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 
+[bundles]
+common-net-json = [
+    "okhttp",
+    "gson"
+]
+
 
