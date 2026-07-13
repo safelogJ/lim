@@ -1,8 +1,8 @@
 package com.safelogj.limserver.request;
 
 
-public record SendMessageRequest(Long receiverId, String text, String type,
-                                 String username, String password, String filePath, String fileName) {
+public record SendMessageRequest(String username, String password, Long receiverId, String text, String type,
+                                 String filePath, String fileName) {
 
     public boolean isValidRequest() {
         return receiverId != null && receiverId > 0

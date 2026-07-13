@@ -19,6 +19,7 @@ public class ChatListViewModel extends AndroidViewModel {
 
     private final MutableLiveData<List<Chat>> dbChatList = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isChatHidden = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> isChatBlocked = new MutableLiveData<>();
     private final AppController controller;
 
     public ChatListViewModel(@NonNull Application application) {
@@ -29,8 +30,13 @@ public class ChatListViewModel extends AndroidViewModel {
     public LiveData<List<Chat>> getDbChatList() {
         return dbChatList;
     }
+
     public LiveData<Boolean> isChatHidden() {
         return isChatHidden;
+    }
+
+    public LiveData<Boolean> isChatBlocked() {
+        return isChatBlocked;
     }
 
 
@@ -62,9 +68,26 @@ public class ChatListViewModel extends AndroidViewModel {
 
             @Override
             public void onError(String errorMsg) {
-                Log.d(AppController.LOG_TAG,  errorMsg);
+                Log.d(AppController.LOG_TAG, errorMsg);
             }
         });
         controller.getDbExecutor().execute(() -> controller.getNetworkService().hideChat(chatId));
+    }
+
+    public void setChatBlockedState(long chatId, boolean isBlocked) {
+        controller.getDbExecutor().execute(() ->
+                controller.getNetworkService().setChatBlockedState(chatId, isBlocked, new ResultCallback<>() {
+
+                    @Override
+                    public void onSuccess(Boolean result) {
+                        isChatBlocked.postValue(result);
+                    }
+
+                    @Override
+                    public void onError(String errorMsg) {
+                        Log.d(AppController.LOG_TAG, errorMsg);
+                    }
+                }));
+
     }
 }

@@ -38,11 +38,6 @@ import java.security.cert.X509Certificate;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/**
- * A simple {@link Fragment} subclass.
- * Use the  factory method to
- * create an instance of this fragment.
- */
 public class UserFragment extends Fragment {
 
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9]{3,20}$");
@@ -194,7 +189,7 @@ public class UserFragment extends Fragment {
     }
 
     private boolean isUsernameValid(@NonNull String username) {
-        return (username.length() >= 3 && username.length() <= 20) && USERNAME_PATTERN.matcher(username).matches();
+        return USERNAME_PATTERN.matcher(username).matches();
     }
 
     private boolean isPasswordValid(@NonNull String password) {

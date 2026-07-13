@@ -28,6 +28,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DISPLAY_NAME = "display_name";
     private static final String IS_GROUP = "is_group";
     private static final String IS_HIDDEN = "is_hidden";
+    private static final String IS_BLOCKED = "is_blocked";
     private static final String INTERLOCUTOR_ID = "interlocutor_id";
     private static final String LAST_MESSAGE = "last_message";
     private static final String LAST_TIMESTAMP = "last_timestamp";
@@ -72,6 +73,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     "last_message TEXT, " +
                     "last_send_status INTEGER DEFAULT 1, " + // 1 - "Sending", 2 - "Sent"
                     "is_hidden INTEGER NOT NULL DEFAULT 0, " + // 0 = visible, 1 = hidden
+                    "is_blocked INTEGER NOT NULL DEFAULT 0, " + // 0 = not blocked, 1 = blocked
                     "last_timestamp INTEGER NOT NULL)");
 
             db.execSQL("CREATE TABLE messages (" +
@@ -193,6 +195,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             v.put(LAST_MESSAGE, chat.lastMessage);
             v.put(LAST_TIMESTAMP, chat.lastTimestamp);
             v.put(IS_HIDDEN, 0);
+            v.put(IS_BLOCKED, chat.isBlocked ? 1 : 0);
             database.insertWithOnConflict(CHATS, null, v, SQLiteDatabase.CONFLICT_REPLACE);
         });
     }
@@ -202,6 +205,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             ContentValues values = new ContentValues();
             values.put(IS_HIDDEN, 1); // 1 - "Hidden"
             if (database.update(CHATS, values, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
+                callback.onSuccess(true);
+            } else {
+                callback.onError("chat hiding error");
+            }
+        });
+    }
+
+    public void setChatBlockedState(long chatId, boolean isBlocked, ResultCallback<Boolean> callback) {
+        dbExecutor.execute(() -> {
+            ContentValues v = new ContentValues();
+            v.put(IS_BLOCKED, isBlocked ? 1 : 0);
+            if (database.update(CHATS, v, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
                 callback.onSuccess(true);
             } else {
                 callback.onError("chat hiding error");
@@ -224,7 +239,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         chat.lastMessage = cursor.getString(cursor.getColumnIndexOrThrow(LAST_MESSAGE));
                         chat.lastTimestamp = lastTimestamp; // Используем для времени последнего сообщения
                         chat.lastTimestampFormatted = AppController.formatSmartTime(controller, lastTimestamp);
-                        chat.isGroup = cursor.getInt(cursor.getColumnIndexOrThrow(IS_GROUP)) == 1;
+                        chat.isGroup = cursor.getLong(cursor.getColumnIndexOrThrow(IS_GROUP)) == 1;
+                        chat.isBlocked = cursor.getLong(cursor.getColumnIndexOrThrow(IS_BLOCKED)) == 1;
                         chats.add(chat);
                     } while (cursor.moveToNext());
                 }
@@ -339,6 +355,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             ContentValues chatValues = new ContentValues();
             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
+            chatValues.put(IS_BLOCKED, 0);
             database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
 
             callback.onSuccess(result);

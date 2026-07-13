@@ -8,6 +8,7 @@ public class Chat {
     public long lastTimestamp;
     public boolean isGroup;
     public boolean isHidden;
+    public boolean isBlocked;
     public long interlocutorId;
     public long createdAt;
 }

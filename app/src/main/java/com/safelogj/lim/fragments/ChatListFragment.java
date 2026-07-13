@@ -66,6 +66,12 @@ public class ChatListFragment extends Fragment {
             }
         });
 
+        viewModel.isChatBlocked().observe(getViewLifecycleOwner(), isBlocked -> {
+            if (isBlocked) {
+                viewModel.loadDbChatList();
+            }
+        });
+
 
         adapter = new ChatListAdapter(chats, new ChatListAdapter.OnChatClickListener() {
             @Override
@@ -95,21 +101,27 @@ public class ChatListFragment extends Fragment {
             @Override
             public void onChatLongClick(Chat chat) {
                 if (chat.id != Chat.INVALID_ID) {
-                      showDeleteDialog(chat);
+                    showChatOptionsDialog(chat);
                 }
             }
         });
         mBinding.chatsRecyclerView.setAdapter(adapter);
     }
 
+    private void showChatOptionsDialog(Chat chat) {
+        boolean isCurrentlyBlocked = chat.isBlocked; // Нужно добавить это поле в модель Chat
 
-    private void showDeleteDialog(Chat chat) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Удалить чат?")
-                .setMessage("Вы хотите скрыть чат с " + chat.name + "?")
-                .setPositiveButton("Удалить", (dialog, which) -> viewModel.hideChat(chat.id))
-                .setNegativeButton("Отмена", null)
-                .show();
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        builder.setTitle(chat.name);
+        builder.setMessage("Выберите действие для этого чата");
+        // Кнопка удаления (скрытия)
+        builder.setPositiveButton("Скрыть", (d, w) -> viewModel.hideChat(chat.id));
+        // Кнопка блокировки
+        String blockText = isCurrentlyBlocked ? "Разблокировать" : "Заблокировать";
+        builder.setNeutralButton(blockText, (d, w) -> viewModel.setChatBlockedState(chat.id, !isCurrentlyBlocked));
+
+        builder.setNegativeButton("Отмена", null);
+        builder.show();
     }
 
     @Override

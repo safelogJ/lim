@@ -60,7 +60,7 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatVi
 
             if (chat.id == Chat.INVALID_ID) {
                 // Логика для элемента "Новый чат"
-                binding.chatIcon.setImageResource(R.drawable.add_comment_48px);
+                binding.chatIcon.setImageResource(R.drawable.person_48px);
                 binding.timeText.setVisibility(View.GONE);
             } else {
                 // Логика для обычного чата
@@ -75,6 +75,14 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatVi
                 binding.timeText.setTextColor(binding.getRoot().getResources().getColor(R.color.light_gray_aaa,
                         binding.getRoot().getContext().getTheme()));
             }
+            if (chat.isBlocked) {
+                binding.chatName.setTextColor(binding.getRoot().getResources().getColor(R.color.light_gray_aaa,
+                        binding.getRoot().getContext().getTheme()));
+            } else {
+                binding.chatName.setTextColor(binding.getRoot().getResources().getColor(R.color.green_400,
+                        binding.getRoot().getContext().getTheme()));
+            }
+
             binding.chatName.setText(chat.name);
             binding.lastMessage.setText(chat.lastMessage);
             binding.timeText.setText(chat.lastTimestampFormatted);

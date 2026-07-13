@@ -12,6 +12,7 @@ import com.google.gson.Gson;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.model.User;
+import com.safelogj.lim.request.BlockChatRequest;
 import com.safelogj.lim.request.EditUserRequest;
 import com.safelogj.lim.request.HideChatRequest;
 import com.safelogj.lim.request.RegisterRequest;
@@ -234,8 +235,8 @@ public class NetworkService {
     public void searchChat(User queryUser, ResultCallback<Chat> callback) {
         try {
             RequestBody body = RequestBody.create(
-                    gson.toJson(new SendMessageRequest(queryUser.id, queryUser.displayName, TEXT, controller.getUsername(),
-                            hashPassword(controller.getPassword()), null, null)), MediaType.parse(MEDIA_TYPE_JSON));
+                    gson.toJson(new SendMessageRequest(controller.getUsername(), hashPassword(controller.getPassword()),
+                            queryUser.id, queryUser.displayName, TEXT, null, null)), MediaType.parse(MEDIA_TYPE_JSON));
             Request request = new Request.Builder()
                     .url(controller.getServerUrl() + "/messages/send").post(body).build();
 
@@ -286,10 +287,10 @@ public class NetworkService {
 
     public void hideChat(long chatId) {
         try {
-            RequestBody body = RequestBody.create(gson.toJson(new HideChatRequest(chatId, controller.getUsername(),
-                    hashPassword(controller.getPassword()))), MediaType.parse(MEDIA_TYPE_JSON));
+            RequestBody body = RequestBody.create(gson.toJson(new HideChatRequest(controller.getUsername(),
+                    hashPassword(controller.getPassword()), chatId)), MediaType.parse(MEDIA_TYPE_JSON));
             Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/chat").post(body).build();
+                    .url(controller.getServerUrl() + "/chat/hide").post(body).build();
 
             client.newCall(request).enqueue(new Callback() {
 
@@ -309,10 +310,44 @@ public class NetworkService {
         }
     }
 
+    public void setChatBlockedState(long chatId, boolean isBlocked, ResultCallback<Boolean> callback) {
+        try {
+            RequestBody body = RequestBody.create(gson.toJson(new BlockChatRequest(
+                    controller.getUsername(), hashPassword(controller.getPassword()), chatId, isBlocked)), MediaType.parse(MEDIA_TYPE_JSON));
+            Request request = new Request.Builder()
+                    .url(controller.getServerUrl() + "/chat/block").post(body).build();
+
+            client.newCall(request).enqueue(new Callback() {
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    Log.i(AppController.LOG_TAG, response.message());
+                    if (response.isSuccessful()) {
+                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                        if (BaseResponse.SUCCESS.equals(res.status())) {
+                            dbHelper.setChatBlockedState(chatId, isBlocked, callback);
+                        } else {
+                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
+                        }
+                    } else {
+                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
+                    }
+                }
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.i(AppController.LOG_TAG, e.getMessage());
+                }
+            });
+
+        } catch (Exception e) {
+            sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
+        }
+    }
+
     public void sendTextMessage(Message msg, ResultCallback<Long> callback) {
         try {
-            RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(msg.receiverId, msg.text, msg.type,
-                    controller.getUsername(), hashPassword(controller.getPassword()), msg.filePath, msg.fileName)), MediaType.parse(MEDIA_TYPE_JSON));
+            RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(), hashPassword(controller.getPassword()),
+                    msg.receiverId, msg.text, msg.type, msg.filePath, msg.fileName)), MediaType.parse(MEDIA_TYPE_JSON));
             Request request = new Request.Builder()
                     .url(controller.getServerUrl() + "/messages/send").post(body).build();
 

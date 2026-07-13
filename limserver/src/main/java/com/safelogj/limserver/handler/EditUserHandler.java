@@ -43,7 +43,7 @@ public class EditUserHandler extends BaseHandler {
             }
 
         } catch (Exception e) {
-            LimController.log.error("editUserHandler error: ", e);
+            LimController.log.error("EditUserHandler error: ", e);
             sendCatchError(exchange, response, e);
         }
     }

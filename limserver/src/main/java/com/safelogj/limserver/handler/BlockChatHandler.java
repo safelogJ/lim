@@ -2,7 +2,7 @@ package com.safelogj.limserver.handler;
 
 import com.safelogj.limserver.LimController;
 import com.safelogj.limserver.model.User;
-import com.safelogj.limserver.request.HideChatRequest;
+import com.safelogj.limserver.request.BlockChatRequest;
 import com.safelogj.limserver.response.BaseResponse;
 import com.sun.net.httpserver.HttpExchange;
 
@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
-public class HideChatHandler extends BaseHandler {
+public class BlockChatHandler extends BaseHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         BaseResponse response = new BaseResponse();
@@ -20,7 +20,7 @@ public class HideChatHandler extends BaseHandler {
         }
         // 2. Читаем входящий JSON от Андроида
         try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8)) {
-            HideChatRequest req = gson.fromJson(reader, HideChatRequest.class);
+            BlockChatRequest req = gson.fromJson(reader, BlockChatRequest.class);
             if (req == null || !req.isValidRequest() || !isUsernameValid(req.username())) {
                 sendFieldMissingError(exchange, response);
                 return;
@@ -31,17 +31,16 @@ public class HideChatHandler extends BaseHandler {
                 return;
             }
 
-            if (LimController.dbManager.hideChat(req.chatId(), user.id)) {
-                response.message = "chat hidden successfully: " + req.chatId();
+            if (LimController.dbManager.setChatBlockedState(req.chatId(), user.id, req.isBlocked())) {
+                response.message = "chat blocked successfully: " + req.chatId();
                 sendSuccess(exchange, response);
             } else {
                 sendInternalServerError(exchange, response);
             }
 
         } catch (Exception e) {
-            LimController.log.error("HideChatHandler error: ", e);
+            LimController.log.error("BlockChatHandler error: ", e);
             sendCatchError(exchange, response, e);
         }
     }
 }
-

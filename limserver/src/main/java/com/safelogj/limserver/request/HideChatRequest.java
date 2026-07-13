@@ -1,6 +1,6 @@
 package com.safelogj.limserver.request;
 
-public record HideChatRequest (Long chatId, String username, String password) {
+public record HideChatRequest (String username, String password, Long chatId) {
 
     public boolean isValidRequest() {
         return chatId != null

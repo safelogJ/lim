@@ -1,8 +1,7 @@
 package com.safelogj.lim.request;
 
 
-public record GetMessagesRequest(Integer lastMessageId, String username,
-                                 String password) {
+public record GetMessagesRequest(String username, String password, Long lastMessageId) {
 
     public boolean isValidRequest() {
         return lastMessageId != null

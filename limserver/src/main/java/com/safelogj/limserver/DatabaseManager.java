@@ -89,7 +89,8 @@ public class DatabaseManager {
                 "chat_id INTEGER NOT NULL, " +
                 "user_id INTEGER NOT NULL, " +
                 "joined_at INTEGER NOT NULL, " +
-                "is_hidden INTEGER NOT NULL DEFAULT 0, " + // 0 = виден в списке, 1 = скрыт у юзера
+                "is_hidden INTEGER NOT NULL DEFAULT 0, " + // 0 = visible, 1 = hidden
+                "is_blocked INTEGER NOT NULL DEFAULT 0, " + // 1 = blocked, 0 = not blocked
                 "PRIMARY KEY (chat_id, user_id)" + // Юзер не может вступить в один чат дважды
                 ")";
 
@@ -205,7 +206,6 @@ public class DatabaseManager {
     @Nullable
     public User authenticateUser(@NotNull String username, @NotNull String password) {
         String serverPasswordHash = hashPassword(password);
-        LimController.log.warn("пароль для пользователя '{}'", serverPasswordHash);
         if (!serverPasswordHash.isEmpty()) {
             try (Connection conn = getConnection();
                  PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name, password_hash FROM users WHERE username = ? AND is_deleted = 0")) {
@@ -281,11 +281,14 @@ public class DatabaseManager {
 
                 if (chatId != -1) { // --- СЦЕНАРИЙ А: ЧАТ НАЙДЕН ---
                     try (PreparedStatement unhideStmt = conn.prepareStatement(
-                            "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ? AND (user_id = ? OR user_id = ?)")) {
+                            "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?");
+                         PreparedStatement unblockStmt = conn.prepareStatement(
+                                 "UPDATE chat_members SET is_blocked = 0 WHERE chat_id = ? AND user_id = ?")) {
                         unhideStmt.setLong(1, chatId);
-                        unhideStmt.setLong(2, senderId);
-                        unhideStmt.setLong(3, receiverId);
                         unhideStmt.executeUpdate();
+                        unblockStmt.setLong(1, chatId);
+                        unblockStmt.setLong(2, senderId);
+                        unblockStmt.executeUpdate();
                     }
                 } else { // --- СЦЕНАРИЙ Б: СОЗДАЕМ НОВЫЙ ЧАТ ---
                     long now = System.currentTimeMillis();
@@ -343,6 +346,19 @@ public class DatabaseManager {
                 "UPDATE chat_members SET is_hidden = 1 WHERE chat_id = ? AND user_id = ?")) {
             stmt.setLong(1, chatId);
             stmt.setLong(2, userId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LimController.log.error("error hiding chat {} for user {}: ", chatId, userId, e);
+            return false;
+        }
+    }
+
+    public boolean setChatBlockedState(long chatId, long userId, boolean isBlocked) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "UPDATE chat_members SET is_blocked = ? WHERE chat_id = ? AND user_id = ?")) {
+            stmt.setLong(1, isBlocked ? 1 : 0);
+            stmt.setLong(2, chatId);
+            stmt.setLong(3, userId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             LimController.log.error("error hiding chat {} for user {}: ", chatId, userId, e);
@@ -484,10 +500,13 @@ public class DatabaseManager {
     public long saveMessage(long chatId, long senderId, String text, String type, long timestamp, String filePath, String fileName) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
+
             try (PreparedStatement insertStmt = conn.prepareStatement(
                     "INSERT INTO messages (chat_id, sender_id, text, type, timestamp, file_path, file_name) VALUES (?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
                  PreparedStatement updateStmt = conn.prepareStatement(
-                         "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?")) {
+                         "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?");
+                 PreparedStatement updateBlock = conn.prepareStatement(
+                         "UPDATE chat_members SET is_blocked = 0 WHERE chat_id = ? AND user_id = ?")) {
 
                 insertStmt.setLong(1, chatId);
                 insertStmt.setLong(2, senderId);
@@ -507,6 +526,9 @@ public class DatabaseManager {
                 }
                 updateStmt.setLong(1, chatId);
                 updateStmt.executeUpdate();
+                updateBlock.setLong(1, chatId);
+                updateBlock.setLong(2, senderId);
+                updateBlock.executeUpdate();
                 conn.commit();
                 return serverId;
             } catch (SQLException e) {

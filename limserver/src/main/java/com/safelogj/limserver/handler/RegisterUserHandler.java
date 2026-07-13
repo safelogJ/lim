@@ -33,7 +33,7 @@ public class RegisterUserHandler extends BaseHandler {
             }
 
             String username = req.username().trim();
-            if (!USERNAME_PATTERN.matcher(username).matches() || username.length() < 3 || username.length() > 20) {
+            if (!USERNAME_PATTERN.matcher(username).matches()) {
                 response.status = BaseResponse.ERROR;
                 response.message = "invalid username format (3-20 chars, lowercase Latin and digits)";
                 sendResponse(exchange, 400, response);
@@ -56,6 +56,7 @@ public class RegisterUserHandler extends BaseHandler {
                 if (!chats.isEmpty()) {
                     response.chats = chats;
                 }
+                response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
                 return;
             }
@@ -80,7 +81,7 @@ public class RegisterUserHandler extends BaseHandler {
             }
 
         } catch (Exception e) {
-            LimController.log.error("registerUserHandler error: ", e);
+            LimController.log.error("RegisterUserHandler error: ", e);
             sendCatchError(exchange, response, e);
         }
     }

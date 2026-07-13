@@ -10,6 +10,7 @@ public class Chat {
     public String lastMessage;
     public long lastTimestamp;
     public boolean isHidden;
+    public boolean isBlocked;
     public long interlocutorId;
     public boolean isGroup;
     public long lastSendStatus;

@@ -1,6 +1,7 @@
 package com.safelogj.limserver;
 
 import com.safelogj.limserver.handler.AuthUserHandler;
+import com.safelogj.limserver.handler.BlockChatHandler;
 import com.safelogj.limserver.handler.GetMessagesHandler;
 import com.safelogj.limserver.handler.HideChatHandler;
 import com.safelogj.limserver.handler.MediaDownloadHandler;
@@ -63,7 +64,8 @@ public class LimController {
             server.createContext("/register", new RegisterUserHandler());
             server.createContext("/auth", new AuthUserHandler());
             server.createContext("/user", new EditUserHandler());
-            server.createContext("/chat", new HideChatHandler());
+            server.createContext("/chat/hide", new HideChatHandler());
+            server.createContext("/chat/block", new BlockChatHandler());
             server.createContext("/user/search", new SearchUserHandler());
             server.createContext("/messages/send", new SendMessageHandler());
             server.createContext("/messages/get", new GetMessagesHandler());
