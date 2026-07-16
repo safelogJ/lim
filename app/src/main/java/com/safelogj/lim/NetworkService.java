@@ -14,8 +14,10 @@ import com.safelogj.lim.model.Message;
 import com.safelogj.lim.model.User;
 import com.safelogj.lim.request.BlockChatRequest;
 import com.safelogj.lim.request.EditUserRequest;
+import com.safelogj.lim.request.GetMessagesRequest;
 import com.safelogj.lim.request.HideChatRequest;
 import com.safelogj.lim.request.RegisterRequest;
+import com.safelogj.lim.request.SearchChatRequest;
 import com.safelogj.lim.request.SearchUserRequest;
 import com.safelogj.lim.request.SendMessageRequest;
 import com.safelogj.lim.response.BaseResponse;
@@ -27,6 +29,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 import okhttp3.Call;
@@ -49,6 +52,7 @@ public class NetworkService {
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private static final String SERVER_RETURNED_ERROR = "server returned error: ";
     private static final String NETWORK_SERVICE_ERROR = "network service error: ";
+    private static final String REQUEST_BUILD_ERROR = "request build error: ";
     private static final String MEDIA_TYPE_JSON = "application/json; charset=utf-8";
     @NonNull
     private final ReentrantLock digestLock = new ReentrantLock();
@@ -72,81 +76,68 @@ public class NetworkService {
     }
 
     public void register(String username, String password, String displayName, ResultCallback<String> callback) {
+        Request request;
         try {
-            RequestBody body = RequestBody.create(
-                    gson.toJson(new RegisterRequest(username, hashPassword(password), displayName)),
+            RequestBody body = RequestBody.create(gson.toJson(new RegisterRequest(username, hashPassword(password), displayName)),
                     MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder().url(controller.getServerUrl() + "/register").post(body).build();
+            request = new Request.Builder().url(controller.getServerUrl() + "/register").post(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status()) && res.isValidRegResponse()) {
+                    User user = new User();
+                    user.id = res.userId();
+                    user.username = username;
+                    user.displayName = displayName;
 
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status()) && res.isValidRegResponse()) {
-                            User user = new User();
-                            user.id = res.userId();
-                            user.username = username;
-                            user.displayName = displayName;
-
-                            controller.setUserId(user.id);
-                            controller.setUsername(username);
-                            controller.setPassword(password);
-                            controller.setDisplayName(displayName);
-                            dbHelper.saveUser(user, callback, res.message(), res.chats());
-                            controller.writeSettingsToFile();
-                            Log.i(AppController.LOG_TAG, res.message());
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+                    controller.setUserId(user.id);
+                    controller.setUsername(username);
+                    controller.setPassword(password);
+                    controller.setDisplayName(displayName);
+                    dbHelper.saveUser(user, callback, res.message(), res.chats());
+                    controller.writeSettingsToFile();
+                    Log.i(AppController.LOG_TAG, res.message());
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
-
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
     public void deleteAccount(String username, String password, ResultCallback<String> callback) {
+        Request request;
         try {
-            RequestBody body = RequestBody.create(
-                    gson.toJson(new EditUserRequest(username, hashPassword(password), null, null)),
+            RequestBody body = RequestBody.create(gson.toJson(new EditUserRequest(username, hashPassword(password), null, null)),
                     MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder().url(controller.getServerUrl() + "/user").delete(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            controller.setUserId(0);
-                            controller.setUsername(AppController.EMPTY_STRING);
-                            controller.setPassword(AppController.EMPTY_STRING);
-                            controller.setDisplayName(AppController.EMPTY_STRING);
-                            dbHelper.wipeAllData(callback, res.message(), res.message());
-                            controller.writeSettingsToFile();
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+            request = new Request.Builder().url(controller.getServerUrl() + "/user").delete(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    controller.setUserId(0);
+                    controller.setUsername(AppController.EMPTY_STRING);
+                    controller.setPassword(AppController.EMPTY_STRING);
+                    controller.setDisplayName(AppController.EMPTY_STRING);
+                    dbHelper.wipeAllData(callback, res.message(), res.message());
+                    controller.writeSettingsToFile();
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
 
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
@@ -154,230 +145,178 @@ public class NetworkService {
     }
 
     public void editUser(String username, String password, @Nullable String dName, @Nullable String newPass, ResultCallback<String> callback) {
+        Request request;
         try {
-            RequestBody body = RequestBody.create(
-                    gson.toJson(new EditUserRequest(username, hashPassword(password), dName, (newPass == null ? null : hashPassword(newPass)))),
+            RequestBody body = RequestBody.create(gson.toJson(new EditUserRequest(username, hashPassword(password), dName, (newPass == null ? null : hashPassword(newPass)))),
                     MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/user").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            if (dName != null) {
-                                controller.setDisplayName(dName);
-                                dbHelper.updateUserDisplayName(controller.getUserId(), dName);
-                            }
-                            if (newPass != null) {
-                                controller.setPassword(newPass);
-                            }
-                            sendSuccess(callback, res.message(), res.message());
-                            controller.writeSettingsToFile();
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            request = new Request.Builder().url(controller.getServerUrl() + "/user").post(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    if (dName != null) {
+                        controller.setDisplayName(dName);
+                        dbHelper.updateUserDisplayName(controller.getUserId(), dName);
                     }
+                    if (newPass != null) {
+                        controller.setPassword(newPass);
+                    }
+                    sendSuccess(callback, res.message(), res.message());
+                    controller.writeSettingsToFile();
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
-
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
     public void searchUser(String username, String password, String queryUsername, ResultCallback<User> callback) {
+        Request request;
         try {
             RequestBody body = RequestBody.create(
                     gson.toJson(new SearchUserRequest(username, hashPassword(password), queryUsername)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
+            request = new Request.Builder()
                     .url(controller.getServerUrl() + "/user/search").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            User user = new User();
-                            user.id = res.userId();
-                            user.username = queryUsername;
-                            user.displayName = res.displayName();
-                            dbHelper.saveUser(user, callback, user, null);
-                            Log.i(AppController.LOG_TAG, res.message());
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    User user = new User();
+                    user.id = res.userId();
+                    user.username = queryUsername;
+                    user.displayName = res.displayName();
+                    dbHelper.saveUser(user, callback, user, null);
+                    Log.i(AppController.LOG_TAG, res.message());
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
 
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
-    public void searchChat(User queryUser, ResultCallback<Chat> callback) {
+    public void searchNewChat(User queryUser, ResultCallback<Chat> callback) {
+        Request request;
         try {
-            RequestBody body = RequestBody.create(
-                    gson.toJson(new SendMessageRequest(controller.getUsername(), hashPassword(controller.getPassword()),
-                            queryUser.id, queryUser.displayName, TEXT, null, null)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/messages/send").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            Chat chat = new Chat();
-                            chat.id = res.chatId();
-                            chat.name = queryUser.displayName;
-                            chat.isGroup = false;
-                            chat.interlocutorId = queryUser.id;
-                            chat.lastMessage = queryUser.displayName;
-                            chat.lastTimestamp = res.timestamp();
-                            dbHelper.saveChat(chat);
-
-                            Message msg = new Message();
-                            msg.serverId = res.messageId();
-                            msg.chatId = res.chatId();
-                            msg.senderId = controller.getUserId();
-                            msg.text = queryUser.displayName;
-                            msg.type = TEXT;
-                            msg.timestamp = res.timestamp();
-
-                            dbHelper.saveMessage(msg);
-                            dbHelper.confirmMessageSent(msg, callback, chat);
-                            Log.i(AppController.LOG_TAG, res.message());
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+            RequestBody body = RequestBody.create(gson.toJson(new SearchChatRequest(controller.getUsername(),
+                    hashPassword(controller.getPassword()), queryUser.id)), MediaType.parse(MEDIA_TYPE_JSON));
+            request = new Request.Builder().url(controller.getServerUrl() + "/chat/search").post(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    Chat chat = new Chat();
+                    chat.id = res.chatId();
+                    chat.name = queryUser.displayName;
+                    chat.isGroup = false;
+                    chat.interlocutorId = queryUser.id;
+                    dbHelper.saveChat(chat, callback, chat);
+                    Log.i(AppController.LOG_TAG, res.message());
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
-
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
     public void hideChat(long chatId) {
+        Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new HideChatRequest(controller.getUsername(),
                     hashPassword(controller.getPassword()), chatId)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/chat/hide").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    Log.i(AppController.LOG_TAG, response.message());
-                }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.i(AppController.LOG_TAG, e.getMessage());
-                }
-            });
-
+            request = new Request.Builder().url(controller.getServerUrl() + "/chat/hide").post(body).build();
+        } catch (Exception e) {
+            Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            Log.i(AppController.LOG_TAG, response.message());
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
-    public void setChatBlockedState(long chatId, boolean isBlocked, ResultCallback<Boolean> callback) {
+    public void setChatBlockedState(long chatId, ResultCallback<Boolean> callback) {
+        Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new BlockChatRequest(
-                    controller.getUsername(), hashPassword(controller.getPassword()), chatId, isBlocked)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/chat/block").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    Log.i(AppController.LOG_TAG, response.message());
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            dbHelper.setChatBlockedState(chatId, isBlocked, callback);
-                        } else {
-                            sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+                    controller.getUsername(), hashPassword(controller.getPassword()), chatId)), MediaType.parse(MEDIA_TYPE_JSON));
+            request = new Request.Builder().url(controller.getServerUrl() + "/chat/block").post(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    dbHelper.setChatBlockedState(chatId, callback);
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.i(AppController.LOG_TAG, e.getMessage());
-                }
-            });
-
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 
     public void sendTextMessage(Message msg, ResultCallback<Long> callback) {
+        Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(), hashPassword(controller.getPassword()),
                     msg.receiverId, msg.text, msg.type, msg.filePath, msg.fileName)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/messages/send").post(body).build();
-
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            msg.chatId = res.chatId(); // проверить
-                            msg.serverId = res.messageId();
-                            msg.timestamp = res.timestamp();
-                            dbHelper.confirmMessageSent(msg, callback, msg.localId);
-                            Log.i(AppController.LOG_TAG, res.message());
-                        }
-                    } else {
-                        sendError(callback, SERVER_RETURNED_ERROR + response.message());
-                    }
+            request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
+        } catch (Exception e) {
+            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    msg.chatId = res.chatId(); // проверить
+                    msg.serverId = res.messageId();
+                    msg.timestamp = res.timestamp();
+                    dbHelper.confirmMessageSent(msg, callback, msg.localId);
+                    Log.i(AppController.LOG_TAG, res.message());
+                    return;
+                } else {
+                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
                 }
-
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
-                }
-            });
+            } else {
+                sendError(callback, SERVER_RETURNED_ERROR + response.message());
+            }
         } catch (Exception e) {
             sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
         }
+        dbHelper.notConfirmMessageSent(msg.localId);
     }
-
 
     // Метод для отправки текстового сообщения
     public void sendMediaMessage(Message msg, ResultCallback<Long> callback) {
@@ -438,6 +377,35 @@ public class NetworkService {
         } catch (Exception e) {
             callback.onError("Ошибка при чтении файла: " + e.getMessage());
         }
+    }
+
+    public void getNewMessages(long lastTimestamp, @NonNull Runnable onComplete) {
+        Request request;
+        try {
+            RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
+                    hashPassword(controller.getPassword()), lastTimestamp)), MediaType.parse(MEDIA_TYPE_JSON));
+            request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
+        } catch (Exception e) {
+            Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            onComplete.run();
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (BaseResponse.SUCCESS.equals(res.status())) {
+                    dbHelper.saveMessages(res.messages(), onComplete);
+                    Log.i(AppController.LOG_TAG, res.message());
+                } else {
+                    Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
+                }
+            } else {
+                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.message());
+            }
+        } catch (Exception e) {
+            Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+        }
+        onComplete.run();
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {

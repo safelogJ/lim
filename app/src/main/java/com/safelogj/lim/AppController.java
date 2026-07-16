@@ -1,13 +1,21 @@
 package com.safelogj.lim;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.safelogj.lim.model.Message;
+import com.safelogj.lim.viewmodels.ResultCallback;
 
 import org.json.JSONObject;
 
@@ -53,6 +61,8 @@ import okhttp3.OkHttpClient;
 public class AppController extends Application {
     public static final String LOG_TAG = "lim";
     public static final String EMPTY_STRING = "";
+    public static final int QUEUE_SIZE = 100;
+    public static final int POOL_SIZE = 5;
     private static final String USER_DATA = "userdata";
     private static final String USER_DATA_JSON = "userdata.txt";
     private static final String USER_ID = "userid";
@@ -70,6 +80,10 @@ public class AppController extends Application {
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
+    private final Handler syncHandler = new Handler(Looper.getMainLooper());
+    private int startedActivities = 0;
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
     private final SimpleDateFormat dayMonthFormat = new SimpleDateFormat("dd MMM", Locale.getDefault());
@@ -77,23 +91,42 @@ public class AppController extends Application {
 
     private byte[] certBytes;
     @NonNull
-    private String certName = EMPTY_STRING;
+    private volatile String certName = EMPTY_STRING;
     @NonNull
-    private String username = EMPTY_STRING;
-    private long userId;
+    private volatile String username = EMPTY_STRING;
+    private volatile long userId;
     @NonNull
-    private String password = EMPTY_STRING;
+    private volatile String password = EMPTY_STRING;
     @NonNull
-    private String displayName = EMPTY_STRING;
+    private volatile String displayName = EMPTY_STRING;
     @NonNull
-    private String serverUrl = EMPTY_STRING;
+    private volatile String serverUrl = EMPTY_STRING;
     @NonNull
-    private String serverIp = EMPTY_STRING;
+    private volatile String serverIp = EMPTY_STRING;
     private Cipher mCipher;
     private OkHttpClient okHttpClient;
     private DatabaseHelper dbHelper;
     private boolean initAppError;
     private String initAppErrStr = EMPTY_STRING;
+    private final Runnable syncRunnable = () -> {
+        if (userId > 0) {
+            dbHelper.getLastIncomingMessageId(userId, new ResultCallback<>() {
+                @Override
+                public void onSuccess(Long lastServerId) {
+                    netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, () -> {
+                        if (startedActivities > 0) {
+                            syncHandler.postDelayed(syncRunnable, 4000);
+                        }
+                    }));
+                }
+
+                @Override
+                public void onError(String msg) {
+                    //
+                }
+            });
+        }
+    };
 
     public boolean isInitAppError() {
         return initAppError;
@@ -193,19 +226,75 @@ public class AppController extends Application {
         return networkService;
     }
 
+    public ExecutorService getUserExecutor() {
+        return userExecutor;
+    }
+
+    public ExecutorService[] getNetStreams() {
+        return netStreams;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
+        regActivityListener();
         readRoutersListAndSettingsEncrypted();
         initOkHttpClient();
         dbHelper = new DatabaseHelper(this);
         networkService = new NetworkService(this);
+        initStreams();
         dbHelper.initDatabase();
         Log.d(LOG_TAG, "Приложение запущено ");
     }
 
     public void writeSettingsToFile() {
         dbExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
+    }
+// worker
+    public void startSendingMsgList() {
+        dbExecutor.execute(() -> {
+            for (Message msg : dbHelper.getPendingMessages()) {
+                sendMsg(msg);
+            }
+        });
+    }
+
+    public void sendMsg(Message msg) {
+        if (userId == 0) return;
+        if (msg.type.equals(NetworkService.TEXT)) {
+            netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> sendTextMsg(msg));
+        } else {
+            netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> sendFileMsg(msg));
+        }
+    }
+
+
+    private void sendTextMsg(Message msg) {
+        networkService.sendTextMessage(msg, new ResultCallback<>() {
+            @Override
+            public void onSuccess(Long result) {
+                Log.i(LOG_TAG, "message sent, localId " + result);
+            }
+
+            @Override
+            public void onError(String errorMsg) {
+                //
+            }
+        });
+    }
+
+    private void sendFileMsg(Message msg) {
+//        networkService.sendFileMessage(msg, new ResultCallback<>() {
+//            @Override
+//            public void onSuccess(Long result) {
+//
+//            }
+//
+//            @Override
+//            public void onError(String errorMsg) {
+//
+//            }
+//        });
     }
 
     private void readRoutersListAndSettingsEncrypted() {
@@ -438,8 +527,8 @@ public class AppController extends Application {
             Dispatcher dispatcher = new Dispatcher();
 // Так как хост у нас один (роутер), эти две цифры должны быть одинаковыми.
 // 8-10 одновременных запросов — золотая середина для SQLite в режиме WAL и процессора роутера.
-            dispatcher.setMaxRequests(8);
-            dispatcher.setMaxRequestsPerHost(8);
+            dispatcher.setMaxRequests(POOL_SIZE);
+            dispatcher.setMaxRequestsPerHost(POOL_SIZE);
 
             okHttpClient = new OkHttpClient.Builder()
                     .dispatcher(dispatcher)
@@ -457,6 +546,57 @@ public class AppController extends Application {
             initAppError = true;
             initAppErrStr = msg;
         }
+    }
+
+    @SuppressWarnings("resource")
+    private void initStreams() {
+        for (int i = 0; i < POOL_SIZE; i++) {
+            netStreams[i] = Executors.newSingleThreadExecutor();
+        }
+    }
+
+    private void regActivityListener() {
+        registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(@androidx.annotation.NonNull Activity activity, @Nullable Bundle savedInstanceState) {
+                //
+            }
+
+            @Override
+            public void onActivityStarted(@androidx.annotation.NonNull Activity activity) {
+                if (++startedActivities == 1) {
+                    syncHandler.removeCallbacks(syncRunnable);
+                    syncHandler.post(syncRunnable);
+                }
+            }
+
+            @Override
+            public void onActivityResumed(@androidx.annotation.NonNull Activity activity) {
+                //
+            }
+
+            @Override
+            public void onActivityPaused(@androidx.annotation.NonNull Activity activity) {
+                //
+            }
+
+            @Override
+            public void onActivityStopped(@androidx.annotation.NonNull Activity activity) {
+                if (--startedActivities == 0) {
+                    syncHandler.removeCallbacks(syncRunnable);
+                }
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(@androidx.annotation.NonNull Activity activity, @androidx.annotation.NonNull Bundle outState) {
+                //
+            }
+
+            @Override
+            public void onActivityDestroyed(@androidx.annotation.NonNull Activity activity) {
+                //
+            }
+        });
     }
 
     public static String formatSmartTime(Context context, long timestamp) {

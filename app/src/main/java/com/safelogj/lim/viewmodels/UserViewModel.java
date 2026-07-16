@@ -9,12 +9,12 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.safelogj.lim.AppController;
 
-public class AuthViewModel extends AndroidViewModel {
+public class UserViewModel extends AndroidViewModel {
 
     private final MutableLiveData<String> resultMessage = new MutableLiveData<>();
     private final AppController controller;
 
-    public AuthViewModel(@NonNull Application application) {
+    public UserViewModel(@NonNull Application application) {
         super(application);
         controller = (AppController) application;
     }
@@ -28,7 +28,7 @@ public class AuthViewModel extends AndroidViewModel {
     }
 
     public void register(String user, String pass, String displayName) {
-        controller.getDbExecutor().execute(() ->
+        controller.getUserExecutor().execute(() ->
                 controller.getNetworkService().register(user, pass, displayName, new ResultCallback<>() {
                     @Override
                     public void onSuccess(String result) {
@@ -44,7 +44,7 @@ public class AuthViewModel extends AndroidViewModel {
     }
 
     public void deleteAccount(String username, String password) {
-        controller.getDbExecutor().execute(() ->
+        controller.getUserExecutor().execute(() ->
                 controller.getNetworkService().deleteAccount(username, password, new ResultCallback<>() {
                     @Override
                     public void onSuccess(String result) {
@@ -60,7 +60,7 @@ public class AuthViewModel extends AndroidViewModel {
     }
 
     public void editUser(String username, String password, String dName, String newPass) {
-        controller.getDbExecutor().execute(() ->
+        controller.getUserExecutor().execute(() ->
                 controller.getNetworkService().editUser(username, password, dName, newPass, new ResultCallback<>() {
                     @Override
                     public void onSuccess(String result) {

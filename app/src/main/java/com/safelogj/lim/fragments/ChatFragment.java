@@ -15,15 +15,15 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -32,9 +32,9 @@ import android.view.ViewGroup;
 import android.widget.Toast;
 
 import com.safelogj.lim.AppController;
-import com.safelogj.lim.adapters.MessageAdapter;
 import com.safelogj.lim.NetworkService;
 import com.safelogj.lim.R;
+import com.safelogj.lim.adapters.MsgAdapter;
 import com.safelogj.lim.databinding.FragmentChatBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
@@ -46,10 +46,12 @@ import java.util.List;
 public class ChatFragment extends Fragment {
 
     private static final String ARG_CHAT_ID = "arg_chat_id";
+    private static final String ARG_CHAT_LOCAL_ID = "arg_chat_local_id";
+    private static final String ARG_CHAT_NAME = "arg_chat_name";
     private final List<Message> messages = new ArrayList<>();
     private AppController controller;
     private FragmentChatBinding mBinding;
-    private MessageAdapter adapter;
+    private MsgAdapter adapter;
     private ChatViewModel chatViewModel;
     private final ActivityResultCallback<ActivityResult> callbackForGeneralPermitURI = result -> {
         if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
@@ -81,17 +83,33 @@ public class ChatFragment extends Fragment {
     };
     private final ActivityResultLauncher<String> requestAskReadFilePermit =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackAskReadFilePermit);
-    // Текущий ID чата. Если -1, значит мы только ищем собеседника
+
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final Runnable uiRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (currentChatId != Chat.INVALID_ID) {
+                chatViewModel.loadDbMessages(currentChatId);
+                controller.getDbHelper().markChatAsRead(currentChatId);
+            }
+            uiHandler.postDelayed(this, 4000);
+        }
+    };
+
     private long currentChatId = Chat.INVALID_ID;
+    private long currentChatLocalId = Chat.INVALID_ID;
+    private String currentChatName = AppController.EMPTY_STRING;
 
     public ChatFragment() {
         // Required empty public constructor
     }
 
-    public static ChatFragment newInstance(long chatId) {
+    public static ChatFragment newInstance(long chatId, long chatLocalId, String chatName) {
         ChatFragment fragment = new ChatFragment();
         Bundle args = new Bundle();
         args.putLong(ARG_CHAT_ID, chatId);
+        args.putLong(ARG_CHAT_LOCAL_ID, chatLocalId);
+        args.putString(ARG_CHAT_NAME, chatName);
         fragment.setArguments(args);
         return fragment;
     }
@@ -103,6 +121,8 @@ public class ChatFragment extends Fragment {
         controller = (AppController) requireActivity().getApplication();
         if (getArguments() != null) {
             currentChatId = getArguments().getLong(ARG_CHAT_ID, Chat.INVALID_ID);
+            currentChatLocalId = getArguments().getLong(ARG_CHAT_LOCAL_ID, Chat.INVALID_ID);
+            currentChatName = getArguments().getString(ARG_CHAT_NAME, AppController.EMPTY_STRING);
         }
     }
 
@@ -117,7 +137,7 @@ public class ChatFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        adapter = new MessageAdapter(messages, controller.getUserId());
+        adapter = new MsgAdapter(controller.getUserId());
         mBinding.messagesRecyclerView.setAdapter(adapter);
 
         setSendBtnListener();
@@ -125,42 +145,53 @@ public class ChatFragment extends Fragment {
         mBinding.clearFileButton.setOnClickListener(v -> chatViewModel.clearFile());
 
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
-        setObserveUser();
+
         setObserveChat();
         setObserveSendMsgLocalId();
         setObserveMsgList();
         setObserveSelectedFileUri();
         setObserveErrorStatus();
 
-        updateChatUI();
+        updateBottomPanel();
         setKeyboardPadding();
-        // Если чат уже существует, загружаем историю
-        if (currentChatId != Chat.INVALID_ID) {
-            loadChatHistory();
-        } else {
+
+        if (currentChatId == Chat.INVALID_ID) {
             addSystemMessageToList("Введите логин пользователя, чтобы начать чат");
         }
     }
 
+    @Override
+    public void onStart() {
+        super.onStart();
+        uiHandler.post(uiRunnable);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        uiHandler.removeCallbacks(uiRunnable);
+    }
+
     private void setSendBtnListener() {
         mBinding.sendButton.setOnClickListener(v -> {
-            String text = mBinding.messageEditText.getText().toString().trim();
-            if (currentChatId == Chat.INVALID_ID && !text.isEmpty() && !text.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
-                performUserSearch(text);
+            String userText = mBinding.messageEditText.getText().toString().trim();
+            if (currentChatId == Chat.INVALID_ID && !userText.isEmpty() && !userText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
+              searchChat(userText);
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
                 Uri fileUri = chatViewModel.getSelectedFileUri().getValue();
-                if (text.isEmpty() && fileUri == null) {
+                if (userText.isEmpty() && fileUri == null) {
                     return;
                 }
-                Message msg = buildMessage(text.isEmpty() ? null : text, // text
+                String fileName = chatViewModel.getSelectedFileName();
+                Message msg = buildMessage((userText.isEmpty() && fileName != null) ? fileName : userText, // text
                         fileUri == null ? NetworkService.TEXT : getMessageType(fileUri),  // type
-                        fileUri,  // uri
-                        chatViewModel.getSelectedFileName()); // name
+                        fileUri, fileName);
                 messages.add(msg);
-                adapter.notifyItemInserted(messages.size() - 1);
-                mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
+//                adapter.notifyItemInserted(messages.size() - 1);
+//                mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
+                adapter.submitList(messages, () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
-                chatViewModel.sendMessage(msg);
+                chatViewModel.sendMessage(msg, currentChatLocalId);
             }
         });
     }
@@ -178,29 +209,9 @@ public class ChatFragment extends Fragment {
         });
     }
 
-    private void setObserveUser() {
-        chatViewModel.getFoundUser().observe(getViewLifecycleOwner(), user -> {
-            if (user != null) {
-                chatViewModel.searchChat(user);
-            //    updateChatUI();
-             //   addSystemMessageToList("Начинаем чат с " + user.displayName);
-            }
-        });
-    }
-
-    private void setObserveChat() {
-        chatViewModel.getFoundChat().observe(getViewLifecycleOwner(), chat -> {
-            if (chat != null) {  // Ура! Чат найден.
-                currentChatId = chat.id;
-                updateChatUI();
-                loadChatHistory();
-            }
-        });
-    }
-
     private void setObserveSendMsgLocalId() {
-        chatViewModel.getSusseccSendMsgLocalId().observe(getViewLifecycleOwner(), localId -> {
-            if (localId != null) {
+        chatViewModel.getSendMsgLocalId().observe(getViewLifecycleOwner(), localId -> {
+            if (localId != null && mBinding != null) {
                 for (int i = 0; i < messages.size(); i++) {
                     if (messages.get(i).localId == localId) {
                         messages.get(i).sendStatus = Message.STATUS_SENT;
@@ -214,16 +225,19 @@ public class ChatFragment extends Fragment {
 
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
-            if (msgList != null) {
-                messages.clear();
-                messages.addAll(msgList);
-                adapter.notifyDataSetChanged();
+            if (msgList != null && mBinding != null) {
+//                messages.clear();
+//                messages.addAll(msgList);
+//                adapter.notifyDataSetChanged();
+//                mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
+                adapter.submitList(messages, () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
             }
         });
     }
 
     private void setObserveSelectedFileUri() {
         chatViewModel.getSelectedFileUri().observe(getViewLifecycleOwner(), uri -> {
+            if (mBinding == null) return;
             if (uri != null) {
                 // Показываем панель с именем файла
                 mBinding.attachmentPreview.setVisibility(View.VISIBLE);
@@ -237,10 +251,25 @@ public class ChatFragment extends Fragment {
 
     private void setObserveErrorStatus() {
         chatViewModel.getErrorStatus().observe(getViewLifecycleOwner(), error -> {
-            if (error != null) {
+            if (error != null && mBinding != null) {
                 addSystemMessageToList(error);
             }
         });
+    }
+
+    private void setObserveChat() {
+        chatViewModel.getFoundChat().observe(getViewLifecycleOwner(), chat -> {
+            if (chat != null && mBinding != null) {
+                currentChatId = chat.id;
+                currentChatName = chat.name;
+                updateBottomPanel();
+            }
+        });
+    }
+
+    public void searchChat(String userText) {
+        chatViewModel.checkChatInDb(userText);
+        mBinding.messageEditText.setText(AppController.EMPTY_STRING);
     }
 
     @Override
@@ -249,22 +278,16 @@ public class ChatFragment extends Fragment {
         mBinding = null;
     }
 
-    private void performUserSearch(String login) {
-        addSystemMessageToList("Поиск пользователя '" + login + "'...");
-        mBinding.messageEditText.setText(AppController.EMPTY_STRING);
-        chatViewModel.searchUser(login);
-    }
-
-    private Message buildMessage(@Nullable String text, @NonNull String type, @Nullable Uri fileUri, @Nullable String fileName) {
+    private Message buildMessage(@NonNull String text, @NonNull String type, @Nullable Uri fileUri, @Nullable String fileName) {
         Message msg = new Message();
         msg.chatId = currentChatId;
         msg.senderId = controller.getUserId();
         msg.text = text;
         msg.type = type;
-        msg.timestamp = System.currentTimeMillis();
-        msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
         msg.filePath = fileUri == null ? null : fileUri.toString();
         msg.fileName = fileName;
+        msg.timestamp = System.currentTimeMillis();
+        msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
         return msg;
     }
 
@@ -277,16 +300,12 @@ public class ChatFragment extends Fragment {
         mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
     }
 
-    private void loadChatHistory() {
-        chatViewModel.loadMessages(currentChatId);
-    }
-
-    private void updateChatUI() {
+    private void updateBottomPanel() {
+        mBinding.chatNameText.setText(currentChatName);
         if (currentChatId == Chat.INVALID_ID) {
             // Режим ПОИСКА
             mBinding.addFileButton.setVisibility(View.INVISIBLE);
             mBinding.messageEditText.setHint(getString(R.string.send_login));
-
         } else {
             // Режим ПЕРЕПИСКИ
             mBinding.addFileButton.setVisibility(View.VISIBLE);
@@ -294,48 +313,18 @@ public class ChatFragment extends Fragment {
         }
     }
 
-//    private void setKeyboardPadding() {
-//        ViewCompat.setOnApplyWindowInsetsListener(mBinding.inputContainer, (v, insets) -> {
-//            // Узнаем, на сколько пикселей клавиатура (ime) вылезла снизу экрана
-//            int keyboardHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
-//            // Сдвигаем контейнер ввода вверх ровно на эту высоту
-//            v.setTranslationY(-keyboardHeight);
-//            // А чтобы RecyclerView тоже не перекрывался клавиатурой,
-//            // добавим ему нижний отступ (padding) на ту же высоту
-//            mBinding.messagesRecyclerView.setPadding(
-//                    mBinding.messagesRecyclerView.getPaddingLeft(),
-//                    mBinding.messagesRecyclerView.getPaddingTop(),
-//                    mBinding.messagesRecyclerView.getPaddingRight(),
-//                    keyboardHeight
-//            );
-//            return insets;
-//        });
-//    }
-
     private void setKeyboardPadding() {
-        // Слушаем отступы на САМОМ ВЕРХНЕМ контейнере фрагмента
-        ViewCompat.setOnApplyWindowInsetsListener(mBinding.chatOuter, (v, insets) -> {
-            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-
-            // Вычисляем чистую высоту клавиатуры за вычетом системных баров
-            // (чтобы не прыгало дважды, если есть навигационная панель)
-            int bottomPadding = Math.max(0, ime.bottom - systemBars.bottom);
-
-            // 1. Вместо трансляции просто меняем нижний отступ у всего контейнера ввода
-            // Это поднимет его над клавиатурой естественным образом
-            ConstraintLayout.LayoutParams lp = (ConstraintLayout.LayoutParams) mBinding.inputContainer.getLayoutParams();
-            lp.bottomMargin = bottomPadding + (int)(4 * getResources().getDisplayMetrics().density); // ваши 4dp из XML
-            mBinding.inputContainer.setLayoutParams(lp);
-
-            // 2. Добавляем отступ списку сообщений, чтобы последние сообщения были видны
+        ViewCompat.setOnApplyWindowInsetsListener(mBinding.inputContainer, (v, insets) -> {
+            int imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            int systemBarsHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            int keyboardHeight = Math.max(0, imeHeight - systemBarsHeight);
+            v.setTranslationY(-keyboardHeight);
             mBinding.messagesRecyclerView.setPadding(
                     mBinding.messagesRecyclerView.getPaddingLeft(),
                     mBinding.messagesRecyclerView.getPaddingTop(),
                     mBinding.messagesRecyclerView.getPaddingRight(),
-                    bottomPadding
+                    keyboardHeight
             );
-
             return insets;
         });
     }

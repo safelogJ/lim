@@ -38,7 +38,7 @@ public class SendMessageHandler extends BaseHandler {
             // Передаем senderId (который достали при авторизации) и receiverId из запроса
             Chat chat = LimController.dbManager.getOrCreatePersonalChat(user.id, req.receiverId());
             if (chat == null) {
-                sendUserNotFoundError(exchange, response);
+                sendChatNotFoundError(exchange, response);
                 return;
             }
             // 6. Сохранение сообщения в созданный/найденный чат

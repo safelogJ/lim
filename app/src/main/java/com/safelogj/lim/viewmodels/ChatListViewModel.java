@@ -27,7 +27,7 @@ public class ChatListViewModel extends AndroidViewModel {
         controller = (AppController) application;
     }
 
-    public LiveData<List<Chat>> getDbChatList() {
+    public LiveData<List<Chat>> getChatList() {
         return dbChatList;
     }
 
@@ -42,6 +42,7 @@ public class ChatListViewModel extends AndroidViewModel {
 
     public void loadDbChatList() {
         controller.getDbHelper().getChatList(new ResultCallback<>() {
+
             @Override
             public void onSuccess(List<Chat> chats) {
                 List<Chat> uiList = new ArrayList<>();
@@ -58,8 +59,8 @@ public class ChatListViewModel extends AndroidViewModel {
 
     }
 
-    public void hideChat(long chatId) {
-        controller.getDbHelper().hideChatLocally(chatId, new ResultCallback<>() {
+    public void hideChat(Chat chat) {
+        controller.getDbHelper().hideChatLocally(chat.id, new ResultCallback<>() {
 
             @Override
             public void onSuccess(Boolean result) {
@@ -71,23 +72,24 @@ public class ChatListViewModel extends AndroidViewModel {
                 Log.d(AppController.LOG_TAG, errorMsg);
             }
         });
-        controller.getDbExecutor().execute(() -> controller.getNetworkService().hideChat(chatId));
+        controller.getNetStreams()[Math.abs((int) (chat.local_id % (AppController.POOL_SIZE - 1)))].execute(()
+                -> controller.getNetworkService().hideChat(chat.id));
     }
 
-    public void setChatBlockedState(long chatId, boolean isBlocked) {
-        controller.getDbExecutor().execute(() ->
-                controller.getNetworkService().setChatBlockedState(chatId, isBlocked, new ResultCallback<>() {
+    public void setChatBlockedState(Chat chat) {
+        controller.getNetStreams()[Math.abs((int) (chat.local_id % (AppController.POOL_SIZE - 1)))].execute(()
+                -> controller.getNetworkService().setChatBlockedState(chat.id, new ResultCallback<>() {
 
-                    @Override
-                    public void onSuccess(Boolean result) {
-                        isChatBlocked.postValue(result);
-                    }
+            @Override
+            public void onSuccess(Boolean result) {
+                isChatBlocked.postValue(result);
+            }
 
-                    @Override
-                    public void onError(String errorMsg) {
-                        Log.d(AppController.LOG_TAG, errorMsg);
-                    }
-                }));
+            @Override
+            public void onError(String errorMsg) {
+                Log.d(AppController.LOG_TAG, errorMsg);
+            }
+        }));
 
     }
 }

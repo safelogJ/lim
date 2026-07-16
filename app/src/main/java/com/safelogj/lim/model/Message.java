@@ -11,12 +11,14 @@ public class Message {
     public static final int TYPE_INCOMING = 2;
     public static final int STATUS_SENDING_OR_RECEIVE = 1;
     public static final int STATUS_SENT = 2;
+    public static final int STATUS_WAITING = 3;
     public static final int SYSTEM_SENDER_ID = -1;
 
 
     public long serverId;
     public long localId;
     public long chatId;
+    public long localChatId;
     public long senderId;
     public long receiverId;
     public String text;

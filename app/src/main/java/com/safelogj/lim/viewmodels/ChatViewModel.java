@@ -20,9 +20,9 @@ import java.util.List;
 public class ChatViewModel extends AndroidViewModel {
 
     private final MutableLiveData<Long> sendMsgLocalId = new MutableLiveData<>();
-    private final MutableLiveData<String> errorStatus = new MutableLiveData<>();
-    private final MutableLiveData<User> foundUser = new MutableLiveData<>();
     private final MutableLiveData<Chat> foundChat = new MutableLiveData<>();
+    private final MutableLiveData<String> errorStatus = new MutableLiveData<>();
+   // private final MutableLiveData<Chat> chatServer = new MutableLiveData<>();
     private final MutableLiveData<List<Message>> msgList = new MutableLiveData<>();
     private final MutableLiveData<Uri> selectedFileUri = new MutableLiveData<>();
     private final AppController controller;
@@ -34,19 +34,15 @@ public class ChatViewModel extends AndroidViewModel {
         controller = (AppController) application;
     }
 
-    public LiveData<User> getFoundUser() {
-        return foundUser;
-    }
-
-    public LiveData<Chat> getFoundChat() {
-        return foundChat;
-    }
+//    public LiveData<Chat> getChatServer() {
+//        return chatServer;
+//    }
 
     public LiveData<String> getErrorStatus() {
         return errorStatus;
     }
 
-    public LiveData<Long> getSusseccSendMsgLocalId() {
+    public LiveData<Long> getSendMsgLocalId() {
         return sendMsgLocalId;
     }
 
@@ -58,15 +54,20 @@ public class ChatViewModel extends AndroidViewModel {
         return selectedFileUri;
     }
 
+    public LiveData<Chat> getFoundChat() {
+        return foundChat;
+    }
+
     @Nullable
     public String getSelectedFileName() {
         return selectedFileName;
     }
 
 
+
     public void selectFile(Uri uri, String name) {
         selectedFileUri.postValue(uri);
-        this.selectedFileName = name;
+        selectedFileName = name;
     }
 
     public void clearFile() {
@@ -74,49 +75,13 @@ public class ChatViewModel extends AndroidViewModel {
         selectedFileName = null;
     }
 
-
-    public void searchUser(String login) {
-        controller.getDbExecutor().execute(() -> controller.getNetworkService().searchUser(
-                controller.getUsername(), controller.getPassword(), login, new ResultCallback<>() {
-
-                    @Override
-                    public void onSuccess(User user) {
-                        foundUser.postValue(user);
-                    }
-
-                    @Override
-                    public void onError(String errorMsg) {
-                        errorStatus.postValue(errorMsg);
-                        foundUser.postValue(null); // Очищаем старый результат
-                    }
-                }));
-    }
-
-    public void searchChat(User user) {
-        controller.getDbExecutor().execute(() -> controller.getNetworkService().searchChat(user, new ResultCallback<>() {
-
-            @Override
-            public void onSuccess(Chat chat) {
-                foundChat.postValue(chat);
-            }
-
-            @Override
-            public void onError(String errorMsg) {
-                errorStatus.postValue(errorMsg);
-                foundChat.postValue(null);
-
-            }
-        }));
-
-    }
-
     // Здесь же можно добавить метод для отправки сообщения в будущем
-    public void sendMessage(Message msg) {
+    public void sendMessage(Message msg, long localChatId) {
         controller.getDbHelper().saveMessage(msg);
 
         if (NetworkService.TEXT.equals(msg.type)) {
-            // Шлем обычный текст
-            controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
+            controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1)))].execute(()->
+                    controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
                 @Override
                 public void onSuccess(Long localId) {
                     sendMsgLocalId.postValue(localId);
@@ -124,10 +89,11 @@ public class ChatViewModel extends AndroidViewModel {
 
                 @Override
                 public void onError(String msg) { /* логика ошибки */ }
-            });
+            }));
+
         } else {
-            // Шлем медиа (картинку или файл)
-            controller.getNetworkService().sendMediaMessage(msg, new ResultCallback<>() {
+            controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1)))].execute(()->
+                    controller.getNetworkService().sendMediaMessage(msg, new ResultCallback<>() {
                 @Override
                 public void onSuccess(Long localId) {
                     sendMsgLocalId.postValue(localId);
@@ -135,11 +101,11 @@ public class ChatViewModel extends AndroidViewModel {
 
                 @Override
                 public void onError(String msg) { /* логика ошибки */ }
-            });
+            }));
         }
     }
 
-    public void loadMessages(long chatId) {
+    public void loadDbMessages(long chatId) {
         controller.getDbHelper().loadMessages(chatId, new ResultCallback<>() {
 
             @Override
@@ -153,5 +119,53 @@ public class ChatViewModel extends AndroidViewModel {
             }
 
         });
+    }
+
+    public void checkChatInDb(String login) {
+        controller.getDbHelper().getChatIdByUsername(login, new ResultCallback<>() {
+            @Override
+            public void onSuccess(Chat chat) {
+                foundChat.postValue(chat);
+            }
+
+            @Override
+            public void onError(String login) {
+                foundChat.postValue(null);
+                searchUserOnServer(login);
+            }
+        });
+    }
+
+    private void searchUserOnServer(String login) {
+        controller.getUserExecutor().execute(() -> controller.getNetworkService().searchUser(
+                controller.getUsername(), controller.getPassword(), login, new ResultCallback<>() {
+
+                    @Override
+                    public void onSuccess(User user) {
+                        searchChatOnServer(user);
+                    }
+
+                    @Override
+                    public void onError(String errorMsg) {
+                        errorStatus.postValue(errorMsg);
+                    }
+                }));
+    }
+
+    private void searchChatOnServer(User queryUser) {
+        controller.getUserExecutor().execute(() -> controller.getNetworkService().searchNewChat(queryUser, new ResultCallback<>() {
+
+            @Override
+            public void onSuccess(Chat chat) {
+                foundChat.postValue(chat);
+            }
+
+            @Override
+            public void onError(String errorMsg) {
+                errorStatus.postValue(errorMsg);
+                foundChat.postValue(null);
+            }
+        }));
+
     }
 }

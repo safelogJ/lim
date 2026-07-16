@@ -6,6 +6,7 @@ public class Chat {
     public static final long INVALID_ID = -1;
 
     public long id;
+    public long local_id;
     public String name;
     public String lastMessage;
     public long lastTimestamp;

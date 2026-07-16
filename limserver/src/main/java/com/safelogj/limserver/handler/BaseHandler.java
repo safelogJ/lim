@@ -68,6 +68,12 @@ public abstract class BaseHandler implements HttpHandler {
         sendResponse(exchange, 404, response);
     }
 
+    protected void sendChatNotFoundError(HttpExchange exchange, BaseResponse response) throws IOException {
+        response.status = BaseResponse.ERROR;
+        response.message = "chat not found";
+        sendResponse(exchange, 404, response);
+    }
+
     @NotNull
     private String sanitizeDisplayName(@NotNull String displayName) {
         String clean = displayName.replaceAll("\\p{Cc}", LimController.EMPTY_STRING);

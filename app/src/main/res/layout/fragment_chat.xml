@@ -7,6 +7,32 @@
     android:layout_height="match_parent"
     android:background="@color/main_background">
 
+    <HorizontalScrollView
+        android:id="@+id/chatNameTextScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/fielder_background_tr"
+        android:fillViewport="true"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:scrollbars="none"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/chatNameText"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:ellipsize="middle"
+            android:gravity="center_vertical|start"
+            android:singleLine="true"
+            android:textColor="@color/green_400"
+            android:textSize="34sp" />
+    </HorizontalScrollView>
+
     <!-- Список сообщений -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/messagesRecyclerView"
@@ -20,7 +46,7 @@
         app:layout_constraintBottom_toTopOf="@+id/inputContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/chatNameTextScroll"
         app:stackFromEnd="true"
         tools:listitem="@layout/item_message" />
 
@@ -41,27 +67,37 @@
         <TextView
             android:id="@+id/addFileButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="1dp"
-            android:background="@drawable/btn_add_file"
+            android:layout_height="0dp"
+            android:layout_marginStart="4dp"
             android:clickable="true"
             android:contentDescription="@string/add_file_btn_text"
             android:focusable="true"
+            android:gravity="center_horizontal|center_vertical"
+            android:text="[ + ]"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/messageEditText" />
 
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/attachmentPreview"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:layout_marginBottom="4dp"
             android:background="@drawable/fielder_background_tr"
-            android:padding="4dp"
+            android:paddingStart="2dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="4dp"
             android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@+id/messageEditText"
             app:layout_constraintEnd_toEndOf="@+id/sendButton"
             app:layout_constraintStart_toStartOf="@+id/addFileButton"
+            app:layout_constraintTop_toTopOf="parent"
             tools:visibility="visible">
 
             <HorizontalScrollView
@@ -88,22 +124,25 @@
                     android:gravity="center_vertical|start"
                     android:singleLine="true"
                     android:text="dsfgsdfdsfdsffdgfdgfdgfdgfdsfsdf.uut"
-                    android:textColor="@color/white"
+                    android:textColor="@color/light_gray_aaa"
                     android:textSize="14sp" />
             </HorizontalScrollView>
 
-            <ImageButton
+            <TextView
                 android:id="@+id/clearFileButton"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:clickable="true"
                 android:contentDescription="@string/remove_file_btn_text"
-                android:src="@drawable/close_small_48px"
-                app:backgroundTint="@color/main_background"
+                android:focusable="true"
+                android:gravity="center_horizontal|center_vertical"
+                android:text="[ - ]"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:rippleColor="@color/main_background_hard"
-                app:tint="@color/white" />
+                app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -112,6 +151,7 @@
             android:id="@+id/messageEditText"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
             android:autofillHints="username"
             android:backgroundTint="@android:color/darker_gray"
@@ -129,14 +169,19 @@
         <TextView
             android:id="@+id/sendButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="1dp"
-            android:background="@drawable/btn_send_msg"
+            android:layout_height="0dp"
+            android:layout_marginEnd="4dp"
             android:clickable="true"
             android:contentDescription="@string/send_icon_desc"
             android:focusable="true"
+            android:gravity="center_horizontal|center_vertical"
+            android:text="-))>"
+            android:textColor="@color/green_400"
+            android:textSize="24sp"
+            android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/messageEditText" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

@@ -7,6 +7,7 @@ import com.safelogj.limserver.handler.HideChatHandler;
 import com.safelogj.limserver.handler.MediaDownloadHandler;
 import com.safelogj.limserver.handler.MediaUploadHandler;
 import com.safelogj.limserver.handler.RegisterUserHandler;
+import com.safelogj.limserver.handler.SearchChatHandler;
 import com.safelogj.limserver.handler.SearchUserHandler;
 import com.safelogj.limserver.handler.SendMessageHandler;
 import com.safelogj.limserver.handler.EditUserHandler;
@@ -66,6 +67,7 @@ public class LimController {
             server.createContext("/user", new EditUserHandler());
             server.createContext("/chat/hide", new HideChatHandler());
             server.createContext("/chat/block", new BlockChatHandler());
+            server.createContext("/chat/search", new SearchChatHandler());
             server.createContext("/user/search", new SearchUserHandler());
             server.createContext("/messages/send", new SendMessageHandler());
             server.createContext("/messages/get", new GetMessagesHandler());

@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.MainActivity;
+import com.safelogj.lim.R;
 import com.safelogj.lim.adapters.ChatListAdapter;
 import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
@@ -24,10 +25,10 @@ import java.util.List;
 
 public class ChatListFragment extends Fragment {
 
+    private final List<Chat> chats = new ArrayList<>();
     private AppController controller;
     private FragmentChatListBinding mBinding;
     private ChatListAdapter adapter;
-    private final List<Chat> chats = new ArrayList<>();
     private ChatListViewModel viewModel;
 
     public ChatListFragment() {
@@ -54,24 +55,23 @@ public class ChatListFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
 
-        viewModel.getDbChatList().observe(getViewLifecycleOwner(), chatList -> {
+        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> {
             chats.clear();
             chats.addAll(chatList);
             adapter.notifyDataSetChanged();
         });
 
         viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
-            if (isHidden) {
+            if (isHidden != null && isHidden) {
                 viewModel.loadDbChatList();
             }
         });
 
         viewModel.isChatBlocked().observe(getViewLifecycleOwner(), isBlocked -> {
-            if (isBlocked) {
+            if (isBlocked != null && isBlocked) {
                 viewModel.loadDbChatList();
             }
         });
-
 
         adapter = new ChatListAdapter(chats, new ChatListAdapter.OnChatClickListener() {
             @Override
@@ -79,12 +79,12 @@ public class ChatListFragment extends Fragment {
                 MainActivity activity = (MainActivity) requireActivity();
                 if (chat.id == Chat.INVALID_ID) {
                     if (controller.getUserId() > 0) {
-                        activity.showFragment(ChatFragment.newInstance(chat.id));
+                        activity.showFragment(ChatFragment.newInstance(chat.id, chat.local_id, chat.name));
                     } else {
                         activity.showFragment(new UserFragment());
                     }
                 } else {
-                    activity.showFragment(ChatFragment.newInstance(chat.id));
+                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.local_id, chat.name));
                 }
             }
 
@@ -94,7 +94,7 @@ public class ChatListFragment extends Fragment {
                 if (chat.id == Chat.INVALID_ID) {
                     activity.showFragment(new UserFragment());
                 } else {
-                    activity.showFragment(ChatFragment.newInstance(chat.id));
+                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.local_id, chat.name));
                 }
             }
 
@@ -109,18 +109,11 @@ public class ChatListFragment extends Fragment {
     }
 
     private void showChatOptionsDialog(Chat chat) {
-        boolean isCurrentlyBlocked = chat.isBlocked; // Нужно добавить это поле в модель Chat
-
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         builder.setTitle(chat.name);
-        builder.setMessage("Выберите действие для этого чата");
-        // Кнопка удаления (скрытия)
-        builder.setPositiveButton("Скрыть", (d, w) -> viewModel.hideChat(chat.id));
-        // Кнопка блокировки
-        String blockText = isCurrentlyBlocked ? "Разблокировать" : "Заблокировать";
-        builder.setNeutralButton(blockText, (d, w) -> viewModel.setChatBlockedState(chat.id, !isCurrentlyBlocked));
-
-        builder.setNegativeButton("Отмена", null);
+        builder.setMessage(getString(R.string.select_action_for_chat));
+        builder.setPositiveButton(getString(R.string.hide_chat), (d, w) -> viewModel.hideChat(chat));
+        builder.setNegativeButton(getString(R.string.block_chat), (d, w) -> viewModel.setChatBlockedState(chat));
         builder.show();
     }
 

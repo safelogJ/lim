@@ -1,5 +1,6 @@
 package com.safelogj.lim.adapters;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -7,6 +8,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemChatBinding;
 import com.safelogj.lim.model.Chat;
@@ -71,9 +73,11 @@ public class ChatListAdapter extends RecyclerView.Adapter<ChatListAdapter.ChatVi
             if (chat.lastSendStatus == Message.STATUS_SENT) {
                 binding.timeText.setTextColor(binding.getRoot().getResources().getColor(R.color.green_400,
                         binding.getRoot().getContext().getTheme()));
+                Log.d(AppController.LOG_TAG, "bind: green");
             } else  {
                 binding.timeText.setTextColor(binding.getRoot().getResources().getColor(R.color.light_gray_aaa,
                         binding.getRoot().getContext().getTheme()));
+                Log.d(AppController.LOG_TAG, "bind: gray_aaa");
             }
             if (chat.isBlocked) {
                 binding.chatName.setTextColor(binding.getRoot().getResources().getColor(R.color.light_gray_aaa,

@@ -6,6 +6,7 @@
     <string name="public_key_cert_error">error: certificate public keys do not match</string>
     <string name="sign_cert_error">error: certificate signature verification failed</string>
     <string name="main_cert_error">error: certificate verification failed</string>
+    <string name="search_user_error">error while searching for user</string>
 
     <string name="server_ip" translatable="false">192.168.10.10</string>
     <string name="server_ip_help">server ip</string>
@@ -24,6 +25,11 @@
     <string name="cert_btn_text">add certificate</string>
     <string name="send_login">send login</string>
     <string name="send_msg">send message</string>
+    <string name="hide_chat">Hide</string>
+    <string name="block_chat">Block</string>
+    <string name="unblock_chat">Unlock</string>
+    <string name="select_action_for_chat">Select an action for this chat</string>
+    <string name="cancel">Cancel</string>
 
     <string name="login_error">invalid username format (3–20 chars, lowercase Latin and digits)</string>
     <string name="pass_error">invalid password format (6–20 chars)</string>

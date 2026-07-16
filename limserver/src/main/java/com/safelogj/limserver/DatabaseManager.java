@@ -80,7 +80,7 @@ public class DatabaseManager {
         String createChatsTable = "CREATE TABLE IF NOT EXISTS chats (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "name TEXT, " +             // Название группы (null для личных чатов двоих)
-                "is_group INTEGER NOT NULL, " + // 1 = групповой чат, 0 = чат один-на-один
+                "is_group INTEGER NOT NULL DEFAULT 0, " + // 1 = групповой чат, 0 = чат один-на-один
                 "created_at INTEGER NOT NULL" +
                 ")";
 
@@ -99,7 +99,7 @@ public class DatabaseManager {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "chat_id INTEGER NOT NULL, " +
                 "sender_id INTEGER NOT NULL, " +
-                "text TEXT, " +
+                "text TEXT NOT NULL, " +
                 "type TEXT NOT NULL, " +        // TEXT, IMAGE, FILE, SYSTEM
                 "file_path TEXT, " +            // Путь к файлу на диске роутера
                 "file_name TEXT, " +            // Оригинальное имя файла
@@ -353,10 +353,10 @@ public class DatabaseManager {
         }
     }
 
-    public boolean setChatBlockedState(long chatId, long userId, boolean isBlocked) {
+    public boolean setChatBlockedState(long chatId, long userId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
                 "UPDATE chat_members SET is_blocked = ? WHERE chat_id = ? AND user_id = ?")) {
-            stmt.setLong(1, isBlocked ? 1 : 0);
+            stmt.setLong(1, 1);
             stmt.setLong(2, chatId);
             stmt.setLong(3, userId);
             return stmt.executeUpdate() > 0;
@@ -545,24 +545,38 @@ public class DatabaseManager {
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastId) {
+        String sql;
+        boolean isInitialSync = (lastId == 0);
 
-        // Запрос: выбираем сообщения из чатов, где состоит данный юзер, и ID сообщения больше последнего известного
-        String sql = "SELECT m.* FROM messages m " +
-                "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                "WHERE cm.user_id = ? AND m.id > ? " +
-                "ORDER BY m.id ASC";
+        if (isInitialSync) {
+            // Для нового устройства: всё, что есть в чатах пользователя
+            sql = "SELECT m.* FROM messages m " +
+                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+                    "WHERE cm.user_id = ? AND m.id > ? " +
+                    "ORDER BY m.id ASC";
+        } else {
+            // Для обычного опроса: только чужие сообщения
+            sql = "SELECT m.* FROM messages m " +
+                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+                    "WHERE cm.user_id = ? AND m.id > ? AND m.sender_id != ? " +
+                    "ORDER BY m.id ASC";
+        }
 
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, userId);
             stmt.setLong(2, lastId);
 
+            if (!isInitialSync) {
+                stmt.setLong(3, userId); // Фильтруем себя только при обычном опросе
+            }
+
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Message> messages = new ArrayList<>();
                 while (rs.next()) {
                     Message msg = new Message();
-                    msg.id = rs.getInt("id");
-                    msg.chatId = rs.getInt("chat_id");
-                    msg.senderId = rs.getInt("sender_id");
+                    msg.id = rs.getLong("id");
+                    msg.chatId = rs.getLong("chat_id");
+                    msg.senderId = rs.getLong("sender_id");
                     msg.text = rs.getString("text");
                     msg.type = rs.getString("type");
                     msg.timestamp = rs.getLong("timestamp");

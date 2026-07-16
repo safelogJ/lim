@@ -30,7 +30,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentUserBinding;
-import com.safelogj.lim.viewmodels.AuthViewModel;
+import com.safelogj.lim.viewmodels.UserViewModel;
 
 import java.io.InputStream;
 import java.security.cert.CertificateFactory;
@@ -76,7 +76,7 @@ public class UserFragment extends Fragment {
 
     private FragmentUserBinding mBinding;
     private AppController controller;
-    private AuthViewModel authViewModel;
+    private UserViewModel userViewModel;
     private String username;
     private String password;
     private String address;
@@ -103,16 +103,16 @@ public class UserFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        authViewModel = new ViewModelProvider(this).get(AuthViewModel.class);
-        authViewModel.getResultMessage().observe(getViewLifecycleOwner(), msg -> {
+        userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
+        userViewModel.getResultMessage().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) {
                 mBinding.resultTextView.setText(msg);
             }
         });
 
+        mBinding.addressEditText.setText(address);
         mBinding.loginEditText.setText(username);
         mBinding.passwordEditText.setText(password);
-        mBinding.addressEditText.setText(address);
         mBinding.displayNameEditText.setText(displayName);
         drawCertName(certName);
         setRegBtnListener();
@@ -217,22 +217,26 @@ public class UserFragment extends Fragment {
 
             if (ip == null) {
                 mBinding.addressInputLayout.setError(getString(R.string.ip_error));
+                mBinding.addressEditText.requestFocus();
                 return;
             }
             if (user == null) {
                 mBinding.loginInputLayout.setError(getString(R.string.login_error));
+                mBinding.loginEditText.requestFocus();
                 return;
             }
             if (pass == null) {
                 mBinding.passwordInputLayout.setError(getString(R.string.pass_error));
+                mBinding.passwordEditText.requestFocus();
                 return;
             }
             if (dName == null) {
                 mBinding.displayNameInputLayout.setError(getString(R.string.display_name_error));
+                mBinding.displayNameEditText.requestFocus();
                 return;
             }
             getUserValues();
-            authViewModel.setResultMessage(AppController.EMPTY_STRING);
+            userViewModel.setResultMessage(AppController.EMPTY_STRING);
             mBinding.displayNameEditText.setText(dName);
             sendCommand(ip, user, pass, dName);
             controller.setServerIp(ip);
@@ -243,15 +247,15 @@ public class UserFragment extends Fragment {
 
     private void sendCommand(String ip, String user, String pass, String dName) {
         if (controller.getUserId() > 0 && username.equals(user) && REMOVE.equals(dName.toLowerCase(Locale.US))) {  // remove
-            authViewModel.deleteAccount(username, password);
+            userViewModel.deleteAccount(username, password);
             Log.d(AppController.LOG_TAG, "Удаление аккаунта");
         } else if (controller.getUserId() > 0 && controller.getServerIp().equals(ip) && username.equals(user)
                 && (!password.equals(pass) || !displayName.equals(dName))) { // edit
-            authViewModel.editUser(username, password, displayName.equals(dName) ? null : dName, password.equals(pass) ? null : pass);
+            userViewModel.editUser(username, password, displayName.equals(dName) ? null : dName, password.equals(pass) ? null : pass);
             Log.d(AppController.LOG_TAG, "Редактирование аккаунта");
-        } else if (controller.getUserId() == 0 && !REMOVE.equals(dName.toLowerCase(Locale.US))) {  // reg
-            authViewModel.register(user, pass, dName);
-            Log.d(AppController.LOG_TAG, "Регистрация аккаунта");
+        } else if (controller.getUserId() == 0 && !REMOVE.equals(dName.toLowerCase(Locale.US))) {  // reg or auth
+            userViewModel.register(user, pass, dName);
+            Log.d(AppController.LOG_TAG, "Регистрация аккаунта или авторизация");
         } else if (REMOVE.equals(dName.toLowerCase(Locale.US))) {
             mBinding.resultTextView.setText(getString(R.string.display_name_reserved));
         } else if (!controller.getServerIp().equals(ip) || !username.equals(user)) {

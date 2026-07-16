@@ -2,6 +2,9 @@ package com.safelogj.lim;
 
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
@@ -16,6 +19,7 @@ import androidx.fragment.app.Fragment;
 
 import com.safelogj.lim.databinding.ActivityMainBinding;
 import com.safelogj.lim.fragments.ChatListFragment;
+import com.safelogj.lim.viewmodels.ResultCallback;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -51,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 v.setPadding(leftPadding, systemInsets.top, rightPadding, bottomPadding);
             }
-            return WindowInsetsCompat.CONSUMED;
+            return insets;
         });
 
         controller = (AppController) getApplication();
