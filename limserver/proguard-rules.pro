@@ -36,3 +36,7 @@
 
 # Sqlite
 -keep class org.sqlite.** { *; }
+
+# HikariCP
+-keep class com.zaxxer.hikari.** { *; }
+-dontwarn com.zaxxer.hikari.**

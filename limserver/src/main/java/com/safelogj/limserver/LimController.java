@@ -42,9 +42,9 @@ public class LimController {
     private static final String USER_DIR = "user.dir";
     private static final String DB_PATH = System.getProperty(USER_DIR) + "/db";
     public static final String MEDIA_PATH = System.getProperty(USER_DIR) + "/media";
-    public static final DatabaseManager dbManager = new DatabaseManager(DB_PATH);
     public static final int ERROR = 1;
     public static final int DATA_ERR = 65;
+    public static DatabaseManager dbManager;
 
     private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
             TimeUnit.MINUTES, new LinkedBlockingQueue<>(500), new ThreadPoolExecutor.CallerRunsPolicy());
@@ -55,10 +55,11 @@ public class LimController {
             System.setProperty("java.awt.headless", "true");
             File db = new File(DB_PATH);
             File media = new File(MEDIA_PATH);
-            if ((!db.exists() && !db.mkdirs()) || (!media.exists() && !media.mkdirs())) {
+            if (!db.exists() || !media.exists()) {
                 log.error("Критическая ошибка: Не удалось создать папки db и media");
                 System.exit(DATA_ERR);
             }
+            dbManager = new DatabaseManager(DB_PATH);
             dbManager.initDatabase();
             HttpsServer server = initHttpsServer();
             closeAppListener(server);

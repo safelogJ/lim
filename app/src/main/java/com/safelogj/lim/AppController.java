@@ -2,10 +2,14 @@ package com.safelogj.lim;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -42,7 +46,10 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -63,6 +70,7 @@ public class AppController extends Application {
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
     public static final int POOL_SIZE = 5;
+    public static final String NOTIFICATION_CHANNEL = "lim_messages";
     private static final String USER_DATA = "userdata";
     private static final String USER_DATA_JSON = "userdata.txt";
     private static final String USER_ID = "userid";
@@ -81,8 +89,10 @@ public class AppController extends Application {
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
+    private ScheduledFuture<?> syncTask;
+    private final AtomicBoolean isDownloadInProgress = new AtomicBoolean(false);
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
-    private final Handler syncHandler = new Handler(Looper.getMainLooper());
     private int startedActivities = 0;
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
@@ -108,27 +118,6 @@ public class AppController extends Application {
     private DatabaseHelper dbHelper;
     private boolean initAppError;
     private String initAppErrStr = EMPTY_STRING;
-    private final Runnable syncRunnable = () -> {
-        if (userId > 0) {
-            dbHelper.getLastIncomingMessageId(userId, new ResultCallback<>() {
-                @Override
-                public void onSuccess(Long lastServerId) {
-                    netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, () -> {
-                        if (startedActivities > 0) {
-                            syncHandler.postDelayed(syncRunnable, 4000);
-                        }
-                    }));
-                }
-
-                @Override
-                public void onError(String msg) {
-                    //
-                }
-            });
-        } else {
-            Log.d(AppController.LOG_TAG, "userId = 0");
-        }
-    };
 
     public boolean isInitAppError() {
         return initAppError;
@@ -242,37 +231,40 @@ public class AppController extends Application {
         networkService = new NetworkService(this);
         initStreams();
         dbHelper.initDatabase();
+        createNotificationChannel();
         Log.d(LOG_TAG, "Приложение запущено ");
     }
 
     public void writeSettingsToFile() {
         dbExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
-// worker
-    public void startSendingMsgList() {
-        dbExecutor.execute(() -> {
-            for (Message msg : dbHelper.getPendingMessages()) {
-                sendMsg(msg);
+
+    private void startDownloadNewMsg() {
+        dbHelper.getLastDbMessageId(userId, new ResultCallback<>() {
+            @Override
+            public void onSuccess(Long lastServerId) {
+                isDownloadInProgress.set(true);
+                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, ()-> isDownloadInProgress.set(false)));
+            }
+
+            @Override
+            public void onError(String msg) {
+                //
             }
         });
     }
 
-    public void sendMsg(Message msg) {
-        if (userId == 0) return;
-        if (msg.type.equals(NetworkService.TEXT)) {
-            netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> sendTextMsg(msg));
-        } else {
-            netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> sendFileMsg(msg));
-        }
-    }
-
-
-    private void sendTextMsg(Message msg) {
-        networkService.sendTextMessage(msg);
-    }
-
-    private void sendFileMsg(Message msg) {
-//        networkService.sendFileMessage(msg);
+    // worker
+    public void startSendingMsgList() {
+        dbExecutor.execute(() -> {
+            for (Message msg : dbHelper.getPendingMessages()) {
+                if (msg.type.equals(NetworkService.TEXT)) {
+                    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() ->  networkService.sendTextMessage(msg));
+                } else {
+              //    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendFileMessage(msg));
+                }
+            }
+        });
     }
 
     private void readRoutersListAndSettingsEncrypted() {
@@ -543,8 +535,14 @@ public class AppController extends Application {
             @Override
             public void onActivityStarted(@androidx.annotation.NonNull Activity activity) {
                 if (++startedActivities == 1) {
-                    syncHandler.removeCallbacks(syncRunnable);
-                    syncHandler.post(syncRunnable);
+                    syncTask = syncExecutor.scheduleWithFixedDelay(()-> {
+                        if (userId > 0 && isNetworkAvailable()) {
+                            if (!isDownloadInProgress.get()) {
+                                startDownloadNewMsg();
+                            }
+                            startSendingMsgList();
+                        }
+                    }, 4000, 4000, TimeUnit.MILLISECONDS);
                 }
             }
 
@@ -560,8 +558,8 @@ public class AppController extends Application {
 
             @Override
             public void onActivityStopped(@androidx.annotation.NonNull Activity activity) {
-                if (--startedActivities == 0) {
-                    syncHandler.removeCallbacks(syncRunnable);
+                if (--startedActivities == 0 && syncTask != null && !syncTask.isCancelled()) {
+                    syncTask.cancel(false);
                 }
             }
 
@@ -606,5 +604,34 @@ public class AppController extends Application {
 
         // Если старое сообщение — полная дата "05.07.2024"
         return controller.dateFormat.format(new Date(timestamp));
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
+            channel.enableVibration(false); // ОТКЛЮЧАЕМ вибрацию для канала
+            channel.setVibrationPattern(new long[]{0}); // На всякий случай зануляем паттерн
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    public boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return false;
+        }
+        Network network = cm.getActiveNetwork();
+        if (network == null) {
+            return false;
+        }
+        NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+        return capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+
     }
 }

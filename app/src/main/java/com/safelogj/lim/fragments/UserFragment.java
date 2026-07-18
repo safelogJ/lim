@@ -21,6 +21,8 @@ import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -30,27 +32,32 @@ import android.view.ViewGroup;
 
 import com.google.android.material.textfield.TextInputLayout;
 import com.safelogj.lim.AppController;
+import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentUserBinding;
+import com.safelogj.lim.model.Chat;
+import com.safelogj.lim.viewmodels.ResultCallback;
 import com.safelogj.lim.viewmodels.UserViewModel;
 
 import java.io.InputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
 public class UserFragment extends Fragment {
 
+    private AppController controller;
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9]{3,20}$");
     private static final String REMOVE = "remove";
     private final ActivityResultCallback<ActivityResult> callbackForGeneralPermitURI = result -> {
         if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
             Uri uri = result.getData().getData();
             if (uri != null) {
-                DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext(), uri);
+                DocumentFile documentFile = DocumentFile.fromSingleUri(controller, uri);
                 if (documentFile.exists()) {
-                    try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
+                    try (InputStream is = controller.getContentResolver().openInputStream(uri)) {
                         CertificateFactory cf = CertificateFactory.getInstance("X.509");
                         X509Certificate cert = (X509Certificate) cf.generateCertificate(is);
                         byte[] certBytes = cert.getEncoded();
@@ -76,8 +83,29 @@ public class UserFragment extends Fragment {
     private final ActivityResultLauncher<String> requestAskReadFilePermit =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackAskReadFilePermit);
 
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final Runnable uiRunnable = new Runnable() {
+        @Override
+        public void run() {
+            controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
+                @Override
+                public void onSuccess(List<Chat> unreadChats) {
+                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: "+ unreadChats.size());
+                    if (!unreadChats.isEmpty()) {
+                        NotificationHelper.showNotification(controller, unreadChats);
+                    }
+                }
+
+                @Override
+                public void onError(String msg) {
+                    //
+                }
+            });
+            uiHandler.postDelayed(this, 4000);
+        }
+    };
+
     private FragmentUserBinding mBinding;
-    private AppController controller;
     private UserViewModel userViewModel;
     private String username;
     private String password;
@@ -121,6 +149,18 @@ public class UserFragment extends Fragment {
         addCertBtnListener();
         setTouchFieldListeners();
         setKeyboardPadding();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        uiHandler.post(uiRunnable);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        uiHandler.removeCallbacks(uiRunnable);
     }
 
     @Override
@@ -239,7 +279,7 @@ public class UserFragment extends Fragment {
                 return;
             }
             getUserValues();
-            userViewModel.setResultMessage(AppController.EMPTY_STRING);
+            userViewModel.setResultMessage(getString(R.string.wait_server_answer));
             mBinding.displayNameEditText.setText(dName);
             sendCommand(ip, user, pass, dName);
             controller.setServerIp(ip);
@@ -269,7 +309,7 @@ public class UserFragment extends Fragment {
     private void addCertBtnListener() {
         mBinding.addCertButton.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
-                    && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    && ContextCompat.checkSelfPermission(controller, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 requestAskReadFilePermit.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
                 return;
             }

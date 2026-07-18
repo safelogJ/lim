@@ -2,6 +2,7 @@ package com.safelogj.lim.adapters;
 
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -109,28 +110,32 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
             switch (type) {
                 case Message.TYPE_SYSTEM:
-                    constraintSet.centerHorizontally(binding.messageBubble.getId(), ConstraintSet.PARENT_ID);
+                    constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.5f);
                     binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_tr);
                     binding.messageTime.setVisibility(View.GONE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
+                    binding.messageBubble.setGravity(Gravity.CENTER);
+                    binding.messageText.setGravity(Gravity.CENTER);
                     break;
 
                 case Message.TYPE_OUTGOING:
-                    constraintSet.clear(binding.messageBubble.getId(), ConstraintSet.START);
-                    constraintSet.connect(binding.messageBubble.getId(), ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END);
+                    constraintSet.setHorizontalBias(binding.messageBubble.getId(), 1.0f);
                     binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_tr);
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.white));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
+                    binding.messageBubble.setGravity(Gravity.END);
+                    binding.messageText.setGravity(Gravity.END);
                     break;
 
                 default: // TYPE_INCOMING
-                    constraintSet.clear(binding.messageBubble.getId(), ConstraintSet.END);
-                    constraintSet.connect(binding.messageBubble.getId(), ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START);
+                    constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.0f);
                     binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_wt);
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.black2));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black3));
+                    binding.messageBubble.setGravity(Gravity.START);
+                    binding.messageText.setGravity(Gravity.START);
             }
 
 

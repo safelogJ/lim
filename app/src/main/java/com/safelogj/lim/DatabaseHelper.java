@@ -47,6 +47,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String LAST_SEND_STATUS = "last_send_status";
     private static final String MESSAGES = "messages";
     private static final String USERS = "users";
+    private static final String ID_ANCHOR = "id = ?";
+    private static final String LOCAL_ID_ANCHOR = "local_id = ?";
     private static final int DB_VERSION = 1;
     private SQLiteDatabase database;
     private final AppController controller;
@@ -99,7 +101,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-
+        //
     }
 
     public void initDatabase() {
@@ -177,7 +179,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try {
                 ContentValues values = new ContentValues();
                 values.put(DISPLAY_NAME, newName);
-                database.update(USERS, values, "id = ?", new String[]{String.valueOf(userId)});
+                database.update(USERS, values, ID_ANCHOR, new String[]{String.valueOf(userId)});
 
                 if (userId != controller.getUserId()) {
                     ContentValues chatValues = new ContentValues();
@@ -209,7 +211,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (foundChat != null) {
                     ContentValues values = new ContentValues();
                     values.put(IS_HIDDEN, 0);
-                    database.update(CHATS, values, "id = ?", new String[]{String.valueOf(foundChat.id)});
+                    database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(foundChat.id)});
                     database.setTransactionSuccessful();
                     callback.onSuccess(foundChat);
                 } else {
@@ -245,7 +247,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
             values.put(NAME, newName);
-            if (database.update(CHATS, values, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
+            if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
                 callback.onSuccess(newName);
             } else {
                 callback.onError("error renaming chat");
@@ -257,7 +259,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
             values.put(IS_HIDDEN, 1); // 1 - "Hidden"
-            if (database.update(CHATS, values, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
+            if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
                 callback.onSuccess(true);
             } else {
                 callback.onError("chat hiding error");
@@ -269,7 +271,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues v = new ContentValues();
             v.put(IS_BLOCKED, 1);
-            if (database.update(CHATS, v, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
+            if (database.update(CHATS, v, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
                 callback.onSuccess(true);
             } else {
                 callback.onError("chat blocking error");
@@ -309,6 +311,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
+    public void getUnreadChats(ResultCallback<List<Chat>> callback) {
+        dbExecutor.execute(() -> {
+            List<Chat> unreadChats = new ArrayList<>();
+            try (Cursor cursor = database.rawQuery("SELECT * FROM chats WHERE has_new_msg = 1 AND is_hidden = 0", null)) {
+                if (cursor.moveToFirst()) {
+                    do {
+                        Chat chat = new Chat();
+                        chat.id = cursor.getLong(cursor.getColumnIndexOrThrow(ID));
+                        chat.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
+                        chat.name = cursor.getString(cursor.getColumnIndexOrThrow(NAME));
+                        unreadChats.add(chat);
+                    } while (cursor.moveToNext());
+                }
+                callback.onSuccess(unreadChats);
+            } catch (Exception e) {
+                Log.d(AppController.LOG_TAG, "Error getting unread chats: ", e);
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+
     public void loadChatMessages(long chatId, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
@@ -343,12 +366,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
             values.put(HAS_NEW_MSG, 0);
-            database.update(CHATS, values, "id = ?", new String[]{String.valueOf(chatId)});
+            database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chatId)});
         });
     }
 
     public void saveMsgBeforeSending(Message msg) {
         dbExecutor.execute(() -> {
+            Log.d(AppController.LOG_TAG, "чат id = " + msg.chatId + "имя чата = " + msg.chatName + " отправитель = "
+                    + msg.senderId + " текст  = " + msg.text + " тип = " + msg.type + " путь = " + msg.filePath
+                    + " имя файла = " + msg.fileName + " время = " + msg.timestamp);
             ContentValues values = new ContentValues();
             values.put(CHAT_ID, msg.chatId);
             values.put(CHAT_NAME, msg.chatName);
@@ -369,7 +395,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                 chatValues.put(IS_HIDDEN, 0);
                 // Обновляем чат, у которого совпадает ID
-                database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
+                database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
             }
         });
     }
@@ -390,7 +416,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                     chatValues.put(IS_HIDDEN, 0);
                     chatValues.put(HAS_NEW_MSG, 1);
-                    database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
+                    database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
                 }
                 database.setTransactionSuccessful(); // Фиксируем изменения
             } catch (Exception e) {
@@ -402,10 +428,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void saveIncomingMsgList(List<Message> messages, @NonNull Runnable onComplete) {
+    public void saveIncomingMsgList(List<Message> messages) {
         dbExecutor.execute(() -> {
             if (messages == null || messages.isEmpty()) {
-                onComplete.run();
                 return;
             }
             database.beginTransaction();
@@ -414,10 +439,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 for (Message msg : messages) {
                     // 1. Сохраняем само сообщение
                     database.insertWithOnConflict(MESSAGES, null, getValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
-
                     // 2. Определяем, кто в этом чате собеседник
                     long interlocutorId = (msg.senderId == myId) ? msg.receiverId : msg.senderId;
-
                     // 3. Подготавливаем данные для чата
                     ContentValues chatValues = new ContentValues();
                     chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
@@ -425,17 +448,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                     chatValues.put(IS_HIDDEN, 0);
                     chatValues.put(INTERLOCUTOR_ID, interlocutorId);
-
                     // Ставим флаг "новое", только если сообщение реально чужое
                     if (msg.senderId != myId) {
                         chatValues.put(HAS_NEW_MSG, 1);
                     } else {
                         chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
                     }
-
                     // 4. Пытаемся обновить существующий чат
-                    int updatedRows = database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
-
+                    int updatedRows = database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
                     // 5. Если чат не найден (новое устройство или первый контакт) — создаем его
                     if (updatedRows == 0) {
                         chatValues.put(ID, msg.chatId);
@@ -449,7 +469,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
             } finally {
                 database.endTransaction();
-                onComplete.run();
             }
         });
     }
@@ -460,6 +479,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(ID, msg.id);             // Серверный ID
         Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id);
         values.put(CHAT_ID, msg.chatId);
+        values.put(CHAT_NAME, msg.chatName);
         values.put(SENDER_ID, msg.senderId);
         values.put(TEXT, msg.text);
         values.put(TYPE, msg.type);
@@ -476,12 +496,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             v.put(ID, msg.id); // Теперь у сообщения есть серверный ID
             v.put(TIMESTAMP, msg.timestamp); // Используем время сервера
             v.put(SEND_STATUS, Message.STATUS_SENT);
-            database.update(MESSAGES, v, "local_id = ?", new String[]{String.valueOf(msg.localId)});
+            database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(msg.localId)});
 
             ContentValues chatValues = new ContentValues();
             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
             chatValues.put(IS_BLOCKED, 0);
-            database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
+            database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
             Log.d(AppController.LOG_TAG, "подтвержденно отправление сообщения, серв id " +  msg.id + " чат id " + msg.chatId);
         });
     }
@@ -490,17 +510,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues v = new ContentValues();
             v.put(SEND_STATUS, Message.STATUS_WAITING);
-            database.update(MESSAGES, v, "local_id = ?", new String[]{String.valueOf(localId)});
+            database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(localId)});
         });
     }
 
-    public void getLastIncomingMessageId(long userId, ResultCallback<Long> callback) {
+    public void getLastDbMessageId(long userId, ResultCallback<Long> callback) {
         dbExecutor.execute(() -> {
             long lastServerId = 0;
-            try (Cursor cursor = database.rawQuery(
-                //    "SELECT MAX(" + ID + ") FROM " + MESSAGES + " WHERE " + SENDER_ID + " != ?",
-                    "SELECT MAX(" + ID + ") FROM " + MESSAGES,
-                    new String[]{String.valueOf(userId)})) {
+            try (Cursor cursor = database.rawQuery("SELECT MAX(" + ID + ") FROM " + MESSAGES, null)) {
                 if (cursor.moveToFirst()) {
                     lastServerId = cursor.getLong(0);
                     Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
@@ -517,31 +534,47 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public List<Message> getPendingMessages() {
         List<Message> messages = new ArrayList<>();
-        try (Cursor cursor = database.rawQuery(
-                "SELECT m.*, c.local_id as chat_local_id " +
-                "FROM messages m " +
-                "JOIN chats c ON m.chat_id = c.id " +
-                "WHERE m.send_status = 3 " +
-                "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
-            if (cursor.moveToFirst()) {
-                do {
-                    Message msg = new Message();
-                    msg.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
-                    msg.chatId = cursor.getLong(cursor.getColumnIndexOrThrow(CHAT_ID));
-                    msg.chatName = cursor.getString(cursor.getColumnIndexOrThrow(CHAT_NAME));
-                    msg.localChatId = cursor.getLong(cursor.getColumnIndexOrThrow("chat_local_id"));
-                    msg.senderId = cursor.getLong(cursor.getColumnIndexOrThrow(SENDER_ID));
-                    msg.text = cursor.getString(cursor.getColumnIndexOrThrow(TEXT));
-                    msg.type = cursor.getString(cursor.getColumnIndexOrThrow(TYPE));
-                    msg.filePath = cursor.getString(cursor.getColumnIndexOrThrow(FILE_PATH));
-                    msg.fileName = cursor.getString(cursor.getColumnIndexOrThrow(FILE_NAME));
-                    msg.timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(TIMESTAMP));
-                    msg.sendStatus = cursor.getLong(cursor.getColumnIndexOrThrow(SEND_STATUS));
-                    messages.add(msg);
-                } while (cursor.moveToNext());
+        List<Long> idsToUpdate = new ArrayList<>();
+
+        database.beginTransaction();
+        try {
+            try (Cursor cursor = database.rawQuery(
+                    "SELECT m.*, c.local_id as chat_local_id " +
+                    "FROM messages m " +
+                    "JOIN chats c ON m.chat_id = c.id " +
+                    "WHERE m.send_status = 3 " +
+                    "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
+                if (cursor.moveToFirst()) {
+                    do {
+                        Message msg = new Message();
+                        msg.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
+                        idsToUpdate.add(msg.localId); // Запоминаем ID для обновления
+                        msg.chatId = cursor.getLong(cursor.getColumnIndexOrThrow(CHAT_ID));
+                        msg.chatName = cursor.getString(cursor.getColumnIndexOrThrow(CHAT_NAME));
+                        msg.localChatId = cursor.getLong(cursor.getColumnIndexOrThrow("chat_local_id"));
+                        msg.senderId = cursor.getLong(cursor.getColumnIndexOrThrow(SENDER_ID));
+                        msg.text = cursor.getString(cursor.getColumnIndexOrThrow(TEXT));
+                        msg.type = cursor.getString(cursor.getColumnIndexOrThrow(TYPE));
+                        msg.filePath = cursor.getString(cursor.getColumnIndexOrThrow(FILE_PATH));
+                        msg.fileName = cursor.getString(cursor.getColumnIndexOrThrow(FILE_NAME));
+                        msg.timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(TIMESTAMP));
+                        messages.add(msg);
+                    } while (cursor.moveToNext());
+                }
             }
+            if (!idsToUpdate.isEmpty()) {
+                ContentValues v = new ContentValues();
+                v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
+                for (Long lid : idsToUpdate) {
+                    database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
+                }
+            }
+
+            database.setTransactionSuccessful();
         } catch (Exception e) {
-            Log.e(AppController.LOG_TAG, "Error receiving sending queue", e);
+            Log.e(AppController.LOG_TAG, "Error in getPendingMessages transaction", e);
+        } finally {
+            database.endTransaction();
         }
         return messages;
     }
@@ -550,7 +583,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             ContentValues values = new android.content.ContentValues();
             values.put(SEND_STATUS, newStatus);
-            database.update(MESSAGES, values, "local_id = ?", new String[]{String.valueOf(localId)});
+            database.update(MESSAGES, values, LOCAL_ID_ANCHOR, new String[]{String.valueOf(localId)});
             // Здесь позже можно добавить сигнал UI: "Эй, обнови иконку сообщения!"
             Log.d(AppController.LOG_TAG, "Status for message " + localId + " updated to " + newStatus);
         });
@@ -564,7 +597,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             v.put(LAST_SEND_STATUS, status);
             v.put(IS_HIDDEN, 0);
             // Обновляем чат, у которого совпадает ID
-            database.update(CHATS, v, "id = ?", new String[]{String.valueOf(chatId)});
+            database.update(CHATS, v, ID_ANCHOR, new String[]{String.valueOf(chatId)});
         });
     }
 

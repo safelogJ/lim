@@ -504,7 +504,7 @@ public class DatabaseManager {
             conn.setAutoCommit(false);
 
             try (PreparedStatement insertStmt = conn.prepareStatement(
-                    "INSERT INTO messages (chat_id, sender_id, text, type, timestamp, file_path, file_name) VALUES (?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+                    "INSERT INTO messages (chat_id, sender_id, text, type, chat_name, file_path, file_name, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
                  PreparedStatement updateStmt = conn.prepareStatement(
                          "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?");
                  PreparedStatement updateBlock = conn.prepareStatement(
@@ -514,10 +514,10 @@ public class DatabaseManager {
                 insertStmt.setLong(2, senderId);
                 insertStmt.setString(3, text);
                 insertStmt.setString(4, type);
-                insertStmt.setLong(5, timestamp);
+                insertStmt.setString(5, chatName);
                 insertStmt.setString(6, filePath);
                 insertStmt.setString(7, fileName);
-                insertStmt.setString(8, chatName);
+                insertStmt.setLong(8, timestamp);
 
 
                 if (insertStmt.executeUpdate() == 0) {
@@ -626,15 +626,5 @@ public class DatabaseManager {
             hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
-    }
-
-    private byte[] hexToBytes(String s) {
-        int len = s.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
-                    + Character.digit(s.charAt(i + 1), 16));
-        }
-        return data;
     }
 }

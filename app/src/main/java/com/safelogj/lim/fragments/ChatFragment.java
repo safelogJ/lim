@@ -2,6 +2,8 @@ package com.safelogj.lim.fragments;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -25,6 +27,7 @@ import androidx.lifecycle.ViewModelProvider;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
+import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -33,12 +36,14 @@ import android.widget.Toast;
 
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.NetworkService;
+import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.adapters.MsgAdapter;
 import com.safelogj.lim.databinding.FragmentChatBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.viewmodels.ChatViewModel;
+import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,12 +69,12 @@ public class ChatFragment extends Fragment {
                 } catch (SecurityException e) {
                     Log.d(AppController.LOG_TAG, "Ошибка получения разрешений на URI: " + e.getMessage(), e);
                 }
-                DocumentFile documentFile = DocumentFile.fromSingleUri(requireContext(), uri);
+                DocumentFile documentFile = DocumentFile.fromSingleUri(controller, uri);
                 if (documentFile.exists()) {
                     chatViewModel.selectFile(uri, documentFile.getName());
                 }
             } else {
-                Toast.makeText(requireContext(), getString(R.string.big_file_error), Toast.LENGTH_SHORT).show();
+                Toast.makeText(controller, getString(R.string.big_file_error), Toast.LENGTH_SHORT).show();
             }
         }
     };
@@ -92,6 +97,21 @@ public class ChatFragment extends Fragment {
                 chatViewModel.loadDbMessages(currentChatId);
                 controller.getDbHelper().markChatAsRead(currentChatId);
             }
+            controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
+                @Override
+                public void onSuccess(List<Chat> unreadChats) {
+                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: "+ unreadChats.size());
+                    unreadChats.removeIf(chat -> chat.id == currentChatId);
+                    if (!unreadChats.isEmpty()) {
+                        NotificationHelper.showNotification(controller, unreadChats);
+                    }
+                }
+
+                @Override
+                public void onError(String msg) {
+                    //
+                }
+            });
             uiHandler.postDelayed(this, 4000);
         }
     };
@@ -164,6 +184,7 @@ public class ChatFragment extends Fragment {
     public void onStart() {
         super.onStart();
         uiHandler.post(uiRunnable);
+        clearNotificationIfMatch();
     }
 
     @Override
@@ -176,7 +197,7 @@ public class ChatFragment extends Fragment {
         mBinding.sendButton.setOnClickListener(v -> {
             String userText = mBinding.messageEditText.getText().toString().trim();
             if (currentChatId == Chat.INVALID_ID && !userText.isEmpty() && !userText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
-              searchChat(userText);
+                searchChat(userText);
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
                 Uri fileUri = chatViewModel.getSelectedFileUri().getValue();
                 if (userText.isEmpty() && fileUri == null) {
@@ -198,7 +219,7 @@ public class ChatFragment extends Fragment {
         mBinding.addFileButton.setOnClickListener(v -> {
             if (currentChatId != Chat.INVALID_ID) {
                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
-                        && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                        && ContextCompat.checkSelfPermission(controller, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                     requestAskReadFilePermit.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
                     return;
                 }
@@ -210,7 +231,7 @@ public class ChatFragment extends Fragment {
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && mBinding != null) {
-              //  boolean isNewMessageAdded = msgList.size() > lastMessageCount;
+                //  boolean isNewMessageAdded = msgList.size() > lastMessageCount;
                 //  lastMessageCount = msgList.size();
                 messages.clear();
                 messages.addAll(msgList);
@@ -267,7 +288,8 @@ public class ChatFragment extends Fragment {
         mBinding = null;
     }
 
-    private Message buildMessage(@NonNull String text, @NonNull String type, @Nullable Uri fileUri, @Nullable String fileName) {
+    private Message buildMessage(@NonNull String text, @NonNull String type,
+                                 @Nullable Uri fileUri, @Nullable String fileName) {
         Message msg = new Message();
         msg.chatId = currentChatId;
         msg.chatName = currentChatName;
@@ -343,11 +365,22 @@ public class ChatFragment extends Fragment {
     }
 
     private String getMessageType(Uri uri) {
-        String mimeType = requireContext().getContentResolver().getType(uri);
+        String mimeType = controller.getContentResolver().getType(uri);
         if (mimeType != null && mimeType.startsWith("image/")) {
             return NetworkService.IMAGE;
         }
         return NetworkService.FILE;
+    }
+
+    private void clearNotificationIfMatch() {
+        NotificationManager manager = (NotificationManager) controller.getSystemService(Context.NOTIFICATION_SERVICE);
+        for (StatusBarNotification sbn : manager.getActiveNotifications()) {
+            if (sbn.getId() == NotificationHelper.NOTIFICATION_ID
+                    && sbn.getNotification().extras.getLong(NotificationHelper.EXTRA_CHAT_ID, -1) == currentChatId) {
+
+                manager.cancel(NotificationHelper.NOTIFICATION_ID);
+            }
+        }
     }
 
 }

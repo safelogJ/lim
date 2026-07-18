@@ -379,7 +379,9 @@ public class NetworkService {
         }
     }
 
-    public void getNewMessages(long lastMessageId, @NonNull Runnable onComplete) {
+    public void getNewMessages(long lastMessageId, Runnable onComplete) {
+
+        Log.d(AppController.LOG_TAG, "зашли в getNewMessages" + lastMessageId);
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
@@ -387,7 +389,6 @@ public class NetworkService {
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
-            onComplete.run();
             return;
         }
         Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
@@ -395,9 +396,9 @@ public class NetworkService {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful()) {
                 if (BaseResponse.SUCCESS.equals(res.status())) {
-                    dbHelper.saveIncomingMsgList(res.messages(), onComplete);
+                    dbHelper.saveIncomingMsgList(res.messages());
                     Log.i(AppController.LOG_TAG, res.message());
-                    return;
+                    onComplete.run();
                 } else {
                     Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
@@ -407,7 +408,6 @@ public class NetworkService {
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
-        onComplete.run();
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {

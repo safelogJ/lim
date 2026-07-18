@@ -18,18 +18,15 @@ import android.view.ViewGroup;
 import com.google.android.material.textfield.TextInputEditText;
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.MainActivity;
+import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.adapters.ChatListAdapter;
 import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.viewmodels.ChatListViewModel;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class ChatListFragment extends Fragment {
 
-    private final List<Chat> chats = new ArrayList<>();
     private AppController controller;
     private FragmentChatListBinding mBinding;
     private ChatListAdapter adapter;
@@ -66,28 +63,7 @@ public class ChatListFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
-
-        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> adapter.submitList(chatList));
-
-        viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
-            if ( isHidden != null && isHidden) {
-                viewModel.loadDbChatList();
-            }
-        });
-
-        viewModel.isChatBlocked().observe(getViewLifecycleOwner(), isBlocked -> {
-            if (isBlocked != null && isBlocked) {
-                viewModel.loadDbChatList();
-            }
-        });
-
-        viewModel.getChatName().observe(getViewLifecycleOwner(), name -> {
-            if (name != null) {
-                viewModel.loadDbChatList();
-            }
-        });
-
-
+        setObservers();
         adapter = new ChatListAdapter(new ChatListAdapter.OnChatClickListener() {
             @Override
             public void onChatClick(Chat chat) {
@@ -123,13 +99,26 @@ public class ChatListFragment extends Fragment {
         mBinding.chatsRecyclerView.setAdapter(adapter);
     }
 
-    private void showChatOptionsDialog1(Chat chat) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle(chat.name);
-        builder.setMessage(getString(R.string.select_action_for_chat));
-        builder.setPositiveButton(getString(R.string.hide_chat), (d, w) -> viewModel.hideChat(chat));
-        builder.setNegativeButton(getString(R.string.block_chat), (d, w) -> viewModel.setChatBlockedState(chat));
-        builder.show();
+    private void setObservers() {
+        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> adapter.submitList(chatList));
+
+        viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
+            if ( isHidden != null && isHidden) {
+                viewModel.loadDbChatList();
+            }
+        });
+
+        viewModel.isChatBlocked().observe(getViewLifecycleOwner(), isBlocked -> {
+            if (isBlocked != null && isBlocked) {
+                viewModel.loadDbChatList();
+            }
+        });
+
+        viewModel.getChatName().observe(getViewLifecycleOwner(), name -> {
+            if (name != null) {
+                viewModel.loadDbChatList();
+            }
+        });
     }
 
     private void showChatOptionsDialog(Chat chat) {
@@ -138,7 +127,6 @@ public class ChatListFragment extends Fragment {
                 .setView(dialogView)
                 .create();
 
-        // Делаем фон самого окна прозрачным, чтобы был виден наш fielder_background_wt с закруглениями
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
@@ -172,6 +160,7 @@ public class ChatListFragment extends Fragment {
     public void onStart() {
         super.onStart();
         uiHandler.post(uiRunnable);
+        NotificationHelper.clearNotification(controller);
     }
 
     @Override

@@ -1,14 +1,15 @@
 package com.safelogj.lim;
 
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -20,12 +21,13 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
 
 import com.safelogj.lim.databinding.ActivityMainBinding;
+import com.safelogj.lim.fragments.ChatFragment;
 import com.safelogj.lim.fragments.ChatListFragment;
-import com.safelogj.lim.viewmodels.ResultCallback;
 
 public class MainActivity extends AppCompatActivity {
 
     private AppController controller;
+
 
     public void showFragment(Fragment fragment) {
         getSupportFragmentManager()
@@ -73,7 +75,34 @@ public class MainActivity extends AppCompatActivity {
                     .add(R.id.main_container, new ChatListFragment())
                     .commit();
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
+        }
+
         setDarkStatusBar();
+        handleIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(@NonNull Intent intent) {
+        super.onNewIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent == null) return;
+
+        if (intent.getBooleanExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST, false)) {
+            showFragment(new ChatListFragment());
+        } else if (intent.hasExtra(NotificationHelper.EXTRA_CHAT_ID)) {
+            showFragment(ChatFragment.newInstance(
+                    intent.getLongExtra(NotificationHelper.EXTRA_CHAT_ID, -1),
+                    intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, -1),
+                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)
+            ));
+        }
     }
 
     private void setDarkStatusBar() {
@@ -95,7 +124,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         TextView messageView = dialogView.findViewById(R.id.errorMessage);
-        messageView.setText(getString(R.string.system_critical_error_text) +  "\n" + controller.getInitAppErrStr());
+        String message = getString(R.string.system_critical_error_text) + "\n" + controller.getInitAppErrStr();
+        messageView.setText(message);
 
         dialogView.findViewById(R.id.btnExit).setOnClickListener(v -> {
             finish();
