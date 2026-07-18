@@ -35,13 +35,18 @@ public class GetMessagesHandler extends BaseHandler {
             }
             // 3. Ищем пользователя в базе данных
             List<Message> messages = LimController.dbManager.getNewMessages(user.id, req.lastMessageId());
-            if (messages != null) {
+            if (messages != null && !messages.isEmpty()) {
                 response.userId = user.id;
                 response.displayName = user.displayName;
                 response.messages = messages;
+                response.message = "has new messages: " + messages.size();
                 sendSuccess(exchange, response);
+                LimController.log.info("GetMessagesHandler не пустой список: ");
             } else {
-                sendUserNotFoundError(exchange, response);
+                LimController.log.info("GetMessagesHandler пустой список: ");
+                response.message = "no new messages";
+                response.status = BaseResponse.ERROR;
+                sendResponse(exchange, 404, response);
             }
 
         } catch (Exception e) {

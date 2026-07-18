@@ -103,6 +103,7 @@ public class DatabaseManager {
                 "type TEXT NOT NULL, " +        // TEXT, IMAGE, FILE, SYSTEM
                 "file_path TEXT, " +            // Путь к файлу на диске роутера
                 "file_name TEXT, " +            // Оригинальное имя файла
+                "chat_name TEXT NOT NULL, " +   // Название чата, если личное
                 "timestamp INTEGER NOT NULL" +  // Время в миллисекундах (System.currentTimeMillis())
                 ")";
 
@@ -497,7 +498,8 @@ public class DatabaseManager {
         return null;
     }
 
-    public long saveMessage(long chatId, long senderId, String text, String type, long timestamp, String filePath, String fileName) {
+    public long saveMessage(long chatId, long senderId, String text, String type, long timestamp,
+                            String filePath, String fileName, String chatName) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
 
@@ -515,6 +517,8 @@ public class DatabaseManager {
                 insertStmt.setLong(5, timestamp);
                 insertStmt.setString(6, filePath);
                 insertStmt.setString(7, fileName);
+                insertStmt.setString(8, chatName);
+
 
                 if (insertStmt.executeUpdate() == 0) {
                     conn.rollback();
@@ -544,38 +548,42 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public List<Message> getNewMessages(long userId, long lastId) {
+    public List<Message> getNewMessages(long userId, long lastMessageId) {
         String sql;
-        boolean isInitialSync = (lastId == 0);
-
-        if (isInitialSync) {
+//        boolean isInitialSync = (lastMessageId == 0);
+//
+//        if (isInitialSync) {
+//            LimController.log.info("новый чат ищем все сообщения: ");
             // Для нового устройства: всё, что есть в чатах пользователя
             sql = "SELECT m.* FROM messages m " +
                     "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
                     "WHERE cm.user_id = ? AND m.id > ? " +
                     "ORDER BY m.id ASC";
-        } else {
-            // Для обычного опроса: только чужие сообщения
-            sql = "SELECT m.* FROM messages m " +
-                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                    "WHERE cm.user_id = ? AND m.id > ? AND m.sender_id != ? " +
-                    "ORDER BY m.id ASC";
-        }
+//        } else {
+//            LimController.log.info("Старый чат ищем новые сообщения: ");
+//            // Для обычного опроса: только чужие сообщения
+//            sql = "SELECT m.* FROM messages m " +
+//                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+//                    "WHERE cm.user_id = ? AND m.id > ? AND m.sender_id != ? " +
+//                    "ORDER BY m.id ASC";
+//        }
 
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, userId);
-            stmt.setLong(2, lastId);
+            stmt.setLong(2, lastMessageId);
 
-            if (!isInitialSync) {
-                stmt.setLong(3, userId); // Фильтруем себя только при обычном опросе
-            }
+//            if (!isInitialSync) {
+//                stmt.setLong(3, userId); // Фильтруем себя только при обычном опросе
+//            }
 
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Message> messages = new ArrayList<>();
                 while (rs.next()) {
                     Message msg = new Message();
                     msg.id = rs.getLong("id");
+                    LimController.log.info("считано новое сообщение msg.id = {}", msg.id);
                     msg.chatId = rs.getLong("chat_id");
+                    msg.chatName = rs.getString("chat_name");
                     msg.senderId = rs.getLong("sender_id");
                     msg.text = rs.getString("text");
                     msg.type = rs.getString("type");

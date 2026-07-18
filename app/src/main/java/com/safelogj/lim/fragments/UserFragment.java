@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
@@ -118,6 +120,7 @@ public class UserFragment extends Fragment {
         setRegBtnListener();
         addCertBtnListener();
         setTouchFieldListeners();
+        setKeyboardPadding();
     }
 
     @Override
@@ -328,6 +331,22 @@ public class UserFragment extends Fragment {
         address = controller.getServerIp();
         displayName = controller.getDisplayName();
         certName = controller.getCertName();
+    }
+
+    private void setKeyboardPadding() {
+        ViewCompat.setOnApplyWindowInsetsListener(mBinding.fielder, (v, insets) -> {
+            int imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            int systemBarsHeight = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom;
+            int keyboardHeight = Math.max(0, imeHeight - systemBarsHeight - mBinding.addCertButton.getHeight() - 16);
+            v.setTranslationY(-keyboardHeight);
+            mBinding.secureLayout.setPadding(
+                    mBinding.secureLayout.getPaddingLeft(),
+                    keyboardHeight,
+                    mBinding.secureLayout.getPaddingRight(),
+                    mBinding.secureLayout.getPaddingBottom()
+            );
+            return insets;
+        });
     }
 
 }

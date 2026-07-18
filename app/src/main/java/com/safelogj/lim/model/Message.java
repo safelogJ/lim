@@ -15,9 +15,10 @@ public class Message {
     public static final int SYSTEM_SENDER_ID = -1;
 
 
-    public long serverId;
+    public long id;
     public long localId;
     public long chatId;
+    public String chatName;
     public long localChatId;
     public long senderId;
     public long receiverId;

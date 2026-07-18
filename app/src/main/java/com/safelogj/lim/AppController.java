@@ -125,6 +125,8 @@ public class AppController extends Application {
                     //
                 }
             });
+        } else {
+            Log.d(AppController.LOG_TAG, "userId = 0");
         }
     };
 
@@ -138,10 +140,6 @@ public class AppController extends Application {
 
     public String getInitAppErrStr() {
         return initAppErrStr;
-    }
-
-    public void setInitAppErrStr(String initAppErrStr) {
-        this.initAppErrStr = initAppErrStr;
     }
 
     public OkHttpClient getOkHttpClient() {
@@ -270,31 +268,11 @@ public class AppController extends Application {
 
 
     private void sendTextMsg(Message msg) {
-        networkService.sendTextMessage(msg, new ResultCallback<>() {
-            @Override
-            public void onSuccess(Long result) {
-                Log.i(LOG_TAG, "message sent, localId " + result);
-            }
-
-            @Override
-            public void onError(String errorMsg) {
-                //
-            }
-        });
+        networkService.sendTextMessage(msg);
     }
 
     private void sendFileMsg(Message msg) {
-//        networkService.sendFileMessage(msg, new ResultCallback<>() {
-//            @Override
-//            public void onSuccess(Long result) {
-//
-//            }
-//
-//            @Override
-//            public void onError(String errorMsg) {
-//
-//            }
-//        });
+//        networkService.sendFileMessage(msg);
     }
 
     private void readRoutersListAndSettingsEncrypted() {

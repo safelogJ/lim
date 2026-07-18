@@ -1,11 +1,13 @@
 package com.safelogj.lim.adapters;
 
 import android.net.Uri;
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.recyclerview.widget.DiffUtil;
@@ -22,8 +24,8 @@ import java.util.List;
 import java.util.Objects;
 
 public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolder> {
-
-
+    private static final String STATUS = "status";
+    private static final String TIME = "time";
 
     private final long userId;
 
@@ -43,6 +45,26 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
         holder.bind(getItem(position), userId);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull MessageViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (payloads.isEmpty()) {
+            // Если правок нет — вызываем стандартную полную отрисовку
+            super.onBindViewHolder(holder, position, payloads);
+        } else {
+            // Если пришли "пайлоады", обновляем только нужные вьюхи
+            for (Object payload : payloads) {
+                if (payload instanceof Bundle diff) {
+                    if (diff.containsKey(STATUS)) {
+                        holder.updateStatus(diff.getLong(STATUS));
+                    }
+                    if (diff.containsKey(TIME)) {
+                        holder.updateTime(diff.getString(TIME));
+                    }
+                }
+            }
+        }
     }
 
     public static class MessageViewHolder extends RecyclerView.ViewHolder {
@@ -111,13 +133,25 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black3));
             }
 
-            // Статус отправки (зеленое время если отправлено)
+
             if (message.sendStatus == Message.STATUS_SENT) {
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_600));
             }
 
             binding.messageTime.setText(message.formattedTime);
             constraintSet.applyTo((ConstraintLayout) itemView);
+        }
+
+        public void updateStatus(long status) {
+            if (status == Message.STATUS_SENT) {
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_600));
+            } else {
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
+            }
+        }
+
+        public void updateTime(String time) {
+            binding.messageTime.setText(time);
         }
     }
 
@@ -127,17 +161,33 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     private static class DiffCallback extends DiffUtil.ItemCallback<Message> {
         @Override
         public boolean areItemsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
-            // Если localId одинаковый — это то же самое сообщение
+            // Проверяем, что это физически то же самое сообщение (по локальному ID)
             return oldItem.localId == newItem.localId;
         }
 
         @Override
         public boolean areContentsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
-            // Проверяем все визуально важные поля на изменение
+            // ВАЖНО: Мы включаем сюда статус и время.
+            // Если они изменятся, метод вернет false, и запустится механизм Payloads.
             return oldItem.sendStatus == newItem.sendStatus &&
+                    Objects.equals(oldItem.formattedTime, newItem.formattedTime) &&
                     Objects.equals(oldItem.text, newItem.text) &&
-                    Objects.equals(oldItem.filePath, newItem.filePath) &&
-                    oldItem.serverId == newItem.serverId;
+                    Objects.equals(oldItem.type, newItem.type) &&
+                    Objects.equals(oldItem.filePath, newItem.filePath);
+        }
+
+        @Nullable
+        @Override
+        public Object getChangePayload(@NonNull Message oldItem, @NonNull Message newItem) {
+            // А вот здесь мы вычисляем, ЧТО конкретно изменилось
+            Bundle diff = new Bundle();
+            if (oldItem.sendStatus != newItem.sendStatus) {
+                diff.putLong(STATUS, newItem.sendStatus);
+            }
+            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) {
+                diff.putString(TIME, newItem.formattedTime);
+            }
+            return diff.isEmpty() ? null : diff;
         }
     }
 }

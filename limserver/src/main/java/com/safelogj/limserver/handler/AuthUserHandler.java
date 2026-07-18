@@ -34,6 +34,7 @@ public class AuthUserHandler extends BaseHandler {
                 LimController.log.info("User '{}' authenticated successfully", username);
                 response.userId = user.id;
                 response.displayName = user.displayName;
+                response.message = "user authenticated successfully";
                 sendSuccess(exchange, response);
             } else {
                 LimController.log.info("User login '{}' password '{}' nulleded", username, req.password());

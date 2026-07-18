@@ -47,6 +47,7 @@ public class MediaUploadHandler extends BaseHandler {
         String senderId = exchange.getRequestHeaders().getFirst("X-Sender-Id");
         String messageText = encodeToHeader(exchange.getRequestHeaders().getFirst("X-Message-Text"));
         String originalName = encodeToHeader(exchange.getRequestHeaders().getFirst("X-File-Name"));
+        String chatName = encodeToHeader(exchange.getRequestHeaders().getFirst("X-Chat-Name"));
         String messageType = exchange.getRequestHeaders().getFirst("X-Message-Type");
 
         if (!SendMessageRequest.isValidHeaders(username, password, originalName)  || !isUsernameValid(username)) {
@@ -80,11 +81,13 @@ public class MediaUploadHandler extends BaseHandler {
             }
             // 4. Возвращаем клиенту имя файла на сервере
             long chatId = Long.parseLong(chatIdStr);
-            long messageId = LimController.dbManager.saveMessage(chatId, Long.parseLong(senderId), messageText, messageType, timestamp, serverFileName, originalName);
+            long messageId = LimController.dbManager.saveMessage(chatId, Long.parseLong(senderId), messageText,
+                    messageType, timestamp, serverFileName, originalName, chatName);
             if (messageId != Message.INVALID_MSG_ID) {
                 response.timestamp = timestamp;
                 response.messageId = messageId;
                 response.chatId = chatId;
+                response.message = "file uploaded successfully: " + originalName;
                 sendSuccess(exchange, response);
             } else {
                 throw new IOException("Save message after file upload error " + originalName);

@@ -2,6 +2,7 @@ package com.safelogj.lim.viewmodels;
 
 import android.app.Application;
 import android.net.Uri;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,10 +20,8 @@ import java.util.List;
 
 public class ChatViewModel extends AndroidViewModel {
 
-    private final MutableLiveData<Long> sendMsgLocalId = new MutableLiveData<>();
     private final MutableLiveData<Chat> foundChat = new MutableLiveData<>();
     private final MutableLiveData<String> errorStatus = new MutableLiveData<>();
-   // private final MutableLiveData<Chat> chatServer = new MutableLiveData<>();
     private final MutableLiveData<List<Message>> msgList = new MutableLiveData<>();
     private final MutableLiveData<Uri> selectedFileUri = new MutableLiveData<>();
     private final AppController controller;
@@ -34,16 +33,8 @@ public class ChatViewModel extends AndroidViewModel {
         controller = (AppController) application;
     }
 
-//    public LiveData<Chat> getChatServer() {
-//        return chatServer;
-//    }
-
     public LiveData<String> getErrorStatus() {
         return errorStatus;
-    }
-
-    public LiveData<Long> getSendMsgLocalId() {
-        return sendMsgLocalId;
     }
 
     public LiveData<List<Message>> getMsgList() {
@@ -77,36 +68,21 @@ public class ChatViewModel extends AndroidViewModel {
 
     // Здесь же можно добавить метод для отправки сообщения в будущем
     public void sendMessage(Message msg, long localChatId) {
-        controller.getDbHelper().saveMessage(msg);
+        controller.getDbHelper().saveMsgBeforeSending(msg);
 
         if (NetworkService.TEXT.equals(msg.type)) {
+            Log.w(AppController.LOG_TAG, "сообщение из чата : " + localChatId + " (отправлено в нити " + Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1))) + ")");
             controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1)))].execute(()->
-                    controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
-                @Override
-                public void onSuccess(Long localId) {
-                    sendMsgLocalId.postValue(localId);
-                }
-
-                @Override
-                public void onError(String msg) { /* логика ошибки */ }
-            }));
+                    controller.getNetworkService().sendTextMessage(msg));
 
         } else {
             controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1)))].execute(()->
-                    controller.getNetworkService().sendMediaMessage(msg, new ResultCallback<>() {
-                @Override
-                public void onSuccess(Long localId) {
-                    sendMsgLocalId.postValue(localId);
-                }
-
-                @Override
-                public void onError(String msg) { /* логика ошибки */ }
-            }));
+                    controller.getNetworkService().sendMediaMessage(msg));
         }
     }
 
     public void loadDbMessages(long chatId) {
-        controller.getDbHelper().loadMessages(chatId, new ResultCallback<>() {
+        controller.getDbHelper().loadChatMessages(chatId, new ResultCallback<>() {
 
             @Override
             public void onSuccess(List<Message> list) {

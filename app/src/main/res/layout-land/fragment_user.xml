@@ -32,6 +32,7 @@
             android:background="@drawable/fielder_background_tr"
             android:contentDescription="@string/user_fields"
             android:padding="8dp"
+            android:clipToPadding="false"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -72,6 +73,7 @@
                         android:id="@+id/addressEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:imeOptions="flagNoExtractUi|actionNext"
                         android:inputType="textPassword"
                         android:textColor="@color/light_gray" />
                 </com.google.android.material.textfield.TextInputLayout>
@@ -103,6 +105,7 @@
                         android:id="@+id/loginEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:imeOptions="flagNoExtractUi|actionNext"
                         android:inputType="textPassword"
                         android:textColor="@color/light_gray" />
                 </com.google.android.material.textfield.TextInputLayout>
@@ -134,6 +137,7 @@
                         android:id="@+id/passwordEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:imeOptions="flagNoExtractUi|actionNext"
                         android:inputType="textPassword"
                         android:textColor="@color/light_gray" />
                 </com.google.android.material.textfield.TextInputLayout>
@@ -165,6 +169,7 @@
                         android:id="@+id/displayNameEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:imeOptions="flagNoExtractUi|actionDone"
                         android:inputType="textPassword"
                         android:textColor="@color/light_gray" />
                 </com.google.android.material.textfield.TextInputLayout>

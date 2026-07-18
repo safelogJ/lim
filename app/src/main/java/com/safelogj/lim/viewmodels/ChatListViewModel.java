@@ -20,6 +20,7 @@ public class ChatListViewModel extends AndroidViewModel {
     private final MutableLiveData<List<Chat>> dbChatList = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isChatHidden = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isChatBlocked = new MutableLiveData<>();
+    private final MutableLiveData<String> chatName = new MutableLiveData<>();
     private final AppController controller;
 
     public ChatListViewModel(@NonNull Application application) {
@@ -39,6 +40,11 @@ public class ChatListViewModel extends AndroidViewModel {
         return isChatBlocked;
     }
 
+    public LiveData<String> getChatName() {
+        return chatName;
+    }
+
+
 
     public void loadDbChatList() {
         controller.getDbHelper().getChatList(new ResultCallback<>() {
@@ -46,7 +52,7 @@ public class ChatListViewModel extends AndroidViewModel {
             @Override
             public void onSuccess(List<Chat> chats) {
                 List<Chat> uiList = new ArrayList<>();
-                uiList.add(Chat.createNewChatAction(controller.getResources().getString(R.string.start_new_chat), controller.getResources().getString(R.string.find_user)));
+                uiList.add(Chat.createNewChatAction(controller.getResources().getString(R.string.new_chat), controller.getResources().getString(R.string.find_user)));
                 uiList.addAll(chats);
                 dbChatList.postValue(uiList);
             }
@@ -72,12 +78,12 @@ public class ChatListViewModel extends AndroidViewModel {
                 Log.d(AppController.LOG_TAG, errorMsg);
             }
         });
-        controller.getNetStreams()[Math.abs((int) (chat.local_id % (AppController.POOL_SIZE - 1)))].execute(()
+        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 1)))].execute(()
                 -> controller.getNetworkService().hideChat(chat.id));
     }
 
     public void setChatBlockedState(Chat chat) {
-        controller.getNetStreams()[Math.abs((int) (chat.local_id % (AppController.POOL_SIZE - 1)))].execute(()
+        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 1)))].execute(()
                 -> controller.getNetworkService().setChatBlockedState(chat.id, new ResultCallback<>() {
 
             @Override
@@ -91,5 +97,19 @@ public class ChatListViewModel extends AndroidViewModel {
             }
         }));
 
+    }
+
+    public void renameChat(Chat chat, String newName) {
+        controller.getDbHelper().renameChat(chat.id, newName, new ResultCallback<>() {
+            @Override
+            public void onSuccess(String name) {
+                chatName.postValue(name);
+            }
+
+            @Override
+            public void onError(String errorMsg) {
+                Log.d(AppController.LOG_TAG, errorMsg);
+            }
+        });
     }
 }

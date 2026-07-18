@@ -35,8 +35,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String LAST_TIMESTAMP = "last_timestamp";
     private static final String TIMESTAMP = "timestamp";
     private static final String LOCAL_ID = "local_id";
-    private static final String SERVER_ID = "server_id";
     private static final String CHAT_ID = "chat_id";
+    private static final String CHAT_NAME = "chat_name";
     private static final String CHATS = "chats";
     private static final String SENDER_ID = "sender_id";
     private static final String TEXT = "text";
@@ -81,8 +81,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             db.execSQL("CREATE TABLE messages (" +
                     "local_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                    "server_id INTEGER , " + // Серверный ID
+                    "id INTEGER , " + // Серверный ID
                     "chat_id INTEGER NOT NULL, " +
+                    "chat_name TEXT NOT NULL, " +
                     "sender_id INTEGER NOT NULL, " +
                     "text TEXT NOT NULL, " +
                     "type TEXT NOT NULL, " +
@@ -240,6 +241,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
+    public void renameChat(long chatId, String newName, ResultCallback<String> callback) {
+        dbExecutor.execute(() -> {
+            ContentValues values = new ContentValues();
+            values.put(NAME, newName);
+            if (database.update(CHATS, values, "id = ?", new String[]{String.valueOf(chatId)}) > 0) {
+                callback.onSuccess(newName);
+            } else {
+                callback.onError("error renaming chat");
+            }
+        });
+    }
+
     public void hideChatLocally(long chatId, ResultCallback<Boolean> callback) {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
@@ -267,22 +280,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void getChatList(ResultCallback<List<Chat>> callback) {
         dbExecutor.execute(() -> {
             List<Chat> chats = new ArrayList<>();
-            // Сортируем по времени последнего сообщения: самые новые сверху
             try (Cursor cursor = database.rawQuery(
-                    "SELECT * FROM chats WHERE is_hidden = 0 ORDER BY last_timestamp DESC", null)) {
+                    "SELECT * FROM chats WHERE is_hidden = 0 ORDER BY has_new_msg DESC, last_timestamp DESC", null)) {
                 if (cursor.moveToFirst()) {
                     do {
                         long lastTimestamp = cursor.getLong(cursor.getColumnIndexOrThrow(LAST_TIMESTAMP));
                         Chat chat = new Chat();
+                        chat.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
                         chat.id = cursor.getLong(cursor.getColumnIndexOrThrow(ID));
                         chat.name = cursor.getString(cursor.getColumnIndexOrThrow(NAME));
+                        chat.isGroup = cursor.getLong(cursor.getColumnIndexOrThrow(IS_GROUP)) == 1;
                         chat.interlocutorId = cursor.getLong(cursor.getColumnIndexOrThrow(INTERLOCUTOR_ID));
                         chat.lastMessage = cursor.getString(cursor.getColumnIndexOrThrow(LAST_MESSAGE));
-                        chat.lastTimestamp = lastTimestamp; // Используем для времени последнего сообщения
                         chat.lastSendStatus = cursor.getLong(cursor.getColumnIndexOrThrow(LAST_SEND_STATUS));
-                        chat.lastTimestampFormatted = AppController.formatSmartTime(controller, lastTimestamp);
-                        chat.isGroup = cursor.getLong(cursor.getColumnIndexOrThrow(IS_GROUP)) == 1;
                         chat.isBlocked = cursor.getLong(cursor.getColumnIndexOrThrow(IS_BLOCKED)) == 1;
+                        chat.hasNewMsg = cursor.getLong(cursor.getColumnIndexOrThrow(HAS_NEW_MSG)) == 1;
+                        chat.lastTimestamp = lastTimestamp;
+                        chat.lastTimestampFormatted = AppController.formatSmartTime(controller, lastTimestamp);
                         chats.add(chat);
                     } while (cursor.moveToNext());
                 }
@@ -295,11 +309,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void loadMessages(long chatId, ResultCallback<List<Message>> callback) {
+    public void loadChatMessages(long chatId, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
             try (Cursor cursor = database.rawQuery(
-                    "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp ASC", new String[]{String.valueOf(chatId)})) {
+                    "SELECT * FROM messages WHERE chat_id = ? ORDER BY local_id ASC", new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     do {
                         Message msg = new Message();
@@ -333,10 +347,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void saveMessage(Message msg) {
+    public void saveMsgBeforeSending(Message msg) {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
             values.put(CHAT_ID, msg.chatId);
+            values.put(CHAT_NAME, msg.chatName);
             values.put(SENDER_ID, msg.senderId);
             values.put(TEXT, msg.text);
             values.put(TYPE, msg.type);
@@ -344,11 +359,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             values.put(FILE_NAME, msg.fileName);
             values.put(TIMESTAMP, msg.timestamp);
             msg.localId = database.insert(MESSAGES, null, values);
+            Log.d(AppController.LOG_TAG, "Сохранено сообщение c id: " + msg.id + " для чата "
+                    + msg.chatId + " c локальным id: " + msg.localId);
             // 2. СРАЗУ ОБНОВЛЯЕМ ЧАТ
             // Если сообщение сохранилось успешно (msg.localId != -1)
             if (msg.localId != -1) {
                 ContentValues chatValues = new ContentValues();
-                chatValues.put(LAST_MESSAGE, (msg.text != null && !msg.text.isEmpty()) ? msg.text : msg.fileName);
+                chatValues.put(LAST_MESSAGE,  msg.text);
                 chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                 chatValues.put(IS_HIDDEN, 0);
                 // Обновляем чат, у которого совпадает ID
@@ -357,7 +374,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void saveMessages(List<Message> messages, @NonNull Runnable onComplete) {
+    public void saveIncomingMsgList2(List<Message> messages, @NonNull Runnable onComplete) {
         dbExecutor.execute(() -> {
             if (messages == null || messages.isEmpty()) {
                 onComplete.run();
@@ -366,9 +383,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             database.beginTransaction(); // Начинаем транзакцию для скорости
             try {
                 for (Message msg : messages) {
+                    Log.d(AppController.LOG_TAG, "Сохранено сообщение c id: " + msg.id + " для чата " + msg.chatId);
                     database.insertWithOnConflict(MESSAGES, null, getValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
                     ContentValues chatValues = new ContentValues();
-                    chatValues.put(LAST_MESSAGE, (msg.text != null && !msg.text.isEmpty()) ? msg.text : msg.fileName);
+                    chatValues.put(LAST_MESSAGE, msg.text);
                     chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                     chatValues.put(IS_HIDDEN, 0);
                     chatValues.put(HAS_NEW_MSG, 1);
@@ -376,7 +394,59 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 }
                 database.setTransactionSuccessful(); // Фиксируем изменения
             } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "error saving new messages to the database: ", e);
+                Log.d(AppController.LOG_TAG, "error saving new messages to the database: ", e);
+            } finally {
+                database.endTransaction();
+                onComplete.run();
+            }
+        });
+    }
+
+    public void saveIncomingMsgList(List<Message> messages, @NonNull Runnable onComplete) {
+        dbExecutor.execute(() -> {
+            if (messages == null || messages.isEmpty()) {
+                onComplete.run();
+                return;
+            }
+            database.beginTransaction();
+            try {
+                long myId = controller.getUserId();
+                for (Message msg : messages) {
+                    // 1. Сохраняем само сообщение
+                    database.insertWithOnConflict(MESSAGES, null, getValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
+
+                    // 2. Определяем, кто в этом чате собеседник
+                    long interlocutorId = (msg.senderId == myId) ? msg.receiverId : msg.senderId;
+
+                    // 3. Подготавливаем данные для чата
+                    ContentValues chatValues = new ContentValues();
+                    chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
+                    chatValues.put(LAST_MESSAGE, msg.text);
+                    chatValues.put(LAST_TIMESTAMP, msg.timestamp);
+                    chatValues.put(IS_HIDDEN, 0);
+                    chatValues.put(INTERLOCUTOR_ID, interlocutorId);
+
+                    // Ставим флаг "новое", только если сообщение реально чужое
+                    if (msg.senderId != myId) {
+                        chatValues.put(HAS_NEW_MSG, 1);
+                    } else {
+                        chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
+                    }
+
+                    // 4. Пытаемся обновить существующий чат
+                    int updatedRows = database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
+
+                    // 5. Если чат не найден (новое устройство или первый контакт) — создаем его
+                    if (updatedRows == 0) {
+                        chatValues.put(ID, msg.chatId);
+                        chatValues.put(IS_GROUP, 0); // Или msg.isGroup, если добавил это поле
+                        database.insert(CHATS, null, chatValues);
+                        Log.d(AppController.LOG_TAG, "Создан новый чат при синхронизации: " + msg.chatName);
+                    }
+                }
+                database.setTransactionSuccessful();
+            } catch (Exception e) {
+                Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
             } finally {
                 database.endTransaction();
                 onComplete.run();
@@ -387,8 +457,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @NonNull
     private ContentValues getValues(Message msg) {
         ContentValues values = new ContentValues();
-        values.put(LOCAL_ID, msg.localId);
-        values.put(SERVER_ID, msg.serverId);             // Серверный ID
+        values.put(ID, msg.id);             // Серверный ID
+        Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id);
         values.put(CHAT_ID, msg.chatId);
         values.put(SENDER_ID, msg.senderId);
         values.put(TEXT, msg.text);
@@ -400,10 +470,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return values;
     }
 
-    public <T> void confirmMessageSent(Message msg, ResultCallback<T> callback, T result) {
+    public void confirmMessageSent(Message msg) {
         dbExecutor.execute(() -> {
             ContentValues v = new ContentValues();
-            v.put(SERVER_ID, msg.serverId); // Теперь у сообщения есть серверный ID
+            v.put(ID, msg.id); // Теперь у сообщения есть серверный ID
             v.put(TIMESTAMP, msg.timestamp); // Используем время сервера
             v.put(SEND_STATUS, Message.STATUS_SENT);
             database.update(MESSAGES, v, "local_id = ?", new String[]{String.valueOf(msg.localId)});
@@ -412,9 +482,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
             chatValues.put(IS_BLOCKED, 0);
             database.update(CHATS, chatValues, "id = ?", new String[]{String.valueOf(msg.chatId)});
-            Log.d(AppController.LOG_TAG, "LAST_SEND_STATUS " + Message.STATUS_SENT);
-
-            callback.onSuccess(result);
+            Log.d(AppController.LOG_TAG, "подтвержденно отправление сообщения, серв id " +  msg.id + " чат id " + msg.chatId);
         });
     }
 
@@ -430,14 +498,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             long lastServerId = 0;
             try (Cursor cursor = database.rawQuery(
-                    "SELECT MAX(" + SERVER_ID + ") FROM " + MESSAGES + " WHERE " + SENDER_ID + " != ?",
+                //    "SELECT MAX(" + ID + ") FROM " + MESSAGES + " WHERE " + SENDER_ID + " != ?",
+                    "SELECT MAX(" + ID + ") FROM " + MESSAGES,
                     new String[]{String.valueOf(userId)})) {
                 if (cursor.moveToFirst()) {
                     lastServerId = cursor.getLong(0);
+                    Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
+                } else {
+                    Log.w(AppController.LOG_TAG, "не найдено последнего полученного сообщения");
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "error getting last incoming timestamp: ", e);
             }
+            Log.w(AppController.LOG_TAG, "Результат MAX(id): " + lastServerId + " (для юзера " + userId + ")");
             callback.onSuccess(lastServerId);
         });
     }
@@ -455,6 +528,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     Message msg = new Message();
                     msg.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
                     msg.chatId = cursor.getLong(cursor.getColumnIndexOrThrow(CHAT_ID));
+                    msg.chatName = cursor.getString(cursor.getColumnIndexOrThrow(CHAT_NAME));
                     msg.localChatId = cursor.getLong(cursor.getColumnIndexOrThrow("chat_local_id"));
                     msg.senderId = cursor.getLong(cursor.getColumnIndexOrThrow(SENDER_ID));
                     msg.text = cursor.getString(cursor.getColumnIndexOrThrow(TEXT));

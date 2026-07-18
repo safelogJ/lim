@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
+import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
@@ -82,13 +84,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showCriticalErrorAndExit() {
-        new AlertDialog.Builder(this)
-                .setTitle("Critical error")
-                .setMessage(controller.getInitAppErrStr())
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_critical_error, null);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
                 .setCancelable(false)
-                .setPositiveButton("Exit", (dialog, which) -> {
-                    finish();
-                    System.exit(0);
-                }).show();
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        TextView messageView = dialogView.findViewById(R.id.errorMessage);
+        messageView.setText(getString(R.string.system_critical_error_text) +  "\n" + controller.getInitAppErrStr());
+
+        dialogView.findViewById(R.id.btnExit).setOnClickListener(v -> {
+            finish();
+            System.exit(0);
+        });
+        dialog.show();
     }
 }

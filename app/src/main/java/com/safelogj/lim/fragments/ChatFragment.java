@@ -99,6 +99,7 @@ public class ChatFragment extends Fragment {
     private long currentChatId = Chat.INVALID_ID;
     private long currentChatLocalId = Chat.INVALID_ID;
     private String currentChatName = AppController.EMPTY_STRING;
+    private int lastMessageCount = 0;
 
     public ChatFragment() {
         // Required empty public constructor
@@ -147,7 +148,6 @@ public class ChatFragment extends Fragment {
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
         setObserveChat();
-        setObserveSendMsgLocalId();
         setObserveMsgList();
         setObserveSelectedFileUri();
         setObserveErrorStatus();
@@ -156,7 +156,7 @@ public class ChatFragment extends Fragment {
         setKeyboardPadding();
 
         if (currentChatId == Chat.INVALID_ID) {
-            addSystemMessageToList("Введите логин пользователя, чтобы начать чат");
+            addSystemMessageToList(getString(R.string.send_login_hint));
         }
     }
 
@@ -186,12 +186,10 @@ public class ChatFragment extends Fragment {
                 Message msg = buildMessage((userText.isEmpty() && fileName != null) ? fileName : userText, // text
                         fileUri == null ? NetworkService.TEXT : getMessageType(fileUri),  // type
                         fileUri, fileName);
-                messages.add(msg);
-//                adapter.notifyItemInserted(messages.size() - 1);
-//                mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
-                adapter.submitList(messages, () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
+                Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId);
                 chatViewModel.sendMessage(msg, currentChatLocalId);
+                chatViewModel.loadDbMessages(currentChatId);
             }
         });
     }
@@ -209,28 +207,19 @@ public class ChatFragment extends Fragment {
         });
     }
 
-    private void setObserveSendMsgLocalId() {
-        chatViewModel.getSendMsgLocalId().observe(getViewLifecycleOwner(), localId -> {
-            if (localId != null && mBinding != null) {
-                for (int i = 0; i < messages.size(); i++) {
-                    if (messages.get(i).localId == localId) {
-                        messages.get(i).sendStatus = Message.STATUS_SENT;
-                        adapter.notifyItemChanged(i);
-                        break;
-                    }
-                }
-            }
-        });
-    }
-
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && mBinding != null) {
-//                messages.clear();
-//                messages.addAll(msgList);
-//                adapter.notifyDataSetChanged();
-//                mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
-                adapter.submitList(messages, () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
+              //  boolean isNewMessageAdded = msgList.size() > lastMessageCount;
+                //  lastMessageCount = msgList.size();
+                messages.clear();
+                messages.addAll(msgList);
+                adapter.submitList(new ArrayList<>(msgList), () -> {
+                    if (msgList.size() > lastMessageCount) {
+                        lastMessageCount = msgList.size();
+                        mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                    }
+                });
             }
         });
     }
@@ -281,6 +270,7 @@ public class ChatFragment extends Fragment {
     private Message buildMessage(@NonNull String text, @NonNull String type, @Nullable Uri fileUri, @Nullable String fileName) {
         Message msg = new Message();
         msg.chatId = currentChatId;
+        msg.chatName = currentChatName;
         msg.senderId = controller.getUserId();
         msg.text = text;
         msg.type = type;
@@ -294,10 +284,10 @@ public class ChatFragment extends Fragment {
     private void addSystemMessageToList(String text) {
         Message msg = new Message();
         msg.text = text;
+        Log.d(AppController.LOG_TAG, "Добавляем системное сообщение: " + text);
         msg.senderId = Message.SYSTEM_SENDER_ID;
         messages.add(msg);
-        adapter.notifyItemInserted(messages.size() - 1);
-        mBinding.messagesRecyclerView.scrollToPosition(messages.size() - 1);
+        adapter.submitList(new ArrayList<>(messages), () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
     }
 
     private void updateBottomPanel() {
@@ -328,6 +318,7 @@ public class ChatFragment extends Fragment {
             return insets;
         });
     }
+
     private Intent getIntentActionOpenDoc() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
@@ -358,4 +349,5 @@ public class ChatFragment extends Fragment {
         }
         return NetworkService.FILE;
     }
+
 }

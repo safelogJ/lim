@@ -30,6 +30,12 @@
     <string name="unblock_chat">Unlock</string>
     <string name="select_action_for_chat">Select an action for this chat</string>
     <string name="cancel">Cancel</string>
+    <string name="rename_chat_title">Chat options</string>
+    <string name="rename_chat_btn">Rename</string>
+    <string name="rename_chat_hint">New chat name</string>
+    <string name="system_critical_error_text">Initialization error, application cannot operate.</string>
+    <string name="system_critical_error_title">Critical error</string>
+    <string name="system_critical_error_btn">Exit</string>
 
     <string name="login_error">invalid username format (3–20 chars, lowercase Latin and digits)</string>
     <string name="pass_error">invalid password format (6–20 chars)</string>
@@ -43,12 +49,13 @@
     <string name="remove_file_btn_text">remove file</string>
     <string name="send_icon_desc">send icon</string>
     <string name="user_fields">user fields</string>
-    <string name="start_new_chat">start new chat</string>
+    <string name="new_chat">new chat</string>
     <string name="find_user">find user by login</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="yesterday">yesterday</string>
     <string name="big_file_error">The file is too large (maximum 50MB)</string>
     <string name="select_file_error">no file selected for sending</string>
+    <string name="send_login_hint">send your interlocutor\'s login to start a chat</string>
     <string name="image">image preview</string>
 
 
