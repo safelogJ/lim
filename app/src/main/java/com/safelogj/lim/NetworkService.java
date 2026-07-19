@@ -289,7 +289,7 @@ public class NetworkService {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()), msg.chatId, msg.senderId, msg.text, msg.type,
+                    hashPassword(controller.getPassword()),  msg.senderId, msg.chatId, msg.text, msg.type,
                     msg.filePath, msg.fileName, msg.chatName)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
         } catch (Exception e) {

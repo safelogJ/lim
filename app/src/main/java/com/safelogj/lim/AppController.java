@@ -77,10 +77,12 @@ import okhttp3.OkHttpClient;
 
 public class AppController extends Application {
     public static final String LOG_TAG = "lim";
+    public static final Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
     public static final int POOL_SIZE = 5;
     public static final String NOTIFICATION_CHANNEL = "lim_messages";
+    public static final String LIM_SYNC = "LimSync";
     private static final String USER_DATA = "userdata";
     private static final String USER_DATA_JSON = "userdata.txt";
     private static final String USER_ID = "userid";
@@ -97,7 +99,6 @@ public class AppController extends Application {
     private static final int GCM_TAG_LENGTH = 16;
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";
-    private static final String LIM_SYNC = "LimSync";
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -649,12 +650,8 @@ public class AppController extends Application {
     }
 
     private void setupWorkManager() {
-        Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
-        PeriodicWorkRequest workRequest =
-                new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES)
-                        .setConstraints(constraints)
-                        .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
-                        .build();
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(LIM_SYNC, ExistingPeriodicWorkPolicy.KEEP, workRequest);
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(LIM_SYNC, ExistingPeriodicWorkPolicy.KEEP,
+                new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
 }

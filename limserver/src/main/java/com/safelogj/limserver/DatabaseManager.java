@@ -25,6 +25,12 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class DatabaseManager {
+
+    public enum UsersTable { ID, USERNAME, PASSWORD_HASH, DISPLAY_NAME, CREATED_AT, IS_DELETED }
+    public enum ChatsTable { ID, NAME, IS_GROUP, CREATED_AT }
+    public enum ChatMembersTable { CHAT_ID, USER_ID, JOINED_AT, IS_HIDDEN, IS_BLOCKED }
+    public enum MessagesTable { ID, CHAT_ID, SENDER_ID, TEXT, TYPE, FILE_PATH, FILE_NAME, CHAT_NAME, TIMESTAMP }
+
     public static final long FILE_SIZE_LIMIT = 50_000_000L;
     private static final String DB_FILE = "lim.db";
     @NotNull
@@ -474,6 +480,7 @@ public class DatabaseManager {
 
     public long saveMessage(long chatId, long senderId, String text, String type, long timestamp,
                             String filePath, String fileName, String chatName) {
+        LimController.log.info("--- ПОПЫТКА СОХРАНЕНИЯ: чат={}, отправитель={} ---", chatId, senderId);
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
 
@@ -502,6 +509,7 @@ public class DatabaseManager {
                 try (ResultSet rs = insertStmt.getGeneratedKeys()) {
                     if (rs.next()) serverId = rs.getLong(1);
                 }
+                LimController.log.info("+++ СОХРАНЕНО: msg_id={}, в чат={}, от={} +++", serverId, chatId, senderId);
                 updateStmt.setLong(1, chatId);
                 updateStmt.executeUpdate();
                 updateBlock.setLong(1, chatId);
@@ -523,6 +531,20 @@ public class DatabaseManager {
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastMessageId) {
+        LimController.log.info(">>> ЗАПРОС НОВЫХ: юзер={}, после_id={} <<<", userId, lastMessageId);
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement("SELECT chat_id FROM chat_members WHERE user_id = ?")) {
+            stmt.setLong(1, userId);
+            StringBuilder chats = new StringBuilder();
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) chats.append(rs.getLong("chat_id")).append(", ");
+            }
+            LimController.log.info("Юзер {} состоит в чатах: [{}]", userId, chats);
+        } catch (Exception e) {}
+
+
+
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
                 "SELECT m.* FROM messages m " +
                 "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
@@ -536,7 +558,6 @@ public class DatabaseManager {
                 while (rs.next()) {
                     Message msg = new Message();
                     msg.id = rs.getLong("id");
-                    LimController.log.info("считано новое сообщение msg.id = {}", msg.id);
                     msg.chatId = rs.getLong("chat_id");
                     msg.chatName = rs.getString("chat_name");
                     msg.senderId = rs.getLong("sender_id");
@@ -545,6 +566,7 @@ public class DatabaseManager {
                     msg.timestamp = rs.getLong("timestamp");
                     msg.filePath = rs.getString("file_path");
                     msg.fileName = rs.getString("file_name");
+                    LimController.log.info("Отдаем юзеру {}: msg_id={}, из чата={}", userId, msg.id, msg.chatId);
                     messages.add(msg);
                 }
                 return messages;
@@ -582,4 +604,5 @@ public class DatabaseManager {
         }
         return new String(hexChars);
     }
+
 }

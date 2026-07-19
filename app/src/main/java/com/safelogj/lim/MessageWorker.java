@@ -44,6 +44,7 @@ public class MessageWorker extends Worker {
                 lastId.set(lastServerId);
                 latch.countDown();
             }
+
             @Override
             public void onError(String msg) {
                 latch.countDown();
@@ -52,7 +53,10 @@ public class MessageWorker extends Worker {
         });
 
         try {
-            if (latch.await(10, TimeUnit.SECONDS) && !controller.isDownloadInProgress.get() && lastId.get() != -1L) {
+            if (latch.await(10, TimeUnit.SECONDS)
+                    && lastId.get() != -1L
+                    && controller.startedActivities.get() == 0
+                    && !controller.isDownloadInProgress.get()) {
                 controller.isDownloadInProgress.set(true);
                 controller.getNetworkService().getNewMessages(lastId.get(), () -> controller.isDownloadInProgress.set(false));
             }
@@ -83,10 +87,12 @@ public class MessageWorker extends Worker {
         try {
             if (latch.await(10, TimeUnit.SECONDS)) {
                 for (Message msg : list) {
-                    if (msg.type.equals(NetworkService.TEXT)) {
-                        controller.getNetworkService().sendTextMessage(msg);
-                    } else {
-                        //  controller.getNetworkService().sendFileMessage(msg);
+                    if (controller.startedActivities.get() == 0) {
+                        if (msg.type.equals(NetworkService.TEXT)) {
+                            controller.getNetworkService().sendTextMessage(msg);
+                        } else {
+                            //  controller.getNetworkService().sendFileMessage(msg);
+                        }
                     }
                 }
             }
@@ -108,6 +114,7 @@ public class MessageWorker extends Worker {
                 list.addAll(unreadChats);
                 latch.countDown();
             }
+
             @Override
             public void onError(String msg) {
                 latch.countDown();
@@ -116,7 +123,9 @@ public class MessageWorker extends Worker {
         });
 
         try {
-            if (latch.await(10, TimeUnit.SECONDS) && !list.isEmpty()) {
+            if (latch.await(10, TimeUnit.SECONDS)
+                    && !list.isEmpty()
+                    && controller.startedActivities.get() == 0) {
                 NotificationHelper.showNotification(controller, list);
             }
             return Result.success();

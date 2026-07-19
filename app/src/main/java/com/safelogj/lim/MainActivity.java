@@ -19,10 +19,12 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 import com.safelogj.lim.databinding.ActivityMainBinding;
 import com.safelogj.lim.fragments.ChatFragment;
 import com.safelogj.lim.fragments.ChatListFragment;
+import com.safelogj.lim.model.Chat;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -30,12 +32,12 @@ public class MainActivity extends AppCompatActivity {
 
 
     public void showFragment(Fragment fragment) {
-        getSupportFragmentManager()
+       getSupportFragmentManager()
                 .beginTransaction()
                 .setReorderingAllowed(true)
                 .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
                 .replace(R.id.main_container, fragment)
-                .addToBackStack(null) // Вот это позволяет вернуться назад кнопкой!
+                .addToBackStack(null)
                 .commit();
     }
 
@@ -88,20 +90,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onNewIntent(@NonNull Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
         handleIntent(intent);
     }
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;
 
-        if (intent.getBooleanExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST, false)) {
-            showFragment(new ChatListFragment());
-        } else if (intent.hasExtra(NotificationHelper.EXTRA_CHAT_ID)) {
-            showFragment(ChatFragment.newInstance(
-                    intent.getLongExtra(NotificationHelper.EXTRA_CHAT_ID, -1),
-                    intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, -1),
-                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)
-            ));
+        long chatId = intent.getLongExtra(NotificationHelper.EXTRA_CHAT_ID, Chat.INVALID_ID);
+        if (intent.hasExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST) || chatId != Chat.INVALID_ID) {
+            getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+        }
+        if (chatId != Chat.INVALID_ID) {
+            showFragment(ChatFragment.newInstance(chatId, intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, Chat.INVALID_ID),
+                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)));
         }
     }
 

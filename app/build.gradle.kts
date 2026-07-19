@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.glide)
     implementation(libs.glidecompiler)
+    implementation(libs.guava)
     implementation(libs.workruntime)
     coreLibraryDesugaring(libs.desugar)
     androidTestImplementation(libs.espresso.core)
