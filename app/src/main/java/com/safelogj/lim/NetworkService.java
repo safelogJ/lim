@@ -380,7 +380,6 @@ public class NetworkService {
     }
 
     public void getNewMessages(long lastMessageId, Runnable onComplete) {
-
         Log.d(AppController.LOG_TAG, "зашли в getNewMessages" + lastMessageId);
         Request request;
         try {
@@ -389,6 +388,7 @@ public class NetworkService {
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            onComplete.run();
             return;
         }
         Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
@@ -399,6 +399,7 @@ public class NetworkService {
                     dbHelper.saveIncomingMsgList(res.messages());
                     Log.i(AppController.LOG_TAG, res.message());
                     onComplete.run();
+                    return;
                 } else {
                     Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
@@ -408,6 +409,7 @@ public class NetworkService {
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
+        onComplete.run();
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {

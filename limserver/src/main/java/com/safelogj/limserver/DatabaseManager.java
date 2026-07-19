@@ -56,7 +56,7 @@ public class DatabaseManager {
     // Метод для получения живого соединения с базой
     private Connection getConnection() throws SQLException {
         if (poolProxy != null && poolProxy.getThreadsAwaitingConnection() > 0) {
-            LimController.log.warn("ВНИМАНИЕ: Появилась очередь к базе данных! Ждут: {}", poolProxy.getThreadsAwaitingConnection());
+            LimController.log.warn("ATTENTION: There is a queue for the database! Waiting: {}", poolProxy.getThreadsAwaitingConnection());
         }
         return dataSource.getConnection();
     }
@@ -113,9 +113,9 @@ public class DatabaseManager {
             stmt.execute(createChatMembersTable);
             stmt.execute(createMessagesTable);
             mDigest = MessageDigest.getInstance("SHA-256");
-            LimController.log.info("База данных SQLite успешно инициализирована. Таблицы проверены.");
+            LimController.log.info("The SQLite database has been successfully initialized. Tables have been verified..");
         } catch (Exception e) {
-            LimController.log.error("Критическая ошибка при инициализации базы данных: ", e);
+            LimController.log.error("critical error while initializing database: ", e);
             System.exit(LimController.ERROR);
         }
     }
@@ -127,27 +127,22 @@ public class DatabaseManager {
             throw new SQLException("critical error: password hashing failed");
         }
 
-        // Открываем соединение из пула
         try (Connection conn = getConnection()) {
             int oldIsolation = conn.getTransactionIsolation();
 
             try {
-                // Для регистрации SERIALIZABLE идеален, чтобы два юзера не забили один логин одновременно
                 conn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
                 conn.setAutoCommit(false);
-                // 1. Проверяем занятость логина
                 try (PreparedStatement checkStmt = conn.prepareStatement("SELECT 1 FROM users WHERE username = ? LIMIT 1")) {
                     checkStmt.setString(1, username);
                     try (ResultSet rs = checkStmt.executeQuery()) {
                         if (rs.next()) {
-                            LimController.log.warn("Попытка регистрации: логин '{}' уже занят", username);
-                            // Просто выходим. Блок finally сам корректно закроет пустую транзакцию
+                            LimController.log.warn("registration attempt: login '{}' is already taken", username);
                             return null;
                         }
                     }
                 }
                 long userId = -1;
-                // 2. Если свободно — вставляем
                 try (PreparedStatement insertStmt = conn.prepareStatement(
                         "INSERT INTO users (username, password_hash, display_name, created_at) VALUES (?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
                     insertStmt.setString(1, username);
@@ -169,7 +164,7 @@ public class DatabaseManager {
 
                 // Если дошли досюда — фиксируем изменения
                 conn.commit();
-                LimController.log.info("Пользователь '{}' успешно зарегистрирован", username);
+                LimController.log.info("user '{}' has been successfully registered", username);
                 User user = new User();
                 user.id = userId;
                 user.displayName = displayName;
@@ -180,7 +175,7 @@ public class DatabaseManager {
                 try {
                     conn.rollback();
                 } catch (SQLException ex) {
-                    LimController.log.error("Не удалось откатить транзакцию: ", ex);
+                    LimController.log.error("failed to roll back transaction: ", ex);
                 }
                 throw e; // Пробрасываем наверх для логирования в главном catch
             } finally {
@@ -189,21 +184,16 @@ public class DatabaseManager {
                     conn.setAutoCommit(true);
                     conn.setTransactionIsolation(oldIsolation);
                 } catch (SQLException ex) {
-                    LimController.log.error("Ошибка при восстановлении настроек соединения: ", ex);
+                    LimController.log.error("error restoring connection settings: ", ex);
                 }
             }
 
         } catch (SQLException e) {
-            LimController.log.error("Критическая ошибка БД при регистрации: ", e);
+            LimController.log.error("critical database error during registration: ", e);
             return null;
         }
     }
 
-    /**
-     * Проверяет учетные данные пользователя по логину и клиентскому хэшу пароля.
-     *
-     * @return id пользователя, если успешно; -1 если не найден или пароль неверен
-     */
     @Nullable
     public User authenticateUser(@NotNull String username, @NotNull String password) {
         String serverPasswordHash = hashPassword(password);
@@ -218,41 +208,34 @@ public class DatabaseManager {
                         user.displayName = rs.getString("display_name");
                         return user;
                     } else {
-                        LimController.log.warn("Неверный пароль для пользователя '{}'", username);
+                        LimController.log.warn("incorrect password for user '{}'", username);
                     }
                 }
             } catch (Exception e) {
-                LimController.log.error("Ошибка при аутентификации пользователя во время запроса: ", e);
+                LimController.log.error("an error occurred while authenticating the user during the request.: ", e);
             }
         } else {
-            LimController.log.error("Ошибка при аутентификации пользователя, не получен хэш из пароля ");
+            LimController.log.error("error while authenticating user, password hash not retrieved ");
         }
         return null;
     }
 
-    /**
-     * Мягкое удаление пользователя. Занимает логин навсегда,
-     * сбрасывает пароль и переименовывает аккаунт, сохраняя историю в чатах.
-     */
     public boolean deleteUser(long userId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE users SET is_deleted = 1, password_hash = '', display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "UPDATE users SET is_deleted = 1, password_hash = '', display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0")) {
             stmt.setLong(1, userId);
             if (stmt.executeUpdate() > 0) {
-                LimController.log.info("Пользователь id={} успешно переведен в статус 'Удален'. Логин заблокирован.", userId);
+                LimController.log.info("User id={} has been successfully moved to 'Deleted' status. Login blocked.", userId);
                 return true;
             } else {
-                LimController.log.warn("Не удалось удалить пользователя id={}. Возможно, он уже удален или не существовал.", userId);
+                LimController.log.warn("failed to delete user id={}. It may have already been deleted or may not have existed.", userId);
             }
         } catch (Exception e) {
-            LimController.log.error("Ошибка при мягком удалении пользователя id={}", userId, e);
+            LimController.log.error("error while soft deleting user id={}", userId, e);
         }
         return false;
     }
 
-    /**
-     * Возвращает ID существующего личного чата между двумя пользователями или создает новый.
-     * Сбрасывает флаг скрытия (is_hidden = 0) для обоих участников, если чат уже был.
-     */
     @Nullable
     public Chat getOrCreatePersonalChat(long senderId, long receiverId) {
         if (senderId == receiverId) {
@@ -302,7 +285,7 @@ public class DatabaseManager {
                             if (keys.next()) {
                                 chatId = keys.getLong(1);
                             } else {
-                                throw new SQLException("Не удалось получить ID нового чата.");
+                                throw new SQLException("failed to get new chat ID.");
                             }
                         }
                     }
@@ -401,7 +384,7 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            LimController.log.error("Ошибка при получении активных чатов для юзера {}: ", userId, e);
+            LimController.log.error("error retrieving active chats for user {}: ", userId, e);
         }
         return activeChats;
     }
@@ -425,10 +408,6 @@ public class DatabaseManager {
         return null;
     }
 
-    /**
-     * Обновляет отображаемое имя и/или пароль пользователя.
-     * Принимает объект запроса, где поля уже проверены на валидность в хэндлере.
-     */
     @Nullable
     public User updateUser(long userId, @NotNull EditUserRequest req, boolean isNewDisplayName, boolean isNewPassword) {
         String newDisplayName = req.newDisplayName();
@@ -438,7 +417,7 @@ public class DatabaseManager {
         if (isNewPassword) {
             newServerPasswordHash = hashPassword(newClientPasswordHash);
             if (newServerPasswordHash.isEmpty()) {
-                LimController.log.error("Ошибка при генерации хэша для обновления id={}", userId);
+                LimController.log.error("error generating hash for update id={}", userId);
                 return null;
             }
         }
@@ -463,22 +442,17 @@ public class DatabaseManager {
             }
             stmt.setLong(paramIndex, userId);
             if (stmt.executeUpdate() > 0) {
-                LimController.log.info("Данные пользователя id={} успешно обновлены.", userId);
+                LimController.log.info("user data id={} has been updated successfully.", userId);
                 return new User();
             } else {
-                LimController.log.warn("Обновление не удалось: пользователь id={} не найден или удален.", userId);
+                LimController.log.warn("update failed: user id={} not found or deleted.", userId);
             }
         } catch (SQLException e) {
-            LimController.log.error("Ошибка БД при обновлении пользователя id={}: ", userId, e);
+            LimController.log.error("database error while updating user id={}: ", userId, e);
         }
         return null;
     }
 
-    /**
-     * Ищет пользователя по его точному логину (username).
-     * Возвращает объект EditUserRequest (используем его как удобный контейнер для ID и имени)
-     * или null, если пользователь не найден.
-     */
     @Nullable
     public User searchUserByUsername(@NotNull String targetUsername) {
         try (Connection conn = getConnection();
@@ -493,7 +467,7 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            LimController.log.error("Ошибка при поиске пользователя '{}'", targetUsername, e);
+            LimController.log.error("error searching for user '{}'", targetUsername, e);
         }
         return null;
     }
@@ -542,39 +516,20 @@ public class DatabaseManager {
                 conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            LimController.log.error("Критическая ошибка при сохранении сообщения и обновлении участников: ", e);
+            LimController.log.error("error while saving message and updating participants: ", e);
             return Message.INVALID_MSG_ID;
         }
     }
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastMessageId) {
-        String sql;
-//        boolean isInitialSync = (lastMessageId == 0);
-//
-//        if (isInitialSync) {
-//            LimController.log.info("новый чат ищем все сообщения: ");
-            // Для нового устройства: всё, что есть в чатах пользователя
-            sql = "SELECT m.* FROM messages m " +
-                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                    "WHERE cm.user_id = ? AND m.id > ? " +
-                    "ORDER BY m.id ASC";
-//        } else {
-//            LimController.log.info("Старый чат ищем новые сообщения: ");
-//            // Для обычного опроса: только чужие сообщения
-//            sql = "SELECT m.* FROM messages m " +
-//                    "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-//                    "WHERE cm.user_id = ? AND m.id > ? AND m.sender_id != ? " +
-//                    "ORDER BY m.id ASC";
-//        }
-
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "SELECT m.* FROM messages m " +
+                "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+                "WHERE cm.user_id = ? AND m.id > ? " +
+                "ORDER BY m.id ASC")) {
             stmt.setLong(1, userId);
             stmt.setLong(2, lastMessageId);
-
-//            if (!isInitialSync) {
-//                stmt.setLong(3, userId); // Фильтруем себя только при обычном опросе
-//            }
 
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Message> messages = new ArrayList<>();
@@ -595,7 +550,7 @@ public class DatabaseManager {
                 return messages;
             }
         } catch (SQLException e) {
-            LimController.log.error("Ошибка при получении новых сообщений для юзера {}: ", userId, e);
+            LimController.log.error("error receiving new messages for the user {}: ", userId, e);
         }
         return null;
     }
@@ -611,7 +566,7 @@ public class DatabaseManager {
             digestLock.unlock();
         }
         if (hash == null || hash.length == 0) {
-            LimController.log.error("Сбой при вычислении хэша пароля MD5/SHA:");
+            LimController.log.error("error calculating MD5/SHA password hash:");
             return LimController.EMPTY_STRING;
         }
         return bytesToHex(hash);

@@ -1,0 +1,20 @@
+<configuration>
+    <!-- Определяем формат вывода в консоль -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!-- Тот самый формат, который ты видишь в логах -->
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ПОДАВЛЯЕМ ЛОГИ HIKARI: ставим уровень INFO или WARN -->
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+
+    <!-- Также можно приглушить сам драйвер SQLite, если будет спамить -->
+    <logger name="org.sqlite" level="INFO"/>
+
+    <!-- Настройки для всего остального приложения -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>

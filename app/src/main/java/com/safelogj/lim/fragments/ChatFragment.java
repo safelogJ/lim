@@ -109,7 +109,7 @@ public class ChatFragment extends Fragment {
 
                 @Override
                 public void onError(String msg) {
-                    //
+                   Log.w(AppController.LOG_TAG, msg);
                 }
             });
             uiHandler.postDelayed(this, 4000);

@@ -19,7 +19,7 @@ gen/
 
 db/
 media/
-server.properties
+db/server.properties
 Rules
 AGENTS.md
 
@@ -34,7 +34,7 @@ Thumbs.db
 
 
 # Local and generated configurations
-local.properties
+app/local.properties
 *.log
 *.swp
 *~

@@ -98,7 +98,7 @@ public class UserFragment extends Fragment {
 
                 @Override
                 public void onError(String msg) {
-                    //
+                    Log.e(AppController.LOG_TAG, msg);
                 }
             });
             uiHandler.postDelayed(this, 4000);

@@ -56,7 +56,7 @@ public class LimController {
             File db = new File(DB_PATH);
             File media = new File(MEDIA_PATH);
             if (!db.exists() || !media.exists()) {
-                log.error("Критическая ошибка: Не удалось создать папки db и media");
+                log.error("folders db and media not found");
                 System.exit(DATA_ERR);
             }
             dbManager = new DatabaseManager(DB_PATH);
@@ -77,16 +77,17 @@ public class LimController {
             server.setExecutor(EXECUTOR_POOL);
             server.start();
         } catch (Exception e) {
-            log.error("Критическая ошибка при создании сервера: ", e);
+            log.error("critical error while creating server: ", e);
             System.exit(ERROR);
         }
-        log.info("Сервер запустился");
+        log.info("LimServer run");
     }
 
     private static HttpsServer initHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
             CertificateException, UnrecoverableKeyException, KeyManagementException, IllegalArgumentException {
 
-        ServerConfig prop = ServerConfig.load(System.getProperty(USER_DIR) +  "/server.properties");
+       // ServerConfig prop = ServerConfig.load(System.getProperty(USER_DIR) +  "/server.properties");
+        ServerConfig prop = ServerConfig.load(DB_PATH + "/server.properties");
         // 2. Загружаем Keystore в память Java
         KeyStore ks = KeyStore.getInstance("PKCS12");
         try (FileInputStream fis = new FileInputStream(prop.getKeystorePath())) {
@@ -109,7 +110,7 @@ public class LimController {
                     SSLContext context = getSSLContext();
                     params.setSSLParameters(context.getDefaultSSLParameters());
                 } catch (Exception e) {
-                    LimController.log.error("Ошибка конфигурации параметров HTTPS: ", e);
+                    LimController.log.error("HTTPS settings configuration error: ", e);
                 }
             }
         });
@@ -118,24 +119,24 @@ public class LimController {
 
     private static void closeAppListener(HttpServer server) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("📥 Получен сигнал на остановку контейнера. Начинаем плавное завершение...");
+            log.info("📥 The signal to stop the container has been received. We are beginning a smooth shutdown....");
             server.stop(1);
-            log.info("[-] HttpServer остановлен. Новые запросы не принимаются.");
+            log.info("HttpServer has stopped. New requests are not accepted..");
             EXECUTOR_POOL.shutdown();
-            log.info("⏳ Ожидаем завершения активных задач в пуле потоков...");
+            log.info("⏳ Waiting for active tasks in the thread pool to complete...");
             try {
                 if (!EXECUTOR_POOL.awaitTermination(5, TimeUnit.SECONDS)) {
-                    log.warn("⚠️ Некоторые задачи не успели завершиться вовремя. Принудительная остановка пула.");
+                    log.warn("⚠️ Some tasks did not complete on time. Forced pool stop.");
                     EXECUTOR_POOL.shutdownNow(); // Если не успели — режем жестко
                 }
-                log.info("[+] Пул потоков успешно остановлен.");
+                log.info("The thread pool was stopped successfully..");
             } catch (InterruptedException e) {
-                log.error("Ошибка при ожидании остановки пула: ", e);
+                log.error("Error waiting for pool to stop: ", e);
                 EXECUTOR_POOL.shutdownNow();
                 Thread.currentThread().interrupt();
             }
             dbManager.close();
-            log.info("🛑 Все ресурсы освобождены. Контейнер успешно остановлен. Пока!");
+            log.info("🛑 All resources have been released. The container has been stopped successfully. Bye!");
         }));
     }
 }

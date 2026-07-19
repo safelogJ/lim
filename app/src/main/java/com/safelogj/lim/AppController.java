@@ -7,7 +7,6 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.Bundle;
 import android.security.keystore.KeyGenParameterSpec;
@@ -17,6 +16,13 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.work.BackoffPolicy;
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.WorkRequest;
 
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.viewmodels.ResultCallback;
@@ -39,10 +45,13 @@ import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +59,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -87,16 +97,18 @@ public class AppController extends Application {
     private static final int GCM_TAG_LENGTH = 16;
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";
+    private static final String LIM_SYNC = "LimSync";
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> syncTask;
-    private final AtomicBoolean isDownloadInProgress = new AtomicBoolean(false);
+    public final AtomicBoolean isDownloadInProgress = new AtomicBoolean(false);
+    public final AtomicInteger startedActivities = new AtomicInteger(0);
+    private final AtomicBoolean isNetworkActive = new AtomicBoolean(false);
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
-    private int startedActivities = 0;
-    private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
-    private final SimpleDateFormat dayMonthFormat = new SimpleDateFormat("dd MMM", Locale.getDefault());
+    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault());
+    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault());
+    private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
     private NetworkService networkService;
 
     private byte[] certBytes;
@@ -225,6 +237,7 @@ public class AppController extends Application {
     public void onCreate() {
         super.onCreate();
         regActivityListener();
+        registerNetworkCallback();
         readRoutersListAndSettingsEncrypted();
         initOkHttpClient();
         dbHelper = new DatabaseHelper(this);
@@ -232,38 +245,45 @@ public class AppController extends Application {
         initStreams();
         dbHelper.initDatabase();
         createNotificationChannel();
-        Log.d(LOG_TAG, "Приложение запущено ");
+        setupWorkManager();
     }
 
     public void writeSettingsToFile() {
         dbExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
 
-    private void startDownloadNewMsg() {
+    public void startDownloadNewMsg() {
         dbHelper.getLastDbMessageId(userId, new ResultCallback<>() {
             @Override
             public void onSuccess(Long lastServerId) {
                 isDownloadInProgress.set(true);
-                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, ()-> isDownloadInProgress.set(false)));
+                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, () -> isDownloadInProgress.set(false)));
             }
 
             @Override
             public void onError(String msg) {
-                //
+                Log.d(LOG_TAG, msg);
             }
         });
     }
 
-    // worker
     public void startSendingMsgList() {
-        dbExecutor.execute(() -> {
-            for (Message msg : dbHelper.getPendingMessages()) {
-                if (msg.type.equals(NetworkService.TEXT)) {
-                    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() ->  networkService.sendTextMessage(msg));
-                } else {
-              //    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendFileMessage(msg));
+        dbHelper.getPendingMessages(new ResultCallback<>() {
+            @Override
+            public void onSuccess(List<Message> messages) {
+                for (Message msg : messages) {
+                    if (msg.type.equals(NetworkService.TEXT)) {
+                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendTextMessage(msg));
+                    } else {
+                        //    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendFileMessage(msg));
+                    }
                 }
             }
+            @Override
+            public void onError(String msg) {
+                //
+            }
+
         });
     }
 
@@ -441,32 +461,13 @@ public class AppController extends Application {
 
                         @Override
                         public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                            Date now = new Date();
-                            if (now.before(chain[0].getNotBefore())) {
-                                throw new CertificateException(getString(R.string.date_cert_before_error));
-                            }
-                            if (now.after(chain[0].getNotAfter())) {
-                                throw new CertificateException(getString(R.string.date_cert_after_error) + " (" + chain[0].getNotAfter() + ")");
-                            }
-
-
+                            checkTime(chain[0]);
                             if (certBytes == null) {
                                 Log.w(AppController.LOG_TAG, "сертификат не импортирован проверена только дата: ");
-                                return; // Если сертификат не задан, доверяем дате
+                                return;
                             }
-
                             try {
-                                // 2. Восстанавливаем объект сертификата из байтов в JSON
-                                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-                                X509Certificate savedCert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
-                                // 3. СРАВНЕНИЕ ПУБЛИЧНЫХ КЛЮЧЕЙ.
-                                if (!chain[0].getPublicKey().equals(savedCert.getPublicKey())) {
-                                    throw new CertificateException(getString(R.string.public_key_cert_error));
-                                } else {
-                                    Log.i(AppController.LOG_TAG, "сертификат публичный ключ совпал: ");
-                                }
-                                // 4. ПРОВЕРКА ПОДПИСИ (Verify).
-                                checkSign(chain[0], savedCert);
+                                checkCert(chain[0]);
                             } catch (CertificateException e) {
                                 throw e;
                             } catch (Exception e) {
@@ -477,6 +478,28 @@ public class AppController extends Application {
                         @Override
                         public X509Certificate[] getAcceptedIssuers() {
                             return new X509Certificate[0];
+                        }
+
+                        private void checkTime(X509Certificate chain) throws CertificateException {
+                            Instant now = Instant.now();
+                            if (now.isBefore(chain.getNotBefore().toInstant())) {
+                                throw new CertificateException(getString(R.string.date_cert_before_error));
+                            }
+                            if (now.isAfter(chain.getNotAfter().toInstant())) {
+                                throw new CertificateException(getString(R.string.date_cert_after_error) + " (" + chain.getNotAfter() + ")");
+                            }
+                        }
+
+                        private void checkCert(X509Certificate chain) throws CertificateException {
+                            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                            X509Certificate savedCert = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
+                            // 3. СРАВНЕНИЕ ПУБЛИЧНЫХ КЛЮЧЕЙ.
+                            if (!chain.getPublicKey().equals(savedCert.getPublicKey())) {
+                                throw new CertificateException(getString(R.string.public_key_cert_error));
+                            } else {
+                                Log.i(AppController.LOG_TAG, "сертификат публичный ключ совпал: ");
+                            }
+                            checkSign(chain, savedCert);
                         }
 
                         private void checkSign(X509Certificate chain, X509Certificate savedCert) throws CertificateException {
@@ -493,10 +516,7 @@ public class AppController extends Application {
             SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
 
-            // 1. Создаем диспетчер
             Dispatcher dispatcher = new Dispatcher();
-// Так как хост у нас один (роутер), эти две цифры должны быть одинаковыми.
-// 8-10 одновременных запросов — золотая середина для SQLite в режиме WAL и процессора роутера.
             dispatcher.setMaxRequests(POOL_SIZE);
             dispatcher.setMaxRequestsPerHost(POOL_SIZE);
 
@@ -534,9 +554,9 @@ public class AppController extends Application {
 
             @Override
             public void onActivityStarted(@androidx.annotation.NonNull Activity activity) {
-                if (++startedActivities == 1) {
-                    syncTask = syncExecutor.scheduleWithFixedDelay(()-> {
-                        if (userId > 0 && isNetworkAvailable()) {
+                if (startedActivities.incrementAndGet() == 1) {
+                    syncTask = syncExecutor.scheduleWithFixedDelay(() -> {
+                        if (userId > 0 && isNetworkActive.get()) {
                             if (!isDownloadInProgress.get()) {
                                 startDownloadNewMsg();
                             }
@@ -558,7 +578,7 @@ public class AppController extends Application {
 
             @Override
             public void onActivityStopped(@androidx.annotation.NonNull Activity activity) {
-                if (--startedActivities == 0 && syncTask != null && !syncTask.isCancelled()) {
+                if (startedActivities.decrementAndGet() == 0 && syncTask != null && !syncTask.isCancelled()) {
                     syncTask.cancel(false);
                 }
             }
@@ -578,32 +598,24 @@ public class AppController extends Application {
     public static String formatSmartTime(Context context, long timestamp) {
         if (timestamp <= 0) return EMPTY_STRING;
         AppController controller = (AppController) context.getApplicationContext();
-        Calendar now = Calendar.getInstance();
-        Calendar msgTime = Calendar.getInstance();
-        msgTime.setTimeInMillis(timestamp);
 
-        // Если сегодня — только время: "12:45"
-        if (now.get(Calendar.YEAR) == msgTime.get(Calendar.YEAR) &&
-                now.get(Calendar.DAY_OF_YEAR) == msgTime.get(Calendar.DAY_OF_YEAR)) {
+        ZonedDateTime msgTime = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault());
+        LocalDate msgDate = msgTime.toLocalDate();
+        LocalDate today = LocalDate.now(msgTime.getZone());
 
-            return controller.timeFormat.format(new Date(timestamp));
+        if (msgDate.equals(today)) {
+            return controller.timeFormatter.format(msgTime);
         }
 
-        // Если вчера — слово "Вчера"
-        now.add(Calendar.DAY_OF_YEAR, -1);
-        if (now.get(Calendar.YEAR) == msgTime.get(Calendar.YEAR) &&
-                now.get(Calendar.DAY_OF_YEAR) == msgTime.get(Calendar.DAY_OF_YEAR)) {
+        if (msgDate.equals(today.minusDays(1))) {
             return controller.getString(R.string.yesterday);
         }
 
-        // Если в этом году — "05 июл"
-        now.add(Calendar.DAY_OF_YEAR, 1); // Вернули к сегодня
-        if (now.get(Calendar.YEAR) == msgTime.get(Calendar.YEAR)) {
-            return controller.dayMonthFormat.format(new Date(timestamp));
+        if (msgDate.getYear() == today.getYear()) {
+            return controller.dayMonthFormatter.format(msgTime);
         }
 
-        // Если старое сообщение — полная дата "05.07.2024"
-        return controller.dateFormat.format(new Date(timestamp));
+        return controller.dateFormatter.format(msgTime);
     }
 
     private void createNotificationChannel() {
@@ -619,19 +631,30 @@ public class AppController extends Application {
         }
     }
 
-    public boolean isNetworkAvailable() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (cm == null) {
-            return false;
-        }
-        Network network = cm.getActiveNetwork();
-        if (network == null) {
-            return false;
-        }
-        NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
-        return capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+    private void registerNetworkCallback() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager != null) {
+            connectivityManager.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(@NonNull Network network) {
+                    isNetworkActive.set(true);
+                }
 
+                @Override
+                public void onLost(@NonNull Network network) {
+                    isNetworkActive.set(false);
+                }
+            });
+        }
+    }
+
+    private void setupWorkManager() {
+        Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+        PeriodicWorkRequest workRequest =
+                new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES)
+                        .setConstraints(constraints)
+                        .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+                        .build();
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(LIM_SYNC, ExistingPeriodicWorkPolicy.KEEP, workRequest);
     }
 }

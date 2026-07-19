@@ -28,32 +28,28 @@ public class ServerConfig {
             props.load(fis);
         }
 
-        // 1. Валидация ПУТИ К КЕЙСТОРУ
         String path = props.getProperty("keystore.path");
         if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("Ошибка конфига: 'keystore.path' не указан.");
+            throw new IllegalArgumentException("Config error: 'keystore.path' is not specified.");
         }
         path = path.trim();
         if (!path.toLowerCase().endsWith(".p12")) {
-            throw new IllegalArgumentException("Ошибка конфига: файл хранилища должен иметь расширение .p12. Указано: " + path);
+            throw new IllegalArgumentException("Config error: The storage file must have the extension .p12. Specified: " + path);
         }
 
-        // Дополнительно проверяем, существует ли этот файл физически на роутере
         File keystoreFile = new File(path);
         if (!keystoreFile.exists() || !keystoreFile.isFile()) {
-            throw new IllegalArgumentException("Ошибка конфига: файл хранилища не найден по пути: " + keystoreFile.getAbsolutePath());
+            throw new IllegalArgumentException("Configuration error: Storage file not found at path: " + keystoreFile.getAbsolutePath());
         }
 
-        // 2. Валидация ПАРОЛЯ
         String pass = props.getProperty("keystore.password");
         if (pass == null || pass.trim().isEmpty()) {
-            throw new IllegalArgumentException("Ошибка конфига: 'keystore.password' не может быть пустым.");
+            throw new IllegalArgumentException("Configuration error: 'keystore.password' cannot be empty.");
         }
         if (pass.length() < 4) {
-            throw new IllegalArgumentException("Ошибка конфига: 'keystore.password' слишком короткий (минимум 4 символа).");
+            throw new IllegalArgumentException("Config error: 'keystore.password' is too short (minimum 4 characters).");
         }
 
-        // Если всё прошло идеально — возвращаем чистый, валидный объект
         return new ServerConfig(path, pass.toCharArray());
     }
 }

@@ -326,8 +326,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 }
                 callback.onSuccess(unreadChats);
             } catch (Exception e) {
-                Log.d(AppController.LOG_TAG, "Error getting unread chats: ", e);
-                callback.onError(e.getMessage());
+                callback.onError("Error getting unread chats: " + e.getMessage());
             }
         });
     }
@@ -391,39 +390,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // Если сообщение сохранилось успешно (msg.localId != -1)
             if (msg.localId != -1) {
                 ContentValues chatValues = new ContentValues();
-                chatValues.put(LAST_MESSAGE,  msg.text);
+                chatValues.put(LAST_MESSAGE, msg.text);
                 chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                 chatValues.put(IS_HIDDEN, 0);
                 // Обновляем чат, у которого совпадает ID
                 database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
-            }
-        });
-    }
-
-    public void saveIncomingMsgList2(List<Message> messages, @NonNull Runnable onComplete) {
-        dbExecutor.execute(() -> {
-            if (messages == null || messages.isEmpty()) {
-                onComplete.run();
-                return;
-            }
-            database.beginTransaction(); // Начинаем транзакцию для скорости
-            try {
-                for (Message msg : messages) {
-                    Log.d(AppController.LOG_TAG, "Сохранено сообщение c id: " + msg.id + " для чата " + msg.chatId);
-                    database.insertWithOnConflict(MESSAGES, null, getValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
-                    ContentValues chatValues = new ContentValues();
-                    chatValues.put(LAST_MESSAGE, msg.text);
-                    chatValues.put(LAST_TIMESTAMP, msg.timestamp);
-                    chatValues.put(IS_HIDDEN, 0);
-                    chatValues.put(HAS_NEW_MSG, 1);
-                    database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
-                }
-                database.setTransactionSuccessful(); // Фиксируем изменения
-            } catch (Exception e) {
-                Log.d(AppController.LOG_TAG, "error saving new messages to the database: ", e);
-            } finally {
-                database.endTransaction();
-                onComplete.run();
             }
         });
     }
@@ -438,7 +409,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 long myId = controller.getUserId();
                 for (Message msg : messages) {
                     // 1. Сохраняем само сообщение
-                    database.insertWithOnConflict(MESSAGES, null, getValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
+                    database.insertWithOnConflict(MESSAGES, null, getMsgValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
                     // 2. Определяем, кто в этом чате собеседник
                     long interlocutorId = (msg.senderId == myId) ? msg.receiverId : msg.senderId;
                     // 3. Подготавливаем данные для чата
@@ -474,7 +445,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     @NonNull
-    private ContentValues getValues(Message msg) {
+    private ContentValues getMsgValues(Message msg) {
         ContentValues values = new ContentValues();
         values.put(ID, msg.id);             // Серверный ID
         Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id);
@@ -502,7 +473,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
             chatValues.put(IS_BLOCKED, 0);
             database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)});
-            Log.d(AppController.LOG_TAG, "подтвержденно отправление сообщения, серв id " +  msg.id + " чат id " + msg.chatId);
+            Log.d(AppController.LOG_TAG, "подтвержденно отправление сообщения, серв id " + msg.id + " чат id " + msg.chatId);
         });
     }
 
@@ -524,59 +495,61 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 } else {
                     Log.w(AppController.LOG_TAG, "не найдено последнего полученного сообщения");
                 }
+                callback.onSuccess(lastServerId);
             } catch (Exception e) {
-                Log.d(AppController.LOG_TAG, "error getting last incoming timestamp: ", e);
+                callback.onError("error getting last incoming timestamp");
             }
             Log.w(AppController.LOG_TAG, "Результат MAX(id): " + lastServerId + " (для юзера " + userId + ")");
-            callback.onSuccess(lastServerId);
         });
     }
 
-    public List<Message> getPendingMessages() {
-        List<Message> messages = new ArrayList<>();
-        List<Long> idsToUpdate = new ArrayList<>();
+    public void getPendingMessages(ResultCallback<List<Message>> callback) {
+        dbExecutor.execute(() -> {
+            List<Message> messages = new ArrayList<>();
+            List<Long> idsToUpdate = new ArrayList<>();
 
-        database.beginTransaction();
-        try {
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT m.*, c.local_id as chat_local_id " +
-                    "FROM messages m " +
-                    "JOIN chats c ON m.chat_id = c.id " +
-                    "WHERE m.send_status = 3 " +
-                    "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
-                if (cursor.moveToFirst()) {
-                    do {
-                        Message msg = new Message();
-                        msg.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
-                        idsToUpdate.add(msg.localId); // Запоминаем ID для обновления
-                        msg.chatId = cursor.getLong(cursor.getColumnIndexOrThrow(CHAT_ID));
-                        msg.chatName = cursor.getString(cursor.getColumnIndexOrThrow(CHAT_NAME));
-                        msg.localChatId = cursor.getLong(cursor.getColumnIndexOrThrow("chat_local_id"));
-                        msg.senderId = cursor.getLong(cursor.getColumnIndexOrThrow(SENDER_ID));
-                        msg.text = cursor.getString(cursor.getColumnIndexOrThrow(TEXT));
-                        msg.type = cursor.getString(cursor.getColumnIndexOrThrow(TYPE));
-                        msg.filePath = cursor.getString(cursor.getColumnIndexOrThrow(FILE_PATH));
-                        msg.fileName = cursor.getString(cursor.getColumnIndexOrThrow(FILE_NAME));
-                        msg.timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(TIMESTAMP));
-                        messages.add(msg);
-                    } while (cursor.moveToNext());
+            database.beginTransaction();
+            try {
+                try (Cursor cursor = database.rawQuery(
+                        "SELECT m.*, c.local_id as chat_local_id " +
+                                "FROM messages m " +
+                                "JOIN chats c ON m.chat_id = c.id " +
+                                "WHERE m.send_status = 3 " +
+                                "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
+                    if (cursor.moveToFirst()) {
+                        do {
+                            Message msg = new Message();
+                            msg.localId = cursor.getLong(cursor.getColumnIndexOrThrow(LOCAL_ID));
+                            idsToUpdate.add(msg.localId); // Запоминаем ID для обновления
+                            msg.chatId = cursor.getLong(cursor.getColumnIndexOrThrow(CHAT_ID));
+                            msg.chatName = cursor.getString(cursor.getColumnIndexOrThrow(CHAT_NAME));
+                            msg.localChatId = cursor.getLong(cursor.getColumnIndexOrThrow("chat_local_id"));
+                            msg.senderId = cursor.getLong(cursor.getColumnIndexOrThrow(SENDER_ID));
+                            msg.text = cursor.getString(cursor.getColumnIndexOrThrow(TEXT));
+                            msg.type = cursor.getString(cursor.getColumnIndexOrThrow(TYPE));
+                            msg.filePath = cursor.getString(cursor.getColumnIndexOrThrow(FILE_PATH));
+                            msg.fileName = cursor.getString(cursor.getColumnIndexOrThrow(FILE_NAME));
+                            msg.timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(TIMESTAMP));
+                            messages.add(msg);
+                        } while (cursor.moveToNext());
+                    }
                 }
-            }
-            if (!idsToUpdate.isEmpty()) {
-                ContentValues v = new ContentValues();
-                v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
-                for (Long lid : idsToUpdate) {
-                    database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
+                if (!idsToUpdate.isEmpty()) {
+                    ContentValues v = new ContentValues();
+                    v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
+                    for (Long lid : idsToUpdate) {
+                        database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
+                    }
                 }
-            }
 
-            database.setTransactionSuccessful();
-        } catch (Exception e) {
-            Log.e(AppController.LOG_TAG, "Error in getPendingMessages transaction", e);
-        } finally {
-            database.endTransaction();
-        }
-        return messages;
+                database.setTransactionSuccessful();
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Error in getPendingMessages transaction", e);
+            } finally {
+                database.endTransaction();
+            }
+            callback.onSuccess(messages);
+        });
     }
 
     public void updateMessageStatus(long localId, int newStatus) {

@@ -31,6 +31,7 @@ configure<ApplicationExtension> {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
@@ -52,6 +53,7 @@ dependencies {
     implementation(libs.glide)
     implementation(libs.glidecompiler)
     implementation(libs.workruntime)
+    coreLibraryDesugaring(libs.desugar)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)
 }
