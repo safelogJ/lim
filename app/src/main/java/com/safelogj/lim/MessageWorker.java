@@ -88,7 +88,7 @@ public class MessageWorker extends Worker {
             if (latch.await(10, TimeUnit.SECONDS)) {
                 for (Message msg : list) {
                     if (controller.startedActivities.get() == 0) {
-                        if (msg.type.equals(NetworkService.TEXT)) {
+                        if (msg.type.equals(Message.TYPE_TEXT)) {
                             controller.getNetworkService().sendTextMessage(msg);
                         } else {
                             //  controller.getNetworkService().sendFileMessage(msg);

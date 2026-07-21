@@ -2,6 +2,7 @@ package com.safelogj.limserver.handler;
 
 import com.safelogj.limserver.LimController;
 import com.safelogj.limserver.model.Message;
+import com.safelogj.limserver.model.User;
 import com.safelogj.limserver.request.SendMessageRequest;
 import com.safelogj.limserver.response.BaseResponse;
 import com.sun.net.httpserver.HttpExchange;
@@ -27,14 +28,15 @@ public class SendMessageHandler extends BaseHandler {
                 sendFieldMissingError(exchange, response);
                 return;
             }
-            if (LimController.dbManager.authenticateUser(req.username(), req.password())== null) {
+            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            if (user == null) {
                 LimController.log.error("sendUnauthorizedError ");
                 sendUnauthorizedError(exchange, response);
                 return;
             }
             long timestamp = System.currentTimeMillis();
             long messageId = LimController.dbManager.saveMessage(
-                    req.chatId(), req.userId(), req.text(), req.type(), timestamp, req.filePath(), req.fileName(), req.chatName());
+                    req.chatId(), user.id, req.text(), req.type(), timestamp, req.filePath(), req.fileName(), req.chatName());
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;

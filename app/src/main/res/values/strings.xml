@@ -33,9 +33,11 @@
     <string name="rename_chat_title">Chat options</string>
     <string name="rename_chat_btn">Rename</string>
     <string name="rename_chat_hint">New chat name</string>
+    <string name="new_chat_number">Chat_</string>
     <string name="system_critical_error_text">Initialization error, application cannot operate.</string>
     <string name="system_critical_error_title">Critical error</string>
     <string name="system_critical_error_btn">Exit</string>
+    <string name="no_app_to_open_file">No app to open file</string>
 
     <string name="login_error">invalid username format (3–20 chars, lowercase Latin and digits)</string>
     <string name="pass_error">invalid password format (6–20 chars)</string>

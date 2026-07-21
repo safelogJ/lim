@@ -68,6 +68,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                     if (diff.containsKey(MSG)) holder.binding.lastMessage.setText(chat.lastMessage);
                 }
             }
+              holder.setListeners(chat, listener);
         }
     }
 
@@ -106,7 +107,10 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
             // Настраиваем фон аватара (новое сообщение)
             updateNewMsgStatus(chat.hasNewMsg);
+            setListeners(chat, listener);
+        }
 
+        public void setListeners(Chat chat, OnChatClickListener listener) {
             binding.avatarBackground.setOnClickListener(v -> listener.onAvatarClick(chat));
             itemView.setOnClickListener(v -> listener.onChatClick(chat));
             itemView.setOnLongClickListener(v -> {

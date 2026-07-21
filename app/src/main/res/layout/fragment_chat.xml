@@ -93,7 +93,7 @@
             android:paddingTop="4dp"
             android:paddingEnd="4dp"
             android:paddingBottom="4dp"
-            android:visibility="gone"
+            android:visibility="invisible"
             app:layout_constraintBottom_toTopOf="@+id/messageEditText"
             app:layout_constraintEnd_toEndOf="@+id/sendButton"
             app:layout_constraintStart_toStartOf="@+id/addFileButton"

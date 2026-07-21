@@ -43,12 +43,12 @@ public class MediaUploadHandler extends BaseHandler {
 
         String username = exchange.getRequestHeaders().getFirst("X-Username");
         String password = exchange.getRequestHeaders().getFirst("X-Password");
-        String chatIdStr = exchange.getRequestHeaders().getFirst("X-Chat-Id");
         String senderId = exchange.getRequestHeaders().getFirst("X-Sender-Id");
+        String chatIdStr = exchange.getRequestHeaders().getFirst("X-Chat-Id");
         String messageText = encodeToHeader(exchange.getRequestHeaders().getFirst("X-Message-Text"));
+        String messageType = exchange.getRequestHeaders().getFirst("X-Message-Type");
         String originalName = encodeToHeader(exchange.getRequestHeaders().getFirst("X-File-Name"));
         String chatName = encodeToHeader(exchange.getRequestHeaders().getFirst("X-Chat-Name"));
-        String messageType = exchange.getRequestHeaders().getFirst("X-Message-Type");
 
         if (!SendMessageRequest.isValidHeaders(username, password, originalName)  || !isUsernameValid(username)) {
             sendFieldMissingError(exchange, response);

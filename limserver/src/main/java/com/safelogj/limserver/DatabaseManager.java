@@ -26,11 +26,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class DatabaseManager {
 
-    public enum UsersTable { ID, USERNAME, PASSWORD_HASH, DISPLAY_NAME, CREATED_AT, IS_DELETED }
-    public enum ChatsTable { ID, NAME, IS_GROUP, CREATED_AT }
-    public enum ChatMembersTable { CHAT_ID, USER_ID, JOINED_AT, IS_HIDDEN, IS_BLOCKED }
-    public enum MessagesTable { ID, CHAT_ID, SENDER_ID, TEXT, TYPE, FILE_PATH, FILE_NAME, CHAT_NAME, TIMESTAMP }
-
     public static final long FILE_SIZE_LIMIT = 50_000_000L;
     private static final String DB_FILE = "lim.db";
     @NotNull
@@ -208,10 +203,10 @@ public class DatabaseManager {
                  PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name, password_hash FROM users WHERE username = ? AND is_deleted = 0")) {
                 stmt.setString(1, username);
                 try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next() && rs.getString("password_hash").equals(serverPasswordHash)) {
+                    if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
                         User user = new User();
-                        user.id = rs.getLong("id");
-                        user.displayName = rs.getString("display_name");
+                        user.id = rs.getLong(1);
+                        user.displayName = rs.getString(2);
                         return user;
                     } else {
                         LimController.log.warn("incorrect password for user '{}'", username);
@@ -264,7 +259,7 @@ public class DatabaseManager {
                     findStmt.setLong(2, receiverId);
                     try (ResultSet rs = findStmt.executeQuery()) {
                         if (rs.next()) {
-                            chatId = rs.getLong("chat_id");
+                            chatId = rs.getLong(1);
                         }
                     }
                 }
@@ -360,9 +355,9 @@ public class DatabaseManager {
         List<Chat> activeChats = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT c.id, c.name, c.is_group, cm.is_hidden, " +
-                             "(SELECT text FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1) as last_text, " +
-                             "(SELECT timestamp FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1) as last_time " +
+                     "SELECT c.id, c.name, c.is_group, cm.is_hidden, cm.is_blocked, " +
+                             "(SELECT text FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1), " +
+                             "(SELECT timestamp FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1) " +
                              "FROM chats c " +
                              "JOIN chat_members cm ON c.id = cm.chat_id " +
                              "WHERE cm.user_id = ? " +
@@ -372,12 +367,13 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     Chat chat = new Chat();
-                    chat.id = rs.getLong("id");
-                    chat.name = rs.getString("name");
-                    chat.isGroup = rs.getLong("is_group") == 1;
-                    chat.lastMessage = rs.getString("last_text");
-                    chat.lastTimestamp = rs.getLong("last_time");
-                    chat.isHidden = rs.getLong("is_hidden") == 1;
+                    chat.id = rs.getLong(1);
+                    chat.name = rs.getString(2);
+                    chat.isGroup = rs.getInt(3) == 1;
+                    chat.isHidden = rs.getInt(4) == 1;
+                    chat.isBlocked = rs.getInt(5) == 1;
+                    chat.lastMessage = rs.getString(6);
+                    chat.lastTimestamp = rs.getLong(7);
                     // Для личных чатов вытягиваем инфо о собеседнике
                     if (!chat.isGroup) {
                         User interlocutor = getInterlocutorInfo(conn, chat.id, userId);
@@ -405,8 +401,8 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     User user = new User();
-                    user.id = rs.getLong("id");
-                    user.displayName = rs.getString("display_name");
+                    user.id = rs.getLong(1);
+                    user.displayName = rs.getString(2);
                     return user;
                 }
             }
@@ -467,8 +463,8 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     User user = new User();
-                    user.id = rs.getLong("id");
-                    user.displayName = rs.getString("display_name");
+                    user.id = rs.getLong(1);
+                    user.displayName = rs.getString(2);
                     return user;
                 }
             }
@@ -531,48 +527,42 @@ public class DatabaseManager {
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastMessageId) {
-        LimController.log.info(">>> ЗАПРОС НОВЫХ: юзер={}, после_id={} <<<", userId, lastMessageId);
-
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT chat_id FROM chat_members WHERE user_id = ?")) {
-            stmt.setLong(1, userId);
-            StringBuilder chats = new StringBuilder();
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) chats.append(rs.getLong("chat_id")).append(", ");
-            }
-            LimController.log.info("Юзер {} состоит в чатах: [{}]", userId, chats);
-        } catch (Exception e) {}
-
-
+        // Мы добавляем JOIN с пользователями, чтобы достать их Display Name
+        // И используем CASE для выбора имени:
+        // если я отправитель - оставляем мое название чата (для синхронизации),
+        // если нет - берем имя отправителя (для идентификации).
 
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT m.* FROM messages m " +
-                "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                "WHERE cm.user_id = ? AND m.id > ? " +
-                "ORDER BY m.id ASC")) {
+                "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, " +
+                        "CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u.display_name END, m.timestamp " +
+                        "FROM messages m " +
+                        "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+                        "JOIN users u ON m.sender_id = u.id " + // Приклеиваем отправителя
+                        "WHERE cm.user_id = ? AND m.id > ? " +
+                        "ORDER BY m.id ASC")) {
             stmt.setLong(1, userId);
-            stmt.setLong(2, lastMessageId);
+            stmt.setLong(2, userId);
+            stmt.setLong(3, lastMessageId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Message> messages = new ArrayList<>();
                 while (rs.next()) {
                     Message msg = new Message();
-                    msg.id = rs.getLong("id");
-                    msg.chatId = rs.getLong("chat_id");
-                    msg.chatName = rs.getString("chat_name");
-                    msg.senderId = rs.getLong("sender_id");
-                    msg.text = rs.getString("text");
-                    msg.type = rs.getString("type");
-                    msg.timestamp = rs.getLong("timestamp");
-                    msg.filePath = rs.getString("file_path");
-                    msg.fileName = rs.getString("file_name");
-                    LimController.log.info("Отдаем юзеру {}: msg_id={}, из чата={}", userId, msg.id, msg.chatId);
+                    msg.id = rs.getLong(1);
+                    msg.chatId = rs.getLong(2);
+                    msg.senderId = rs.getLong(3);
+                    msg.text = rs.getString(4);
+                    msg.type = rs.getString(5);
+                    msg.filePath = rs.getString(6);
+                    msg.fileName = rs.getString(7);
+                    msg.chatName = rs.getString(8);
+                    msg.timestamp = rs.getLong(9);
                     messages.add(msg);
                 }
                 return messages;
             }
         } catch (SQLException e) {
-            LimController.log.error("error receiving new messages for the user {}: ", userId, e);
+            LimController.log.error("error receiving messages: ", e);
         }
         return null;
     }

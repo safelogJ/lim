@@ -66,11 +66,10 @@ public class ChatViewModel extends AndroidViewModel {
         selectedFileName = null;
     }
 
-    // Здесь же можно добавить метод для отправки сообщения в будущем
     public void sendMessage(Message msg, long localChatId) {
         controller.getDbHelper().saveMsgBeforeSending(msg);
 
-        if (NetworkService.TEXT.equals(msg.type)) {
+        if (Message.TYPE_TEXT.equals(msg.type)) {
             Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + localChatId + " (отправлено в нити " + Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1))) + ")");
             controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 1)))].execute(()->
                     controller.getNetworkService().sendTextMessage(msg));

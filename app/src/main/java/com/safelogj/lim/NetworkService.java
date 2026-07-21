@@ -31,8 +31,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.locks.ReentrantLock;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -43,10 +41,6 @@ import okio.BufferedSink;
 
 public class NetworkService {
 
-    public static final String TEXT = "TEXT";
-    public static final String IMAGE = "IMAGE";
-    public static final String FILE = "FILE";
-    public static final String SYSTEM = "SYSTEM";
     public static final long FILE_SIZE_LIMIT = 50_000_000L;
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private static final String SERVER_RETURNED_ERROR = "server returned error: ";
@@ -227,7 +221,6 @@ public class NetworkService {
                     Chat chat = new Chat();
                     chat.id = res.chatId();
                     chat.name = queryUser.displayName;
-                    chat.isGroup = false;
                     chat.interlocutorId = queryUser.id;
                     dbHelper.saveChat(chat, callback, chat);
                     Log.i(AppController.LOG_TAG, res.message());
@@ -289,7 +282,7 @@ public class NetworkService {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()),  msg.senderId, msg.chatId, msg.text, msg.type,
+                    hashPassword(controller.getPassword()), msg.senderId, msg.chatId, msg.text, msg.type,
                     msg.filePath, msg.fileName, msg.chatName)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
         } catch (Exception e) {
@@ -317,26 +310,26 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg.localId);
     }
 
-    // Метод для отправки текстового сообщения
     public void sendMediaMessage(Message msg) {
-        if (msg.filePath == null) {
-            Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.select_file_error));
-            return;
-        }
-        Uri uri = Uri.parse(msg.filePath);
-        long fileSize = getFileSize(uri);
-        if (fileSize >= FILE_SIZE_LIMIT) {
-            Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.big_file_error));
+        Uri uri;
+        long fileSize;
+        try {
+            uri = Uri.parse(msg.filePath);
+            fileSize = getFileSize(uri);
+            if (fileSize >= FILE_SIZE_LIMIT) {
+                Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.big_file_error));
+                return;
+            }
+        } catch (Exception e) {
+            Log.w(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             return;
         }
 
         try {
             // 1. Открываем поток для чтения файла
             InputStream inputStream = controller.getContentResolver().openInputStream(uri);
-
             // 2. Создаем RequestBody, который читает из стрима
             RequestBody requestBody = createRequestBodyFromStream(inputStream, fileSize);
-
             // 3. Собираем запрос с заголовками, как ждет ваш сервер
             Request request = new Request.Builder()
                     .url(controller.getServerUrl() + "/media/upload")
@@ -345,38 +338,37 @@ public class NetworkService {
                     .header("X-Sender-Id", String.valueOf(msg.senderId))
                     .header("X-Chat-Id", String.valueOf(msg.chatId))
                     .header("X-Message-Text", encodeToHeader(msg.text)) // Чтобы не было проблем с русским
+                    .header("X-Message-Type", msg.type)
                     .header("X-File-Name", encodeToHeader(msg.fileName))
                     .header("X-Chat-Name", encodeToHeader(msg.chatName))
-                    .header("X-Message-Type", msg.type)
                     .post(requestBody)
                     .build();
 
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                    if (response.isSuccessful()) {
-                        if (BaseResponse.SUCCESS.equals(res.status())) {
-                            msg.chatId = res.chatId(); // проверить
-                            msg.id = res.messageId();
-                            msg.timestamp = res.timestamp();
-                            dbHelper.confirmMessageSent(msg);
-                            Log.i(AppController.LOG_TAG, res.message());
-                        }
+            try (Response response = client.newCall(request).execute()) {
+                BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+                if (response.isSuccessful()) {
+                    if (BaseResponse.SUCCESS.equals(res.status())) {
+                        msg.chatId = res.chatId(); // проверить
+                        msg.id = res.messageId();
+                        msg.timestamp = res.timestamp();
+                        dbHelper.confirmMessageSent(msg);
+                        Log.i(AppController.LOG_TAG, res.message());
+                        return;
                     } else {
-                        Log.d(AppController.LOG_TAG, "Сообщение не отправлено, ответ сервера :" + res.message());
+                        Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                     }
+                } else {
+                    Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
 
-                @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.d(AppController.LOG_TAG, "Сообщение не отправлено :" + e);
-                }
-            });
+            } catch (Exception e) {
+                Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+            }
 
         } catch (Exception e) {
             Log.w(AppController.LOG_TAG, "Ошибка при чтении файла: " + e.getMessage());
         }
+        dbHelper.notConfirmMessageSent(msg.localId);
     }
 
     public void getNewMessages(long lastMessageId, Runnable onComplete) {
@@ -404,7 +396,7 @@ public class NetworkService {
                     Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
             } else {
-              //  Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
+                //  Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
             }
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());

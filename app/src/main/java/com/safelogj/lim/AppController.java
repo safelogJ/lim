@@ -273,7 +273,7 @@ public class AppController extends Application {
             @Override
             public void onSuccess(List<Message> messages) {
                 for (Message msg : messages) {
-                    if (msg.type.equals(NetworkService.TEXT)) {
+                    if (msg.type.equals(Message.TYPE_TEXT)) {
                         netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendTextMessage(msg));
                     } else {
                         //    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendFileMessage(msg));

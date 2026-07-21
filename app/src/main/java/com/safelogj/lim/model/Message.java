@@ -2,10 +2,11 @@ package com.safelogj.lim.model;
 
 import androidx.annotation.NonNull;
 
-import com.safelogj.lim.NetworkService;
-
 public class Message {
 
+    public static final String TYPE_TEXT = "TEXT";
+    public static final String TYPE_IMAGE = "IMAGE";
+    public static final String TYPE_FILE = "FILE";
     public static final int TYPE_SYSTEM = 0;
     public static final int TYPE_OUTGOING = 1;
     public static final int TYPE_INCOMING = 2;
@@ -24,7 +25,7 @@ public class Message {
     public long receiverId;
     public String text;
     @NonNull
-    public String type = NetworkService.TEXT;      // "TEXT", "FILE", "IMAGE", "SYSTEM"
+    public String type = TYPE_TEXT;      // "TEXT", "FILE", "IMAGE", "SYSTEM"
     public long timestamp;
     public String filePath;  // Для файлов
     public String fileName;

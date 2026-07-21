@@ -100,7 +100,7 @@ public class ChatFragment extends Fragment {
             controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
                 @Override
                 public void onSuccess(List<Chat> unreadChats) {
-                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: "+ unreadChats.size());
+                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: " + unreadChats.size());
                     unreadChats.removeIf(chat -> chat.id == currentChatId);
                     if (!unreadChats.isEmpty()) {
                         NotificationHelper.showNotification(controller, unreadChats);
@@ -109,7 +109,7 @@ public class ChatFragment extends Fragment {
 
                 @Override
                 public void onError(String msg) {
-                   Log.w(AppController.LOG_TAG, msg);
+                    Log.w(AppController.LOG_TAG, msg);
                 }
             });
             uiHandler.postDelayed(this, 4000);
@@ -171,9 +171,8 @@ public class ChatFragment extends Fragment {
         setObserveMsgList();
         setObserveSelectedFileUri();
         setObserveErrorStatus();
-
-        updateBottomPanel();
         setKeyboardPadding();
+        updateBottomPanel();
 
         if (currentChatId == Chat.INVALID_ID) {
             addSystemMessageToList(getString(R.string.send_login_hint));
@@ -204,10 +203,11 @@ public class ChatFragment extends Fragment {
                     return;
                 }
                 String fileName = chatViewModel.getSelectedFileName();
-                Message msg = buildMessage((userText.isEmpty() && fileName != null) ? fileName : userText, // text
-                        fileUri == null ? NetworkService.TEXT : getMessageType(fileUri),  // type
+                Message msg = buildMessage(userText, // text
+                        fileUri == null ? Message.TYPE_TEXT : getMessageType(fileUri),  // type
                         fileUri, fileName);
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
+                chatViewModel.clearFile();
                 Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId);
                 chatViewModel.sendMessage(msg, currentChatLocalId);
                 chatViewModel.loadDbMessages(currentChatId);
@@ -231,8 +231,15 @@ public class ChatFragment extends Fragment {
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && mBinding != null) {
-                //  boolean isNewMessageAdded = msgList.size() > lastMessageCount;
-                //  lastMessageCount = msgList.size();
+                if (!msgList.isEmpty()) {
+                    String freshChatName = msgList.get(msgList.size() - 1).chatName;
+                    if (freshChatName != null && !freshChatName.isEmpty()
+                            && !freshChatName.equals(currentChatName)) {
+                        currentChatName = freshChatName;
+                        mBinding.chatNameText.setText(currentChatName);
+                    }
+                }
+
                 messages.clear();
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
@@ -254,7 +261,7 @@ public class ChatFragment extends Fragment {
                 mBinding.fileNameText.setText(chatViewModel.getSelectedFileName());
             } else {
                 // Скрываем панель, если файл удален
-                mBinding.attachmentPreview.setVisibility(View.GONE);
+                mBinding.attachmentPreview.setVisibility(View.INVISIBLE);
             }
         });
     }
@@ -367,9 +374,9 @@ public class ChatFragment extends Fragment {
     private String getMessageType(Uri uri) {
         String mimeType = controller.getContentResolver().getType(uri);
         if (mimeType != null && mimeType.startsWith("image/")) {
-            return NetworkService.IMAGE;
+            return Message.TYPE_IMAGE;
         }
-        return NetworkService.FILE;
+        return Message.TYPE_FILE;
     }
 
     private void clearNotificationIfMatch() {

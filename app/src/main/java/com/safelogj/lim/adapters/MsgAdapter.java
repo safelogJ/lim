@@ -1,11 +1,16 @@
 package com.safelogj.lim.adapters;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,6 +21,7 @@ import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.safelogj.lim.AppController;
 import com.safelogj.lim.NetworkService;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemMessageBinding;
@@ -90,7 +96,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             }
 
             // 2. Контент: Картинка или Файл
-            if (NetworkService.IMAGE.equals(message.type)) {
+            if (Message.TYPE_IMAGE.equals(message.type)) {
                 if (message.filePath != null && !message.filePath.isEmpty()) {
                     binding.messageImage.setVisibility(View.VISIBLE);
                     Glide.with(itemView.getContext())
@@ -98,7 +104,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                             .centerCrop()
                             .into(binding.messageImage);
                 }
-            } else if (NetworkService.FILE.equals(message.type)) {
+            } else if (Message.TYPE_FILE.equals(message.type)) {
                 binding.fileContainer.setVisibility(View.VISIBLE);
                 binding.messageFileName.setText(message.fileName);
             }
@@ -126,6 +132,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
                     binding.messageBubble.setGravity(Gravity.END);
                     binding.messageText.setGravity(Gravity.END);
+                    LinearLayout.LayoutParams fileParamsOut = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
+                    fileParamsOut.gravity = Gravity.END;
+                    binding.fileContainer.setLayoutParams(fileParamsOut);
                     break;
 
                 default: // TYPE_INCOMING
@@ -136,6 +145,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black3));
                     binding.messageBubble.setGravity(Gravity.START);
                     binding.messageText.setGravity(Gravity.START);
+                    LinearLayout.LayoutParams fileParamsIn = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
+                    fileParamsIn.gravity = Gravity.START;
+                    binding.fileContainer.setLayoutParams(fileParamsIn);
             }
 
 
@@ -145,6 +157,25 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
             binding.messageTime.setText(message.formattedTime);
             constraintSet.applyTo((ConstraintLayout) itemView);
+            // 4. Слушатели нажатий для открытия файлов
+            binding.messageImage.setOnClickListener(v -> openFile(message.filePath));
+            binding.fileContainer.setOnClickListener(v -> openFile(message.filePath));
+        }
+
+        private void openFile(String path) {
+            if (path == null || path.isEmpty()) return;
+            try {
+                Uri uri = Uri.parse(path);
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(uri, itemView.getContext().getContentResolver().getType(uri));
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                itemView.getContext().startActivity(intent);
+            } catch (ActivityNotFoundException e) {
+                Toast.makeText(itemView.getContext(), itemView.getContext().getString(R.string.no_app_to_open_file), Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Error opening file: " + path, e);
+            }
         }
 
         public void updateStatus(long status) {
