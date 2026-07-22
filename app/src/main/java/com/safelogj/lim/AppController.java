@@ -103,7 +103,7 @@ public class AppController extends Application {
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> syncTask;
-    public final AtomicBoolean isDownloadInProgress = new AtomicBoolean(false);
+    public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     private final AtomicBoolean isNetworkActive = new AtomicBoolean(false);
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
@@ -111,6 +111,7 @@ public class AppController extends Application {
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault());
     private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
     private NetworkService networkService;
+    private File mExternalFileDir;
 
     private byte[] certBytes;
     @NonNull
@@ -234,9 +235,15 @@ public class AppController extends Application {
         return netStreams;
     }
 
+    @Nullable
+    public File getExternalFileDir() {
+        return mExternalFileDir;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
+        mExternalFileDir = getExternalFilesDir(null);
         regActivityListener();
         registerNetworkCallback();
         readRoutersListAndSettingsEncrypted();
@@ -257,8 +264,8 @@ public class AppController extends Application {
         dbHelper.getLastDbMessageId(userId, new ResultCallback<>() {
             @Override
             public void onSuccess(Long lastServerId) {
-                isDownloadInProgress.set(true);
-                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, () -> isDownloadInProgress.set(false)));
+                activeDownloadsCount.incrementAndGet();
+                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId));
             }
 
             @Override
@@ -276,7 +283,7 @@ public class AppController extends Application {
                     if (msg.type.equals(Message.TYPE_TEXT)) {
                         netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendTextMessage(msg));
                     } else {
-                        //    netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendFileMessage(msg));
+                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendMediaMessage(msg));
                     }
                 }
             }
@@ -558,7 +565,7 @@ public class AppController extends Application {
                 if (startedActivities.incrementAndGet() == 1) {
                     syncTask = syncExecutor.scheduleWithFixedDelay(() -> {
                         if (userId > 0 && isNetworkActive.get()) {
-                            if (!isDownloadInProgress.get()) {
+                            if (activeDownloadsCount.get() == 0) {
                                 startDownloadNewMsg();
                             }
                             startSendingMsgList();

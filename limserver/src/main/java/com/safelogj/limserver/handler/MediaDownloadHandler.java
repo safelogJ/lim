@@ -1,6 +1,7 @@
 package com.safelogj.limserver.handler;
 
 import com.safelogj.limserver.LimController;
+import com.safelogj.limserver.model.User;
 import com.safelogj.limserver.request.MediaDownloadRequest;
 import com.safelogj.limserver.response.BaseResponse;
 import com.sun.net.httpserver.HttpExchange;
@@ -30,7 +31,8 @@ public class MediaDownloadHandler extends BaseHandler {
                 return;
             }
             // 3. Авторизация
-            if (LimController.dbManager.authenticateUser(req.username(), req.password()) == null) {
+            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            if (user == null) {
                 sendUnauthorizedError(exchange, response);
                 return;
             }
@@ -40,6 +42,11 @@ public class MediaDownloadHandler extends BaseHandler {
                 response.status = BaseResponse.ERROR;
                 response.message = "File not found or already deleted";
                 sendResponse(exchange, 404, response);
+                return;
+            }
+
+            if (!LimController.dbManager.isFileAccessible(user.id, req.chatId(), req.filePath())) {
+                sendUnauthorizedError(exchange,response);
                 return;
             }
 

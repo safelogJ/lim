@@ -3,6 +3,7 @@
     <color name="black">#FF000000</color>
     <color name="black2">#333333</color>
     <color name="black3">#666666</color>
+    <color name="black4">#444444</color>
     <color name="light_gray">#D6D6D6</color>
     <color name="light_gray_fieldsender">#E6E6E6</color>
     <color name="light_gray_aaa">#AAAAAA</color>
@@ -12,6 +13,8 @@
     <color name="redA400">#FFFF1744</color>
     <color name="redA200">#FFFF5252</color>
     <color name="pink120">#FFF8BBD0</color>
+    <color name="pink200">#F06292</color>
+    <color name="green_50">#C8E6C9</color>
     <color name="green_100">#B9F6CA</color>
     <color name="green_200">#A5D6A7</color>
     <color name="green_400">#66BB6A</color>

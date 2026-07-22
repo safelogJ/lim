@@ -34,11 +34,18 @@
             tools:visibility="visible" />
 
         <!-- Контейнер для файла -->
+        <TextView
+            android:id="@+id/messageText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            tools:text="Привет! Как дела?" />
+
         <LinearLayout
             android:id="@+id/fileContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
             android:background="@drawable/fielder_background_tr"
             android:orientation="horizontal"
             android:padding="8dp"
@@ -51,7 +58,7 @@
                 android:layout_height="24dp"
                 android:contentDescription="@string/image"
                 android:src="@drawable/attach_file_48px"
-                app:tint="@android:color/darker_gray" />
+                app:tint="@color/light_gray" />
 
             <TextView
                 android:id="@+id/messageFileName"
@@ -64,14 +71,6 @@
                 android:textSize="14sp"
                 tools:text="документ.pdf" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/messageText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            tools:text="Привет! Как дела?" />
 
         <TextView
             android:id="@+id/messageTime"

@@ -43,6 +43,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String FILE_PATH = "file_path";
     private static final String FILE_NAME = "file_name";
     private static final String SEND_STATUS = "send_status";
+    private static final String MEDIA_STATUS = "media_status";
     private static final String LAST_SEND_STATUS = "last_send_status";
     private static final String MESSAGES = "messages";
     private static final String USERS = "users";
@@ -90,6 +91,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     "type TEXT NOT NULL, " +
                     "file_path TEXT, " +
                     "file_name TEXT, " +
+                    "media_status INTEGER DEFAULT 0, " +
                     "timestamp INTEGER NOT NULL, " +
                     "send_status INTEGER DEFAULT 1)"); // 1 - "Sending", 2 - "Sent" , 3 = "Waiting"
         } catch (SQLException e) {
@@ -243,7 +245,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void renameChat(long chatId, String newName, ResultCallback<String> callback) {
+    public void renameChat1(long chatId, String newName, ResultCallback<String> callback) {
         dbExecutor.execute(() -> {
             ContentValues values = new ContentValues();
             values.put(NAME, newName);
@@ -251,6 +253,34 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 callback.onSuccess(newName);
             } else {
                 callback.onError("error renaming chat");
+            }
+        });
+    }
+    public void renameChat(long chatId, String newName, ResultCallback<String> callback) {
+        dbExecutor.execute(() -> {
+            database.beginTransaction();
+            try {
+                // 1. Обновляем имя в самой таблице чатов
+                ContentValues chatValues = new ContentValues();
+                chatValues.put(NAME, newName);
+                int updatedChats = database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(chatId)});
+                if (updatedChats > 0) {
+                    // 2. Обновляем chat_name во всех сообщениях этого чата.
+                    // Это нужно, чтобы при входе в чат синхронизация подхватила новое имя.
+                    ContentValues msgValues = new ContentValues();
+                    msgValues.put(CHAT_NAME, newName);
+                    database.update(MESSAGES, msgValues, "chat_id = ?", new String[]{String.valueOf(chatId)});
+                    database.setTransactionSuccessful();
+                    callback.onSuccess(newName);
+                    Log.d(AppController.LOG_TAG, "Чат " + chatId + " переименован в: " + newName);
+                } else {
+                    callback.onError("error renaming chat: not found");
+                }
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Ошибка при транзакции переименования", e);
+                callback.onError("database error during rename");
+            } finally {
+                database.endTransaction();
             }
         });
     }
@@ -389,7 +419,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     + msg.chatId + " c локальным id: " + msg.localId);
             // 2. СРАЗУ ОБНОВЛЯЕМ ЧАТ
             // Если сообщение сохранилось успешно (msg.localId != -1)
-            if (msg.localId != -1) {
+            if (msg.localId != Chat.INVALID_ID) {
                 ContentValues chatValues = new ContentValues();
                 chatValues.put(LAST_MESSAGE, msg.text);
                 chatValues.put(LAST_TIMESTAMP, msg.timestamp);
@@ -402,42 +432,44 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public void saveIncomingMsgList(List<Message> messages) {
         dbExecutor.execute(() -> {
-            if (messages == null || messages.isEmpty()) {
-                return;
-            }
-            database.beginTransaction();
-            try {
-                for (Message msg : messages) {
-                    database.insertWithOnConflict(MESSAGES, null, getMsgValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
-                    ContentValues chatValues = new ContentValues();
-                    chatValues.put(LAST_MESSAGE, msg.text);
-                    chatValues.put(LAST_TIMESTAMP, msg.timestamp);
-                    chatValues.put(IS_HIDDEN, 0);
+            if (messages != null && !messages.isEmpty()) {
+                database.beginTransaction();
+                try {
+                    for (Message msg : messages) {
+                        try (Cursor c = database.rawQuery("SELECT 1 FROM messages WHERE id = ? LIMIT 1", new String[]{String.valueOf(msg.id)})) {
+                            if (c.moveToFirst()) continue;
+                        }
+                        msg.localId = database.insertWithOnConflict(MESSAGES, null, getMsgValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
+                        ContentValues chatValues = new ContentValues();
+                        chatValues.put(LAST_MESSAGE, msg.text);
+                        chatValues.put(LAST_TIMESTAMP, msg.timestamp);
+                        chatValues.put(IS_HIDDEN, 0);
 
-                    if (msg.senderId != controller.getUserId()) {
-                        chatValues.put(INTERLOCUTOR_ID, msg.senderId);
-                        chatValues.put(HAS_NEW_MSG, 1);
-                    } else {
-                        chatValues.put(INTERLOCUTOR_ID, msg.receiverId);
-                        chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
-                        chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
+                        if (msg.senderId != controller.getUserId()) {
+                            chatValues.put(INTERLOCUTOR_ID, msg.senderId);
+                            chatValues.put(HAS_NEW_MSG, 1);
+                        } else {
+                            chatValues.put(INTERLOCUTOR_ID, msg.receiverId);
+                            chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
+                            chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
+                        }
+                        // 4. Пытаемся обновить существующий чат
+                        if (database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)}) == 0) {
+                            chatValues.put(ID, msg.chatId);
+                            chatValues.put(NAME, msg.chatName); // Получаем имя чата из сообщения
+                            // 5. Если чат не найден создаем его
+                            database.insert(CHATS, null, chatValues);
+                            Log.d(AppController.LOG_TAG, "Создан новый чат при синхронизации: " + msg.chatName);
+                        }
                     }
-                    // 4. Пытаемся обновить существующий чат
-
-                    if (database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)}) == 0) {
-                        chatValues.put(ID, msg.chatId);
-                        chatValues.put(NAME, msg.chatName); // Получаем имя чата из сообщения
-                        // 5. Если чат не найден создаем его
-                        database.insert(CHATS, null, chatValues);
-                        Log.d(AppController.LOG_TAG, "Создан новый чат при синхронизации: " + msg.chatName);
-                    }
+                    database.setTransactionSuccessful();
+                } catch (Exception e) {
+                    Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
+                } finally {
+                    database.endTransaction();
                 }
-                database.setTransactionSuccessful();
-            } catch (Exception e) {
-                Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
-            } finally {
-                database.endTransaction();
             }
+            loadMedia();
         });
     }
 
@@ -455,9 +487,31 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put(TIMESTAMP, msg.timestamp);
         if (msg.senderId == controller.getUserId()) {
             values.put(SEND_STATUS, Message.STATUS_SENT);
+        } else {
+            if (!msg.isLocalFile()) {
+                values.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
+            }
         }
         Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id);
         return values;
+    }
+
+    public void updateFilePath(long localId, String filePath) {
+        dbExecutor.execute(() -> {
+            ContentValues v = new ContentValues();
+            v.put(FILE_PATH, filePath);
+            v.put(MEDIA_STATUS, Message.MEDIA_STATUS_DOWNLOADED);
+            database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(localId)});
+            Log.d(AppController.LOG_TAG, "Файл скачан и привязан к сообщению: " + filePath);
+        });
+    }
+
+    public void setMediaStatusError(long localId) {
+        dbExecutor.execute(() -> {
+            ContentValues v = new ContentValues();
+            v.put(MEDIA_STATUS, Message.MEDIA_STATUS_ERROR);
+            database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(localId)});
+        });
     }
 
     public void confirmMessageSent(Message msg) {
@@ -549,6 +603,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
             callback.onSuccess(messages);
         });
+    }
+
+    public void loadMedia() {
+            try (Cursor cursor = database.rawQuery(
+                    "SELECT local_id, chat_id, file_path, file_name FROM messages WHERE media_status = 1",null)) {
+                if (cursor.moveToFirst()) {
+                    do {
+                        Message msg = new Message();
+                        msg.localId = cursor.getLong(0);
+                        msg.chatId = cursor.getLong(1);
+                        msg.filePath = cursor.getString(2);
+                        msg.fileName = cursor.getString(3);
+                        controller.activeDownloadsCount.incrementAndGet();
+                        controller.getNetStreams()[AppController.POOL_SIZE - 1].execute(()->
+                                controller.getNetworkService().downloadMedia(msg)); // Пнули загрузку!
+                    } while (cursor.moveToNext());
+                }
+            } catch (Exception e) {
+                Log.d(AppController.LOG_TAG, "error loading media message for download");
+            }
+        controller.activeDownloadsCount.decrementAndGet(); // конец задачи загрузки новых сообщений
     }
 
 }

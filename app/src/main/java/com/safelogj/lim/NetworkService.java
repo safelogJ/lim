@@ -16,6 +16,7 @@ import com.safelogj.lim.request.BlockChatRequest;
 import com.safelogj.lim.request.EditUserRequest;
 import com.safelogj.lim.request.GetMessagesRequest;
 import com.safelogj.lim.request.HideChatRequest;
+import com.safelogj.lim.request.MediaDownloadRequest;
 import com.safelogj.lim.request.RegisterRequest;
 import com.safelogj.lim.request.SearchChatRequest;
 import com.safelogj.lim.request.SearchUserRequest;
@@ -23,6 +24,8 @@ import com.safelogj.lim.request.SendMessageRequest;
 import com.safelogj.lim.response.BaseResponse;
 import com.safelogj.lim.viewmodels.ResultCallback;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
@@ -59,7 +62,6 @@ public class NetworkService {
         this.controller = controller;
         client = controller.getOkHttpClient();
         dbHelper = controller.getDbHelper();
-
         try {
             mDigest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
@@ -295,6 +297,9 @@ public class NetworkService {
                 if (BaseResponse.SUCCESS.equals(res.status())) {
                     msg.id = res.messageId();
                     msg.timestamp = res.timestamp();
+                    if (msg.localId == Chat.INVALID_ID) {
+                        controller.getDbHelper().saveMsgBeforeSending(msg);
+                    }
                     dbHelper.confirmMessageSent(msg);
                     Log.i(AppController.LOG_TAG, res.message());
                     return;
@@ -316,7 +321,7 @@ public class NetworkService {
         try {
             uri = Uri.parse(msg.filePath);
             fileSize = getFileSize(uri);
-            if (fileSize >= FILE_SIZE_LIMIT) {
+            if (fileSize > FILE_SIZE_LIMIT) {
                 Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.big_file_error));
                 return;
             }
@@ -325,34 +330,35 @@ public class NetworkService {
             return;
         }
 
-        try {
-            // 1. Открываем поток для чтения файла
-            InputStream inputStream = controller.getContentResolver().openInputStream(uri);
-            // 2. Создаем RequestBody, который читает из стрима
-            RequestBody requestBody = createRequestBodyFromStream(inputStream, fileSize);
-            // 3. Собираем запрос с заголовками, как ждет ваш сервер
+        try (InputStream inputStream = controller.getContentResolver().openInputStream(uri)) {
+            if (inputStream == null) {
+                Log.w(AppController.LOG_TAG, "Cannot open input stream for: " + msg.filePath);
+                return;
+            }
             Request request = new Request.Builder()
                     .url(controller.getServerUrl() + "/media/upload")
                     .header("X-Username", controller.getUsername())
                     .header("X-Password", hashPassword(controller.getPassword()))
                     .header("X-Sender-Id", String.valueOf(msg.senderId))
                     .header("X-Chat-Id", String.valueOf(msg.chatId))
-                    .header("X-Message-Text", encodeToHeader(msg.text)) // Чтобы не было проблем с русским
+                    .header("X-Message-Text", encodeToHeader(msg.text))
                     .header("X-Message-Type", msg.type)
                     .header("X-File-Name", encodeToHeader(msg.fileName))
                     .header("X-Chat-Name", encodeToHeader(msg.chatName))
-                    .post(requestBody)
+                    .post(createRequestBodyFromStream(inputStream, fileSize))
                     .build();
 
             try (Response response = client.newCall(request).execute()) {
                 BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
                 if (response.isSuccessful()) {
                     if (BaseResponse.SUCCESS.equals(res.status())) {
-                        msg.chatId = res.chatId(); // проверить
                         msg.id = res.messageId();
                         msg.timestamp = res.timestamp();
+                        if (msg.localId == Chat.INVALID_ID) {
+                            controller.getDbHelper().saveMsgBeforeSending(msg);
+                        }
                         dbHelper.confirmMessageSent(msg);
-                        Log.i(AppController.LOG_TAG, res.message());
+                        Log.i(AppController.LOG_TAG, "Media message sent: " + res.message());
                         return;
                     } else {
                         Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
@@ -360,19 +366,14 @@ public class NetworkService {
                 } else {
                     Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
-
-            } catch (Exception e) {
-                Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
             }
-
         } catch (Exception e) {
-            Log.w(AppController.LOG_TAG, "Ошибка при чтении файла: " + e.getMessage());
+            Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
         dbHelper.notConfirmMessageSent(msg.localId);
     }
 
-    public void getNewMessages(long lastMessageId, Runnable onComplete) {
-        Log.d(AppController.LOG_TAG, "зашли в getNewMessages" + lastMessageId);
+    public void getNewMessages(long lastMessageId) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
@@ -380,7 +381,7 @@ public class NetworkService {
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
-            onComplete.run();
+            controller.activeDownloadsCount.decrementAndGet();
             return;
         }
         Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
@@ -390,18 +391,58 @@ public class NetworkService {
                 if (BaseResponse.SUCCESS.equals(res.status())) {
                     dbHelper.saveIncomingMsgList(res.messages());
                     Log.i(AppController.LOG_TAG, res.message());
-                    onComplete.run();
                     return;
                 } else {
                     Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
             } else {
-                //  Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
+                Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
             }
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
-        onComplete.run();
+        controller.activeDownloadsCount.decrementAndGet();
+    }
+
+    public void downloadMedia(Message msg) {
+        Request request;
+        try {
+            RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(),
+                    hashPassword(controller.getPassword()), msg.chatId, msg.filePath)), MediaType.parse(MEDIA_TYPE_JSON));
+            request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
+        } catch (Exception e) {
+            Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            controller.activeDownloadsCount.decrementAndGet();
+            return;
+        }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                long expectedSize = response.body().contentLength();
+                File localFile = new File(controller.getExternalFileDir(), msg.fileName);
+                try (InputStream is = response.body().byteStream(); FileOutputStream fos = new FileOutputStream(localFile)) {
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, read);
+                    }
+                }
+                if (localFile.length() == expectedSize) {
+                    dbHelper.updateFilePath(msg.localId, Uri.fromFile(localFile).toString());
+                    Log.d(AppController.LOG_TAG, "Файл успешно скачан: " + msg.fileName);
+                } else {
+                    localFile.delete(); // Удаляем битый файл
+                    throw new IOException("File size mismatch!");
+                }
+
+            } else {
+                dbHelper.setMediaStatusError(msg.localId);
+                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.message());
+            }
+
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Download error: " + e.getMessage());
+        }
+        controller.activeDownloadsCount.decrementAndGet();
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {

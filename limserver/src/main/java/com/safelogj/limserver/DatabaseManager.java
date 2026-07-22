@@ -28,11 +28,13 @@ public class DatabaseManager {
 
     public static final long FILE_SIZE_LIMIT = 50_000_000L;
     private static final String DB_FILE = "lim.db";
+
     @NotNull
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private final HikariDataSource dataSource;
     private final HikariPoolMXBean poolProxy;
     private MessageDigest mDigest;
+
     @NotNull
     private final ReentrantLock digestLock = new ReentrantLock();
 
@@ -474,8 +476,8 @@ public class DatabaseManager {
         return null;
     }
 
-    public long saveMessage(long chatId, long senderId, String text, String type, long timestamp,
-                            String filePath, String fileName, String chatName) {
+    public long saveMessage(long chatId, long senderId, String text, String type, String chatName,
+                            String filePath, String fileName, long timestamp) {
         LimController.log.info("--- ПОПЫТКА СОХРАНЕНИЯ: чат={}, отправитель={} ---", chatId, senderId);
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
@@ -495,7 +497,6 @@ public class DatabaseManager {
                 insertStmt.setString(6, filePath);
                 insertStmt.setString(7, fileName);
                 insertStmt.setLong(8, timestamp);
-
 
                 if (insertStmt.executeUpdate() == 0) {
                     conn.rollback();
@@ -565,6 +566,23 @@ public class DatabaseManager {
             LimController.log.error("error receiving messages: ", e);
         }
         return null;
+    }
+
+    public boolean isFileAccessible(long userId, long chatId, String serverFileName) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "SELECT 1 FROM messages m " +
+                "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
+                "WHERE m.chat_id = ? AND m.file_path = ? AND cm.user_id = ? LIMIT 1")) {
+            stmt.setLong(1, chatId);
+            stmt.setString(2, serverFileName);
+            stmt.setLong(3, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LimController.log.error("Error checking file accessibility: ", e);
+            return false;
+        }
     }
 
     @NotNull

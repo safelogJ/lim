@@ -86,7 +86,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                 binding.chatIcon.setImageResource(R.drawable.person_48px);
                 binding.timeText.setVisibility(View.GONE);
             } else {
-                binding.chatIcon.setImageResource(R.drawable.encrypted_48px);
+                binding.chatIcon.setImageResource(R.drawable.add_comment_48px);
                 binding.timeText.setVisibility(View.VISIBLE);
             }
 

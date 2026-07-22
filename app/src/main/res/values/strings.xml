@@ -38,6 +38,7 @@
     <string name="system_critical_error_title">Critical error</string>
     <string name="system_critical_error_btn">Exit</string>
     <string name="no_app_to_open_file">No app to open file</string>
+    <string name="file_not_found_on_disk">File not found on disk</string>
 
     <string name="login_error">invalid username format (3–20 chars, lowercase Latin and digits)</string>
     <string name="pass_error">invalid password format (6–20 chars)</string>

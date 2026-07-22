@@ -11,8 +11,8 @@
         android:id="@+id/chatNameTextScroll"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
         android:background="@drawable/fielder_background_tr"
         android:fillViewport="true"
         android:paddingStart="8dp"
@@ -30,7 +30,8 @@
             android:gravity="center_vertical|start"
             android:singleLine="true"
             android:textColor="@color/green_400"
-            android:textSize="34sp" />
+            android:textSize="32sp"
+            android:textStyle="bold" />
     </HorizontalScrollView>
 
     <!-- Список сообщений -->
@@ -74,7 +75,7 @@
             android:focusable="true"
             android:gravity="center_horizontal|center_vertical"
             android:text="[ + ]"
-            android:textColor="@android:color/white"
+            android:textColor="@color/light_gray_aaa"
             android:textSize="24sp"
             android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -137,7 +138,7 @@
                 android:focusable="true"
                 android:gravity="center_horizontal|center_vertical"
                 android:text="[ - ]"
-                android:textColor="@android:color/white"
+                android:textColor="@color/light_gray_aaa"
                 android:textSize="24sp"
                 android:textStyle="bold"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -168,14 +169,13 @@
 
         <TextView
             android:id="@+id/sendButton"
-            android:layout_width="wrap_content"
+            android:layout_width="48dp"
             android:layout_height="0dp"
             android:layout_marginEnd="4dp"
             android:clickable="true"
             android:contentDescription="@string/send_icon_desc"
             android:focusable="true"
             android:gravity="center_horizontal|center_vertical"
-            android:text="-))>"
             android:textColor="@color/green_400"
             android:textSize="24sp"
             android:textStyle="bold"

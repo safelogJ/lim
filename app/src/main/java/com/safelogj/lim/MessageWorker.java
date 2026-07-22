@@ -56,9 +56,9 @@ public class MessageWorker extends Worker {
             if (latch.await(10, TimeUnit.SECONDS)
                     && lastId.get() != -1L
                     && controller.startedActivities.get() == 0
-                    && !controller.isDownloadInProgress.get()) {
-                controller.isDownloadInProgress.set(true);
-                controller.getNetworkService().getNewMessages(lastId.get(), () -> controller.isDownloadInProgress.set(false));
+                    && controller.activeDownloadsCount.get() == 0) {
+                controller.activeDownloadsCount.incrementAndGet();
+                controller.getNetworkService().getNewMessages(lastId.get());
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -91,7 +91,7 @@ public class MessageWorker extends Worker {
                         if (msg.type.equals(Message.TYPE_TEXT)) {
                             controller.getNetworkService().sendTextMessage(msg);
                         } else {
-                            //  controller.getNetworkService().sendFileMessage(msg);
+                              controller.getNetworkService().sendMediaMessage(msg);
                         }
                     }
                 }

@@ -11,8 +11,8 @@ configure<ApplicationExtension> {
         applicationId = "com.safelogj.lim"
         minSdk = 24
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,7 +47,6 @@ dependencies {
     implementation(libs.documentfile)
     implementation(libs.constraintlayout)
     implementation(libs.material)
-    testImplementation(libs.junit)
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.glide)
@@ -57,4 +56,5 @@ dependencies {
     coreLibraryDesugaring(libs.desugar)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)
+    testImplementation(libs.junit)
 }

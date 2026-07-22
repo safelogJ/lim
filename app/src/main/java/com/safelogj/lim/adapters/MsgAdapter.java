@@ -1,6 +1,7 @@
 package com.safelogj.lim.adapters;
 
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -16,23 +17,25 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.constraintlayout.widget.ConstraintSet;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.safelogj.lim.AppController;
-import com.safelogj.lim.NetworkService;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemMessageBinding;
 import com.safelogj.lim.model.Message;
 
+import java.io.File;
 import java.util.List;
 import java.util.Objects;
 
 public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolder> {
     private static final String STATUS = "status";
     private static final String TIME = "time";
+    private static final String FILE_PATH = "file_path";
 
     private final long userId;
 
@@ -57,20 +60,17 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position, @NonNull List<Object> payloads) {
         if (payloads.isEmpty()) {
-            // Если правок нет — вызываем стандартную полную отрисовку
             super.onBindViewHolder(holder, position, payloads);
         } else {
-            // Если пришли "пайлоады", обновляем только нужные вьюхи
+            Message message = getItem(position);
             for (Object payload : payloads) {
                 if (payload instanceof Bundle diff) {
-                    if (diff.containsKey(STATUS)) {
-                        holder.updateStatus(diff.getLong(STATUS));
-                    }
-                    if (diff.containsKey(TIME)) {
-                        holder.updateTime(diff.getString(TIME));
-                    }
+                    if (diff.containsKey(STATUS)) holder.updateStatus(message.sendStatus);
+                    if (diff.containsKey(TIME)) holder.updateTime(message.formattedTime);
+                    if (diff.containsKey(FILE_PATH)) holder.bind(message, userId);
                 }
             }
+            holder.setListeners(message, userId);
         }
     }
 
@@ -94,17 +94,15 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             } else {
                 binding.messageText.setText(message.text);
             }
-
             // 2. Контент: Картинка или Файл
-            if (Message.TYPE_IMAGE.equals(message.type)) {
-                if (message.filePath != null && !message.filePath.isEmpty()) {
-                    binding.messageImage.setVisibility(View.VISIBLE);
-                    Glide.with(itemView.getContext())
-                            .load(Uri.parse(message.filePath))
-                            .centerCrop()
-                            .into(binding.messageImage);
-                }
-            } else if (Message.TYPE_FILE.equals(message.type)) {
+            if (Message.TYPE_IMAGE.equals(message.type) && message.isLocalFile()) {
+                binding.messageImage.setVisibility(View.VISIBLE);
+                Glide.with(itemView.getContext())
+                        .load(Uri.parse(message.filePath))
+                        .centerCrop()
+                        .into(binding.messageImage);
+
+            } else if (Message.TYPE_FILE.equals(message.type) && (message.isLocalFile())) {
                 binding.fileContainer.setVisibility(View.VISIBLE);
                 binding.messageFileName.setText(message.fileName);
             }
@@ -139,10 +137,10 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
                 default: // TYPE_INCOMING
                     constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.0f);
-                    binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_wt);
+                    binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_green);
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.black2));
-                    binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black3));
+                    binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black4));
                     binding.messageBubble.setGravity(Gravity.START);
                     binding.messageText.setGravity(Gravity.START);
                     LinearLayout.LayoutParams fileParamsIn = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
@@ -152,41 +150,61 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
 
             if (message.sendStatus == Message.STATUS_SENT) {
-                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_600));
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_400));
             }
 
             binding.messageTime.setText(message.formattedTime);
             constraintSet.applyTo((ConstraintLayout) itemView);
-            // 4. Слушатели нажатий для открытия файлов
-            binding.messageImage.setOnClickListener(v -> openFile(message.filePath));
-            binding.fileContainer.setOnClickListener(v -> openFile(message.filePath));
+            setListeners(message, currentUserId);
         }
 
-        private void openFile(String path) {
-            if (path == null || path.isEmpty()) return;
+        public void setListeners(Message message, long currentUserId) {
+            binding.messageImage.setOnClickListener(v -> openFile(message, currentUserId));
+            binding.fileContainer.setOnClickListener(v -> openFile(message, currentUserId));
+        }
+
+        private void openFile(Message msg, long userId) {
+            if (msg.filePath == null || msg.filePath.isEmpty()) {
+                return;
+            }
+            Context context = itemView.getContext();
+            Uri contentUri;
             try {
-                Uri uri = Uri.parse(path);
+                if (msg.getMessageTypeByUserId(userId) == Message.TYPE_OUTGOING) {
+                    contentUri = Uri.parse(msg.filePath);
+                } else if (msg.getMessageTypeByUserId(userId) == Message.TYPE_INCOMING) {
+                    Uri rawUri = Uri.parse(msg.filePath);
+                    File file = new File(Objects.requireNonNull(rawUri.getPath()));
+                    if (!file.exists()) {
+                        Toast.makeText(context, context.getString(R.string.file_not_found_on_disk), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    contentUri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file);
+                } else {
+                    return;
+                }
                 Intent intent = new Intent(Intent.ACTION_VIEW);
-                intent.setDataAndType(uri, itemView.getContext().getContentResolver().getType(uri));
+                intent.setDataAndType(contentUri, context.getContentResolver().getType(contentUri));
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                itemView.getContext().startActivity(intent);
+                context.startActivity(intent);
             } catch (ActivityNotFoundException e) {
-                Toast.makeText(itemView.getContext(), itemView.getContext().getString(R.string.no_app_to_open_file), Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, context.getString(R.string.no_app_to_open_file), Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "Error opening file: " + path, e);
+                Log.e(AppController.LOG_TAG, "Error opening file: " + msg.filePath, e);
             }
         }
 
         public void updateStatus(long status) {
             if (status == Message.STATUS_SENT) {
-                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_600));
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_400));
             } else {
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
             }
         }
 
         public void updateTime(String time) {
+            Log.d(AppController.EMPTY_STRING, "отображаемое время " + time);
             binding.messageTime.setText(time);
         }
     }
@@ -198,7 +216,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         @Override
         public boolean areItemsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
             // Проверяем, что это физически то же самое сообщение (по локальному ID)
-            return oldItem.localId == newItem.localId;
+            return oldItem.localId == newItem.localId
+                    //  && Objects.equals(oldItem.filePath, newItem.filePath)
+                    ;
         }
 
         @Override
@@ -207,22 +227,16 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             // Если они изменятся, метод вернет false, и запустится механизм Payloads.
             return oldItem.sendStatus == newItem.sendStatus &&
                     Objects.equals(oldItem.formattedTime, newItem.formattedTime) &&
-                    Objects.equals(oldItem.text, newItem.text) &&
-                    Objects.equals(oldItem.type, newItem.type) &&
                     Objects.equals(oldItem.filePath, newItem.filePath);
         }
 
         @Nullable
         @Override
         public Object getChangePayload(@NonNull Message oldItem, @NonNull Message newItem) {
-            // А вот здесь мы вычисляем, ЧТО конкретно изменилось
             Bundle diff = new Bundle();
-            if (oldItem.sendStatus != newItem.sendStatus) {
-                diff.putLong(STATUS, newItem.sendStatus);
-            }
-            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) {
-                diff.putString(TIME, newItem.formattedTime);
-            }
+            if (oldItem.sendStatus != newItem.sendStatus) diff.putBoolean(STATUS, true);
+            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) diff.putBoolean(TIME, true);
+            if (!Objects.equals(oldItem.filePath, newItem.filePath)) diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }
     }
