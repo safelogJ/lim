@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 public abstract class BaseHandler implements HttpHandler {
 
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9]{3,20}$");
+    protected static final String DELETE = "DELETE";
+    protected static final String POST = "POST";
     protected final Gson gson = new Gson();
 
     protected void sendResponse(HttpExchange exchange, int statusCode, Object responseObj) throws IOException {

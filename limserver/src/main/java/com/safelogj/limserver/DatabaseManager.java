@@ -75,6 +75,8 @@ public class DatabaseManager {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "username TEXT NOT NULL UNIQUE, " + // Уникальный логин (например, "ivan")
                 "password_hash TEXT NOT NULL, " +   // Хэш пароля (для безопасности)
+                "public_key TEXT NOT NULL, " +   // Публичный ключ
+                "private_hash TEXT NOT NULL, " +   // Хэш приватного ключа
                 "display_name TEXT NOT NULL, " +    // Имя в чате (например, "Иван Иванович")
                 "created_at INTEGER NOT NULL, " +     // Дата регистрации
                 "is_deleted INTEGER NOT NULL DEFAULT 0" + // 0 = активен, 1 = удален
@@ -124,7 +126,8 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public User registerUser(@NotNull String username, @NotNull String clientPasswordHash, @NotNull String displayName) throws SQLException {
+    public User registerUser(@NotNull String username, @NotNull String clientPasswordHash, @NotNull String displayName,
+                             @NotNull String publicKey, @NotNull String privateHash) throws SQLException {
         String serverPasswordHash = hashPassword(clientPasswordHash);
         if (serverPasswordHash.isEmpty()) {
             throw new SQLException("critical error: password hashing failed");
@@ -147,11 +150,13 @@ public class DatabaseManager {
                 }
                 long userId = -1;
                 try (PreparedStatement insertStmt = conn.prepareStatement(
-                        "INSERT INTO users (username, password_hash, display_name, created_at) VALUES (?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+                        "INSERT INTO users (username, password_hash, public_key, private_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
                     insertStmt.setString(1, username);
                     insertStmt.setString(2, serverPasswordHash);
-                    insertStmt.setString(3, displayName);
-                    insertStmt.setLong(4, System.currentTimeMillis());
+                    insertStmt.setString(3, publicKey);
+                    insertStmt.setString(4, privateHash);
+                    insertStmt.setString(5, displayName);
+                    insertStmt.setLong(6, System.currentTimeMillis());
                     insertStmt.executeUpdate();
 
                     try (ResultSet rs = insertStmt.getGeneratedKeys()) {
@@ -202,13 +207,16 @@ public class DatabaseManager {
         String serverPasswordHash = hashPassword(password);
         if (!serverPasswordHash.isEmpty()) {
             try (Connection conn = getConnection();
-                 PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name, password_hash FROM users WHERE username = ? AND is_deleted = 0")) {
+                 PreparedStatement stmt = conn.prepareStatement(
+                         "SELECT id, display_name, password_hash, public_key, private_hash FROM users WHERE username = ? AND is_deleted = 0")) {
                 stmt.setString(1, username);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
                         User user = new User();
                         user.id = rs.getLong(1);
                         user.displayName = rs.getString(2);
+                        user.publicKey = rs.getString(4);
+                        user.privateHash = rs.getString(5);
                         return user;
                     } else {
                         LimController.log.warn("incorrect password for user '{}'", username);
@@ -225,7 +233,8 @@ public class DatabaseManager {
 
     public boolean deleteUser(long userId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE users SET is_deleted = 1, password_hash = '', display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0")) {
+                "UPDATE users SET is_deleted = 1, password_hash = '', public_key = '', private_hash = '', "
+                        + "display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0")) {
             stmt.setLong(1, userId);
             if (stmt.executeUpdate() > 0) {
                 LimController.log.info("User id={} has been successfully moved to 'Deleted' status. Login blocked.", userId);
@@ -237,6 +246,19 @@ public class DatabaseManager {
             LimController.log.error("error while soft deleting user id={}", userId, e);
         }
         return false;
+    }
+
+    public boolean isUserDeleted(@NotNull String username) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "SELECT 1 FROM users WHERE username = ? AND is_deleted = 1 LIMIT 1")) {
+            stmt.setString(1, username);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LimController.log.error("Error checking deleted status for user '{}': ", username, e);
+            return false;
+        }
     }
 
     @Nullable
@@ -340,12 +362,11 @@ public class DatabaseManager {
         }
     }
 
-    public boolean setChatBlockedState(long chatId, long userId) {
+    public boolean blockChat(long chatId, long userId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE chat_members SET is_blocked = ? WHERE chat_id = ? AND user_id = ?")) {
-            stmt.setLong(1, 1);
-            stmt.setLong(2, chatId);
-            stmt.setLong(3, userId);
+                "UPDATE chat_members SET is_blocked = 1 WHERE chat_id = ? AND user_id = ?")) {
+            stmt.setLong(1, chatId);
+            stmt.setLong(2, userId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             LimController.log.error("error hiding chat {} for user {}: ", chatId, userId, e);
@@ -358,7 +379,7 @@ public class DatabaseManager {
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(
                      "SELECT c.id, c.name, c.is_group, cm.is_hidden, cm.is_blocked, " +
-                             "(SELECT text FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1), " +
+                     //   "(SELECT text FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1), " +
                              "(SELECT timestamp FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1) " +
                              "FROM chats c " +
                              "JOIN chat_members cm ON c.id = cm.chat_id " +
@@ -374,8 +395,9 @@ public class DatabaseManager {
                     chat.isGroup = rs.getInt(3) == 1;
                     chat.isHidden = rs.getInt(4) == 1;
                     chat.isBlocked = rs.getInt(5) == 1;
-                    chat.lastMessage = rs.getString(6);
-                    chat.lastTimestamp = rs.getLong(7);
+                 //   chat.lastMessage = rs.getString(6);
+                 //   chat.lastMessage = LimController.EMPTY_STRING;
+                    chat.lastTimestamp = rs.getLong(6);
                     // Для личных чатов вытягиваем инфо о собеседнике
                     if (!chat.isGroup) {
                         User interlocutor = getInterlocutorInfo(conn, chat.id, userId);
@@ -460,18 +482,44 @@ public class DatabaseManager {
     @Nullable
     public User searchUserByUsername(@NotNull String targetUsername) {
         try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name FROM users WHERE username = ? AND is_deleted = 0")) {
+             PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0")) {
             stmt.setString(1, targetUsername);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     User user = new User();
                     user.id = rs.getLong(1);
+                    user.username = targetUsername;
                     user.displayName = rs.getString(2);
+                    user.publicKey = rs.getString(3);
                     return user;
                 }
             }
         } catch (SQLException e) {
             LimController.log.error("error searching for user '{}'", targetUsername, e);
+        }
+        return null;
+    }
+
+    @Nullable
+    public User searchUserByChatId(@NotNull Long userId, @NotNull Long chatId) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT u.id, u.username, u.display_name, u.public_key FROM users u " +
+                     "JOIN chat_members cm ON u.id = cm.user_id " +
+                     "WHERE cm.chat_id = ? AND cm.user_id != ? LIMIT 1")) {
+            stmt.setLong(1, chatId);
+            stmt.setLong(2, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    User user = new User();
+                    user.id = rs.getLong(1);
+                    user.username = rs.getString(2);
+                    user.displayName = rs.getString(3);
+                    user.publicKey = rs.getString(4);
+                    return user;
+                }
+            }
+        } catch (SQLException e) {
+            LimController.log.error("error searching for user in chat '{}'", chatId, e);
         }
         return null;
     }
@@ -535,15 +583,19 @@ public class DatabaseManager {
 
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
                 "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, " +
-                        "CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u.display_name END, m.timestamp " +
+                        "CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, " +
+                        "m.timestamp, u_interlocutor.public_key " + // <--- КЛЮЧ СОБЕСЕДНИКА
                         "FROM messages m " +
-                        "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                        "JOIN users u ON m.sender_id = u.id " + // Приклеиваем отправителя
-                        "WHERE cm.user_id = ? AND m.id > ? " +
+                        "JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? " +
+                        "JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? " +
+                        "JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id " +
+                        "JOIN users u_sender ON m.sender_id = u_sender.id " +
+                        "WHERE m.id > ? " +
                         "ORDER BY m.id ASC")) {
             stmt.setLong(1, userId);
             stmt.setLong(2, userId);
-            stmt.setLong(3, lastMessageId);
+            stmt.setLong(3, userId);
+            stmt.setLong(4, lastMessageId);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 List<Message> messages = new ArrayList<>();
@@ -558,6 +610,7 @@ public class DatabaseManager {
                     msg.fileName = rs.getString(7);
                     msg.chatName = rs.getString(8);
                     msg.timestamp = rs.getLong(9);
+                    msg.interlocutorPublicKey = rs.getString(10);
                     messages.add(msg);
                 }
                 return messages;

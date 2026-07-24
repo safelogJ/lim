@@ -52,12 +52,14 @@ public class RegisterUserHandler extends BaseHandler {
                 List<Chat> chats = LimController.dbManager.getActiveChats(user.id);
                 response.userId = user.id;
                 response.displayName = user.displayName;
-                LimController.log.info("User '{}' login successfully: ", user.displayName);
+                response.publicKey = user.publicKey;
+                response.privateHash = user.privateHash;
                 if (!chats.isEmpty()) {
                     response.chats = chats;
                 }
                 response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
+                LimController.log.info("User '{}' login successfully: ", user.displayName);
                 return;
             }
 
@@ -67,10 +69,11 @@ public class RegisterUserHandler extends BaseHandler {
                 sendResponse(exchange, 400, response);
                 return;
             }
-            user = LimController.dbManager.registerUser(username, req.password(), req.displayName());
+            user = LimController.dbManager.registerUser(username, req.password(), req.displayName(), req.publicKey(), req.privateHash());
             if (user != null) {
                 response.userId = user.id;
                 response.displayName = user.displayName;
+                response.publicKey = req.publicKey();
                 response.message = "registration successful: " + user.displayName;
                 sendSuccess(exchange, response);
                 LimController.log.info("User '{}' registered successfully: ", user.displayName);

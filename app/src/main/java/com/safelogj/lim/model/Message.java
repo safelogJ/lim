@@ -24,6 +24,7 @@ public class Message {
     public long localId;
     public long chatId;
     public String chatName;
+    public String interlocutorPublicKey;
     public long localChatId;
     public long senderId;
     public long receiverId;
@@ -45,8 +46,4 @@ public class Message {
     public boolean isLocalFile() {
         return filePath != null && !filePath.isEmpty() && (filePath.startsWith("content://") || filePath.startsWith("file://"));
     }
-
-//    public boolean isDownloadFile() {
-//        return filePath != null && (!filePath.startsWith("content://") && !filePath.startsWith("file://"));
-//    }
 }

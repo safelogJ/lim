@@ -15,13 +15,15 @@
     <color name="pink120">#FFF8BBD0</color>
     <color name="pink200">#F06292</color>
     <color name="green_50">#C8E6C9</color>
-    <color name="green_100">#B9F6CA</color>
+    <color name="last_time">#81FBA4</color>
     <color name="green_200">#A5D6A7</color>
     <color name="green_400">#66BB6A</color>
     <color name="green_600">#43A047</color>
     <color name="green_600t">#01BF0B</color>
     <color name="green_a700">#00695C</color>
     <color name="transparent">#00FFFFFF</color>
-    <color name="main_background">#01457A</color>
+    <color name="chat_name">#629BFB</color>
+    <color name="main_backgroundo">#01457A</color>
+    <color name="main_background">#16131B</color>
     <color name="main_background_hard">#00335B</color>
 </resources>

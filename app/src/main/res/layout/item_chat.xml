@@ -33,19 +33,22 @@
         app:layout_constraintTop_toTopOf="@id/avatarBackground"
         app:tint="@color/light_gray" />
 
+
     <!-- Имя чата / "Начать новый чат" -->
     <TextView
         android:id="@+id/chatName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:singleLine="true"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:text="@string/new_chat"
-        android:textColor="@color/green_400"
+        android:textColor="@color/chat_name"
         android:textSize="28sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/lastMessage"
-        app:layout_constraintEnd_toStartOf="@+id/timeText"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/avatarBackground"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_chainStyle="packed" />
@@ -55,15 +58,18 @@
         android:id="@+id/lastMessage"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
         android:ellipsize="end"
         android:singleLine="true"
         android:text="@string/find_user"
         android:textColor="@color/white"
         android:textSize="18sp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="@id/chatName"
+        app:layout_constraintEnd_toStartOf="@id/timeText"
         app:layout_constraintStart_toStartOf="@id/chatName"
         app:layout_constraintTop_toBottomOf="@id/chatName" />
+
+
 
     <!-- Время (для обычных чатов) -->
     <TextView

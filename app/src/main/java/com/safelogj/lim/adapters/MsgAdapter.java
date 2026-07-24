@@ -139,8 +139,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.0f);
                     binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_green);
                     binding.messageTime.setVisibility(View.VISIBLE);
-                    binding.messageText.setTextColor(itemView.getContext().getColor(R.color.black2));
-                    binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.black4));
+                    binding.messageText.setTextColor(itemView.getContext().getColor(R.color.main_background));
+                    binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.main_background));
                     binding.messageBubble.setGravity(Gravity.START);
                     binding.messageText.setGravity(Gravity.START);
                     LinearLayout.LayoutParams fileParamsIn = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
@@ -150,7 +150,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
 
             if (message.sendStatus == Message.STATUS_SENT) {
-                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_400));
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.last_time));
             }
 
             binding.messageTime.setText(message.formattedTime);
@@ -197,7 +197,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
         public void updateStatus(long status) {
             if (status == Message.STATUS_SENT) {
-                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.green_400));
+                binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.last_time));
             } else {
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
             }

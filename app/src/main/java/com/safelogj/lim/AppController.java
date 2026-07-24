@@ -37,14 +37,23 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.SecureRandom;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -64,10 +73,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyAgreement;
 import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
@@ -93,27 +106,39 @@ public class AppController extends Application {
     private static final String SERVER_CERT_NAME = "servercertname";
     private static final String SERVER_URL = "serverurl";
     private static final String SERVER_IP = "serverip";
+    private static final String E2EE_PRIVATE_KEY = "e2eePrivateKey";
+    private static final String E2EE_PUBLIC_KEY = "e2eePublicKey";
     private static final String KEY_ALIAS = "MikrotikRouterKeyAlias";
     private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     private static final int GCM_TAG_LENGTH = 16;
     private static final int AES_KEY_SIZE = 256;
-    private static final String ENCRYPTED_DATA_KEY = "encryptedData";
+    private static final String ENCRYPTED_DATA_KEY = "encryptedData";    // Константы для E2EE
+    private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256";
+    public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
+    public final AtomicInteger startedActivities = new AtomicInteger(0);
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
-    private ScheduledFuture<?> syncTask;
-    public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
-    public final AtomicInteger startedActivities = new AtomicInteger(0);
     private final AtomicBoolean isNetworkActive = new AtomicBoolean(false);
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault());
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault());
     private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
+    private final SecureRandom secureRandom = new SecureRandom();
     private NetworkService networkService;
+    private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
+    private OkHttpClient okHttpClient;
+    private DatabaseHelper dbHelper;
+    private boolean initAppError;
+    private String initAppErrStr = EMPTY_STRING;
 
-    private byte[] certBytes;
+    @NonNull
+    private volatile String e2eePrivateKey = EMPTY_STRING;
+    @NonNull
+    private volatile String e2eePublicKey = EMPTY_STRING;
+    private volatile byte[] certBytes;
     @NonNull
     private volatile String certName = EMPTY_STRING;
     @NonNull
@@ -127,11 +152,9 @@ public class AppController extends Application {
     private volatile String serverUrl = EMPTY_STRING;
     @NonNull
     private volatile String serverIp = EMPTY_STRING;
-    private Cipher mCipher;
-    private OkHttpClient okHttpClient;
-    private DatabaseHelper dbHelper;
-    private boolean initAppError;
-    private String initAppErrStr = EMPTY_STRING;
+    private volatile String cachedInterlocutorPubKey = EMPTY_STRING;
+    private volatile SecretKey cachedSharedKey = null;
+
 
     public boolean isInitAppError() {
         return initAppError;
@@ -205,6 +228,15 @@ public class AppController extends Application {
         this.displayName = displayName;
     }
 
+    public void eraseUser() {
+        userId = 0;
+        username = EMPTY_STRING;
+        password = EMPTY_STRING;
+        displayName = EMPTY_STRING;
+        e2eePrivateKey = EMPTY_STRING;
+        e2eePublicKey = EMPTY_STRING;
+    }
+
     public void setServerUrl(@NonNull String serverIp) {
         serverUrl = "https://" + serverIp + ":443";
     }
@@ -240,6 +272,19 @@ public class AppController extends Application {
         return mExternalFileDir;
     }
 
+    @NonNull
+    public String getE2eePublicKey() {
+        return e2eePublicKey;
+    }
+
+    public void setE2eePublicKey(@NonNull String e2eePublicKey) {
+        this.e2eePublicKey = e2eePublicKey;
+    }
+
+    public SecureRandom getSecureRandom() {
+        return secureRandom;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -257,11 +302,11 @@ public class AppController extends Application {
     }
 
     public void writeSettingsToFile() {
-        dbExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
+        userExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
 
     public void startDownloadNewMsg() {
-        dbHelper.getLastDbMessageId(userId, new ResultCallback<>() {
+        dbHelper.getLastDbMessageId(new ResultCallback<>() {
             @Override
             public void onSuccess(Long lastServerId) {
                 activeDownloadsCount.incrementAndGet();
@@ -287,6 +332,7 @@ public class AppController extends Application {
                     }
                 }
             }
+
             @Override
             public void onError(String msg) {
                 //
@@ -335,6 +381,8 @@ public class AppController extends Application {
             serverUrl = json.optString(SERVER_URL, EMPTY_STRING);
             serverIp = json.optString(SERVER_IP, EMPTY_STRING);
             certName = json.optString(SERVER_CERT_NAME, EMPTY_STRING);
+            e2eePrivateKey = json.optString(E2EE_PRIVATE_KEY, EMPTY_STRING);
+            e2eePublicKey = json.optString(E2EE_PUBLIC_KEY, EMPTY_STRING);
             String cert = json.optString(SERVER_CERT, EMPTY_STRING);
             certBytes = cert.isEmpty() ? null : Base64.decode(cert, Base64.NO_WRAP);
         } catch (Exception e) {
@@ -356,7 +404,6 @@ public class AppController extends Application {
 
         JSONObject json = new JSONObject();
         try {
-
             json.put(USER_ID, userId);
             json.put(USER_NAME, username);
             json.put(USER_PASS, password);
@@ -364,6 +411,8 @@ public class AppController extends Application {
             json.put(SERVER_URL, serverUrl);
             json.put(SERVER_IP, serverIp);
             json.put(SERVER_CERT_NAME, certName);
+            json.put(E2EE_PRIVATE_KEY, e2eePrivateKey);
+            json.put(E2EE_PUBLIC_KEY, e2eePublicKey);
             json.put(SERVER_CERT, certBytes != null ? Base64.encodeToString(certBytes, Base64.NO_WRAP) : EMPTY_STRING);
             String rawJsonString = json.toString();
             byte[] rawJsonBytes = rawJsonString.getBytes(StandardCharsets.UTF_8);
@@ -387,13 +436,11 @@ public class AppController extends Application {
             BadPaddingException {
 
         SecretKey secretKey = getOrCreateSecretKey();
-        if (mCipher == null) {
-            mCipher = Cipher.getInstance(TRANSFORMATION);
-        }
-        mCipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 
-        byte[] iv = mCipher.getIV();
-        byte[] encryptedData = mCipher.doFinal(dataBytes);
+        byte[] iv = cipher.getIV();
+        byte[] encryptedData = cipher.doFinal(dataBytes);
         byte[] combined = new byte[1 + iv.length + encryptedData.length];
         combined[0] = (byte) iv.length; // Сохраняем длину IV в первом байте
         System.arraycopy(iv, 0, combined, 1, iv.length); // Копируем IV начиная со второго байта
@@ -422,12 +469,12 @@ public class AppController extends Application {
         byte[] encryptedData = Arrays.copyOfRange(combinedBytes, 1 + ivLength, combinedBytes.length);
 
         SecretKey secretKey = getOrCreateSecretKey();
-        mCipher = Cipher.getInstance(TRANSFORMATION);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         // GCM_TAG_LENGTH * 8, так как длина тега указывается в битах (16 байт * 8 = 128 бит)
         GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
 
-        mCipher.init(Cipher.DECRYPT_MODE, secretKey, spec);
-        return mCipher.doFinal(encryptedData);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec);
+        return cipher.doFinal(encryptedData);
     }
 
     private SecretKey getOrCreateSecretKey() throws KeyStoreException, IllegalArgumentException, IOException, NoSuchAlgorithmException,
@@ -659,6 +706,148 @@ public class AppController extends Application {
     private void setupWorkManager() {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(LIM_SYNC, ExistingPeriodicWorkPolicy.KEEP,
                 new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
+                        .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
+    }
+
+    /**
+     * Создает пару ключей для E2EE.
+     */
+    public void createE2Keys() throws IllegalArgumentException, NoSuchAlgorithmException, NullPointerException,
+            InvalidAlgorithmParameterException, UnsupportedOperationException, IllegalStateException {
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+        kpg.initialize(new ECGenParameterSpec("secp256r1"));
+        KeyPair kp = kpg.generateKeyPair();
+        // Превращаем ключи в обычные строки (Base64)
+        e2eePrivateKey = Base64.encodeToString(kp.getPrivate().getEncoded(), Base64.NO_WRAP);
+        e2eePublicKey = Base64.encodeToString(kp.getPublic().getEncoded(),Base64.NO_WRAP);
+    }
+
+    public String getPrivateHash(String pass) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+
+        byte[] salt = new byte[16];
+        secureRandom.nextBytes(salt);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromPassword(pass, salt));
+        byte[] iv = cipher.getIV();
+        byte[] encrypted = cipher.doFinal(e2eePrivateKey.getBytes(StandardCharsets.UTF_8));
+        byte[] combined = new byte[salt.length + iv.length + encrypted.length];
+        System.arraycopy(salt, 0, combined, 0, salt.length);
+        System.arraycopy(iv, 0, combined, salt.length, iv.length);
+        System.arraycopy(encrypted, 0, combined, salt.length + iv.length, encrypted.length);
+        return Base64.encodeToString(combined, Base64.NO_WRAP);
+    }
+
+    public void unpackPrivateKey(@Nullable String encryptedBlob, String password) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            InvalidKeyException, BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
+
+        if (encryptedBlob == null) return;
+        byte[] combined = Base64.decode(encryptedBlob, Base64.NO_WRAP);
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromPassword(password, Arrays.copyOfRange(combined, 0, 16)),
+                new GCMParameterSpec(128, Arrays.copyOfRange(combined, 16, 28)));
+        e2eePrivateKey = new String(cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length)), StandardCharsets.UTF_8);
+    }
+
+    private SecretKey deriveKeyFromPassword(String password, byte[] salt) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException {
+        return new SecretKeySpec(SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
+                .generateSecret(new PBEKeySpec(password.toCharArray(), salt, 10000,  AES_KEY_SIZE))
+                .getEncoded(), "AES");
+    }
+
+    /**
+     * Шифрует текст сообщения для конкретного получателя.
+     */
+    @Nullable
+    public String encryptMessage(@NonNull String plainText, @NonNull String theirPublicKeyBase64) {
+        try {
+            // 2. Шифруем через AES-GCM
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKeyBase64));
+            byte[] iv = cipher.getIV();
+            byte[] encryptedText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+            // 3. Упаковываем в строку: [IV_LENGTH(1b)] + [IV] + [DATA]
+            byte[] packet = new byte[1 + iv.length + encryptedText.length];
+            packet[0] = (byte) iv.length;
+            System.arraycopy(iv, 0, packet, 1, iv.length);
+            System.arraycopy(encryptedText, 0, packet, 1 + iv.length, encryptedText.length);
+            return Base64.encodeToString(packet, Base64.NO_WRAP);
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "Encryption error: " + e.getMessage());
+            return null; // Если не смогли зашифровать - вернем как есть (или ошибку)
+        }
+    }
+
+    /**
+     * Расшифровывает входящее сообщение.
+     */
+    @Nullable
+    public String decryptMessage(@NonNull String encryptedBase64, @NonNull String theirPublicKeyBase64) {
+        try {
+            byte[] packet = Base64.decode(encryptedBase64, Base64.NO_WRAP);
+            // 1. Извлекаем IV и зашифрованные данные
+            int ivLength = packet[0] & 0xFF;
+            byte[] iv = Arrays.copyOfRange(packet, 1, 1 + ivLength);
+            byte[] encryptedText = Arrays.copyOfRange(packet, 1 + ivLength, packet.length);
+            // 3. Расшифровываем
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKeyBase64), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
+            byte[] decrypted = cipher.doFinal(encryptedText);
+            return new String(decrypted, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            Log.w(LOG_TAG, "Decryption failed (maybe plain text?): " + e.getMessage());
+            return null;
+        }
+    }
+    /**
+     * Вспомогательный метод для вычисления Общего Секрета (Shared Secret) по алгоритму ECDH.
+     * Использует кэш последнего ключа для ускорения работы.
+     */
+    private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
+        // 1. Проверяем кэш
+        if (theirPublicKeyBase64.equals(cachedInterlocutorPubKey) && cachedSharedKey != null) {
+            return cachedSharedKey;
+        }
+        // 2. Если в кэше нет или ключ другой - вычисляем
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        KeyAgreement ka = KeyAgreement.getInstance("ECDH");
+        ka.init(kf.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
+        ka.doPhase(kf.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
+
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        byte[] aesKeyBytes = sha.digest(ka.generateSecret());
+        SecretKey newKey = new SecretKeySpec(aesKeyBytes, "AES");
+        // 3. Обновляем кэш
+        cachedInterlocutorPubKey = theirPublicKeyBase64;
+        cachedSharedKey = newKey;
+        return newKey;
+    }
+
+    /**
+     * Создает Cipher для потокового шифрования файла.
+     * Мы добавим IV в начало файла вручную в NetworkService.
+     */
+    public Cipher getFileEncryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            InvalidKeyException, InvalidAlgorithmParameterException {
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
+        return cipher;
+    }
+
+    /**
+     * Создает Cipher для потоковой расшифровки файла.
+     */
+    public Cipher getFileDecryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            InvalidKeyException, InvalidAlgorithmParameterException {
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
+        return cipher;
     }
 }

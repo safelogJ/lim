@@ -291,14 +291,14 @@ public class UserFragment extends Fragment {
     private void sendCommand(String ip, String user, String pass, String dName) {
         if (controller.getUserId() > 0 && username.equals(user) && REMOVE.equals(dName.toLowerCase(Locale.US))) {  // remove
             userViewModel.deleteAccount(username, password);
-            Log.d(AppController.LOG_TAG, "Удаление аккаунта");
+            Log.d(AppController.LOG_TAG, "deleting an account");
         } else if (controller.getUserId() > 0 && controller.getServerIp().equals(ip) && username.equals(user)
                 && (!password.equals(pass) || !displayName.equals(dName))) { // edit
             userViewModel.editUser(username, password, displayName.equals(dName) ? null : dName, password.equals(pass) ? null : pass);
-            Log.d(AppController.LOG_TAG, "Редактирование аккаунта");
+            Log.d(AppController.LOG_TAG, "editing an account");
         } else if (controller.getUserId() == 0 && !REMOVE.equals(dName.toLowerCase(Locale.US))) {  // reg or auth
             userViewModel.register(user, pass, dName);
-            Log.d(AppController.LOG_TAG, "Регистрация аккаунта или авторизация");
+            Log.d(AppController.LOG_TAG, "account registration or authorization");
         } else if (REMOVE.equals(dName.toLowerCase(Locale.US))) {
             mBinding.resultTextView.setText(getString(R.string.display_name_reserved));
         } else if (!controller.getServerIp().equals(ip) || !username.equals(user)) {

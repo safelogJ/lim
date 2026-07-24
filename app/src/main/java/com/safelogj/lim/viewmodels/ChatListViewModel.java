@@ -84,7 +84,7 @@ public class ChatListViewModel extends AndroidViewModel {
 
     public void setChatBlockedState(Chat chat) {
         controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 1)))].execute(()
-                -> controller.getNetworkService().setChatBlockedState(chat.id, new ResultCallback<>() {
+                -> controller.getNetworkService().blockChat(chat.id, new ResultCallback<>() {
 
             @Override
             public void onSuccess(Boolean result) {

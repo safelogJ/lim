@@ -14,6 +14,7 @@ public class BaseResponse {
     public String message;
     public Long messageId;
     public Long userId;
+    public String userName;
     public String displayName;
     public Long chatId;
     public Long timestamp;
@@ -21,6 +22,9 @@ public class BaseResponse {
     public String type;
     public String filePath;
     public String fileName;
+    public String publicKey;
+    public String interlocutorPublicKey;
+    public String privateHash;
     public List<Message> messages;
     public List<Chat> chats;
 }

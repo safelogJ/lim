@@ -92,14 +92,14 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
             // Цвет времени (статус отправки последнего)
             if (chat.lastSendStatus == Message.STATUS_SENT) {
-                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.green_400));
+                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.last_time));
             } else {
                 binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
             }
 
             // Цвет имени (заблокирован или нет)
             binding.chatName.setTextColor(itemView.getContext().getColor(
-                    chat.isBlocked ? R.color.light_gray_aaa : R.color.green_400));
+                    chat.isBlocked ? R.color.light_gray_aaa : R.color.chat_name));
 
             binding.chatName.setText(chat.name);
             binding.lastMessage.setText(chat.lastMessage);
@@ -126,12 +126,12 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
         public void updateBlockStatus(Chat chat) {
             binding.chatName.setTextColor(itemView.getContext().getColor(
-                    chat.isBlocked ? R.color.light_gray_aaa : R.color.green_400));
+                    chat.isBlocked ? R.color.light_gray_aaa : R.color.chat_name));
         }
 
         public void updateSendStatus(Chat chat) {
             if (chat.lastSendStatus == Message.STATUS_SENT) {
-                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.green_400));
+                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.last_time));
             } else {
                 binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
             }

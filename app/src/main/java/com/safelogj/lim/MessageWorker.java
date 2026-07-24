@@ -38,7 +38,7 @@ public class MessageWorker extends Worker {
         Log.d(AppController.LOG_TAG, "MessageWorker.startDownloadNewMsg()");
         CountDownLatch latch = new CountDownLatch(1);
         AtomicLong lastId = new AtomicLong(-1L);
-        controller.getDbHelper().getLastDbMessageId(controller.getUserId(), new ResultCallback<>() {
+        controller.getDbHelper().getLastDbMessageId(new ResultCallback<>() {
             @Override
             public void onSuccess(Long lastServerId) { // lastServerId >= 0
                 lastId.set(lastServerId);

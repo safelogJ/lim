@@ -17,7 +17,6 @@ import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Locale;
 import java.util.UUID;
 
 public class MediaUploadHandler extends BaseHandler {
@@ -57,11 +56,8 @@ public class MediaUploadHandler extends BaseHandler {
             return;
         }
         // 2. Генерация уникального имени файла
-        String extension = LimController.EMPTY_STRING;
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex >= 0) extension = fileName.substring(dotIndex).toLowerCase(Locale.US);
-        long timestamp = System.currentTimeMillis();
-        String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
+         long timestamp = System.currentTimeMillis();
+        String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8);
         File targetFile = new File(LimController.MEDIA_PATH, serverFileName);
 
         // 3. Стриминг файла из сети на диск
@@ -71,7 +67,7 @@ public class MediaUploadHandler extends BaseHandler {
             long totalRead = 0L;
             while ((bytesRead = is.read(buffer)) != -1) {
                 totalRead += bytesRead;
-                if (totalRead > DatabaseManager.FILE_SIZE_LIMIT) {
+                if (totalRead > DatabaseManager.FILE_SIZE_LIMIT + 28) {
                     throw new IOException("File size limit exceeded during upload");
                 }
                 fos.write(buffer, 0, bytesRead);
@@ -111,7 +107,7 @@ public class MediaUploadHandler extends BaseHandler {
     private boolean isSmallFile(@Nullable String sizeStr) {
         if (sizeStr == null) return false;
         long size = parsePositiveLong(sizeStr);
-        return size > 0 && size <= DatabaseManager.FILE_SIZE_LIMIT;
+        return size > 0 && size <= (DatabaseManager.FILE_SIZE_LIMIT + 1024);
     }
 
     private long parsePositiveLong(String value) {

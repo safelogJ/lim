@@ -119,6 +119,8 @@ public class ChatFragment extends Fragment {
     private long currentChatId = Chat.INVALID_ID;
     private long currentChatLocalId = Chat.INVALID_ID;
     private String currentChatName = AppController.EMPTY_STRING;
+    private String interlocutorPublicKey = AppController.EMPTY_STRING;
+    private String inputText = AppController.EMPTY_STRING;
     private int lastMessageCount = 0;
 
     public ChatFragment() {
@@ -168,6 +170,8 @@ public class ChatFragment extends Fragment {
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
         setObserveChat();
+        setObservePublicKey();
+        setObserveDbPublicKey();
         setObserveMsgList();
         setObserveSelectedFileUri();
         setObserveErrorStatus();
@@ -176,6 +180,8 @@ public class ChatFragment extends Fragment {
 
         if (currentChatId == Chat.INVALID_ID) {
             addSystemMessageToList(getString(R.string.send_login_hint));
+        } else {
+            chatViewModel.getDbPublicKey(currentChatId);
         }
     }
 
@@ -194,23 +200,16 @@ public class ChatFragment extends Fragment {
 
     private void setSendBtnListener() {
         mBinding.sendButton.setOnClickListener(v -> {
-            String userText = mBinding.messageEditText.getText().toString().trim();
-            if (currentChatId == Chat.INVALID_ID && !userText.isEmpty() && !userText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
-                searchChat(userText);
-            } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
-                Uri fileUri = chatViewModel.getSelectedFileUri().getValue();
-                if (userText.isEmpty() && fileUri == null) {
-                    return;
-                }
-                String fileName = chatViewModel.getSelectedFileName();
-                Message msg = buildMessage(userText, // text
-                        fileUri == null ? Message.TYPE_TEXT : getMessageType(fileUri),  // type
-                        fileUri, fileName);
+            inputText = mBinding.messageEditText.getText().toString().trim();
+            if (currentChatId == Chat.INVALID_ID && !inputText.isEmpty() && !inputText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
-                chatViewModel.clearFile();
-                Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId);
-                chatViewModel.sendMessage(msg, currentChatLocalId);
-                chatViewModel.loadDbMessages(currentChatId);
+                chatViewModel.checkChatInDb(inputText);
+            } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
+                if (interlocutorPublicKey.isEmpty()) {
+                    chatViewModel.searchInterlocutorOnServer(null, currentChatId);
+                } else {
+                    sendMessage();
+                }
             }
         });
     }
@@ -239,7 +238,6 @@ public class ChatFragment extends Fragment {
                         mBinding.chatNameText.setText(currentChatName);
                     }
                 }
-
                 messages.clear();
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
@@ -266,6 +264,34 @@ public class ChatFragment extends Fragment {
         });
     }
 
+    private void setObserveChat() {
+        chatViewModel.getFoundChat().observe(getViewLifecycleOwner(), chat -> {
+            if (chat != null && mBinding != null) {
+                currentChatId = chat.id;
+                currentChatName = chat.name;
+                chatViewModel.getDbPublicKey(currentChatId);
+                updateBottomPanel();
+            }
+        });
+    }
+
+    private void setObservePublicKey() {
+        chatViewModel.getInterlocutorPublicKey().observe(getViewLifecycleOwner(), publicKey -> {
+            if (publicKey != null) {
+                interlocutorPublicKey = publicKey;
+                sendMessage();
+            }
+        });
+    }
+
+    private void setObserveDbPublicKey() {
+        chatViewModel.getDbPublicKey().observe(getViewLifecycleOwner(), chatKey -> {
+            if (chatKey != null) {
+                interlocutorPublicKey = chatKey;
+            }
+        });
+    }
+
     private void setObserveErrorStatus() {
         chatViewModel.getErrorStatus().observe(getViewLifecycleOwner(), error -> {
             if (error != null && mBinding != null) {
@@ -274,39 +300,36 @@ public class ChatFragment extends Fragment {
         });
     }
 
-    private void setObserveChat() {
-        chatViewModel.getFoundChat().observe(getViewLifecycleOwner(), chat -> {
-            if (chat != null && mBinding != null) {
-                currentChatId = chat.id;
-                currentChatName = chat.name;
-                updateBottomPanel();
-            }
-        });
-    }
-
-    public void searchChat(String userText) {
-        chatViewModel.checkChatInDb(userText);
-        mBinding.messageEditText.setText(AppController.EMPTY_STRING);
-    }
-
     @Override
     public void onDestroyView() {
         super.onDestroyView();
         mBinding = null;
     }
 
-    private Message buildMessage(@NonNull String text, @NonNull String type,
-                                 @Nullable Uri fileUri, @Nullable String fileName) {
+    private void sendMessage() {
+        Uri fileUri = chatViewModel.getSelectedFileUri().getValue();
+        if (inputText.isEmpty() && fileUri == null) {
+            return;
+        }
+        mBinding.messageEditText.setText(AppController.EMPTY_STRING);
+        chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
+        chatViewModel.clearFile();
+        chatViewModel.loadDbMessages(currentChatId);
+    }
+
+    private Message buildMessage(@Nullable Uri fileUri, @Nullable String fileName) {
         Message msg = new Message();
         msg.chatId = currentChatId;
         msg.chatName = currentChatName;
         msg.senderId = controller.getUserId();
-        msg.text = text;
-        msg.type = type;
+        msg.interlocutorPublicKey = interlocutorPublicKey;
+        msg.text = inputText;
+        msg.type = fileUri == null ? Message.TYPE_TEXT : getMessageType(fileUri);
         msg.filePath = fileUri == null ? null : fileUri.toString();
         msg.fileName = fileName;
         msg.timestamp = System.currentTimeMillis();
         msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
+        Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId + " публичный ключ " + interlocutorPublicKey);
         return msg;
     }
 

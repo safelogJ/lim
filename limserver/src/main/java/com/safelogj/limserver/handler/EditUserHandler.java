@@ -19,7 +19,7 @@ public class EditUserHandler extends BaseHandler {
         String method = exchange.getRequestMethod();
         BaseResponse response = new BaseResponse();
 
-        if (!"POST".equalsIgnoreCase(method) && !"DELETE".equalsIgnoreCase(method)) {
+        if (!POST.equalsIgnoreCase(method) && !DELETE.equalsIgnoreCase(method)) {
             sendMethodError(exchange, response);
             return;
         }
@@ -32,11 +32,16 @@ public class EditUserHandler extends BaseHandler {
             }
             User user = LimController.dbManager.authenticateUser(req.username(), req.password());
             if (user == null) {
+                if (DELETE.equalsIgnoreCase(method) && LimController.dbManager.isUserDeleted(req.username())) {
+                    response.message = "account was already deleted";
+                    sendSuccess(exchange, response);
+                    return;
+                }
                 sendUnauthorizedError(exchange, response);
                 return;
             }
 
-            if ("DELETE".equalsIgnoreCase(method)) {
+            if (DELETE.equalsIgnoreCase(method)) {
                 deleteUser(exchange, user, response);
             } else {
                 updateUser(exchange, req, user.id, response);

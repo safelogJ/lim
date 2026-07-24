@@ -29,7 +29,7 @@
             android:ellipsize="middle"
             android:gravity="center_vertical|start"
             android:singleLine="true"
-            android:textColor="@color/green_400"
+            android:textColor="@color/chat_name"
             android:textSize="32sp"
             android:textStyle="bold" />
     </HorizontalScrollView>
@@ -39,7 +39,7 @@
         android:id="@+id/messagesRecyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="16dp"
         android:layout_marginBottom="8dp"
         android:clipToPadding="false"
         android:padding="8dp"

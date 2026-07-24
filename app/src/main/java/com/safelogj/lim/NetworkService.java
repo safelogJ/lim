@@ -34,6 +34,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.locks.ReentrantLock;
 
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -71,10 +74,19 @@ public class NetworkService {
     }
 
     public void register(String username, String password, String displayName, ResultCallback<String> callback) {
+        String publicKey;
+        String privateHash;
         Request request;
         try {
-            RequestBody body = RequestBody.create(gson.toJson(new RegisterRequest(username, hashPassword(password), displayName)),
-                    MediaType.parse(MEDIA_TYPE_JSON));
+            controller.createE2Keys();
+            publicKey = controller.getE2eePublicKey();
+            privateHash = controller.getPrivateHash(password);
+            if (publicKey.isEmpty() || privateHash.isEmpty()) {
+                throw new SecurityException("error creating encryption keys");
+            }
+
+            RequestBody body = RequestBody.create(gson.toJson(new RegisterRequest(username, hashPassword(password),
+                    displayName, publicKey, privateHash)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/register").post(body).build();
         } catch (Exception e) {
             sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
@@ -82,23 +94,23 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status()) && res.isValidRegResponse()) {
-                    User user = new User();
-                    user.id = res.userId();
-                    user.username = username;
-                    user.displayName = displayName;
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                User user = new User();
+                user.id = res.userId();
+                user.username = username;
+                user.displayName = displayName;
+                user.publicKey = res.publicKey();
 
-                    controller.setUserId(user.id);
-                    controller.setUsername(username);
-                    controller.setPassword(password);
-                    controller.setDisplayName(displayName);
-                    dbHelper.saveUser(user, callback, res.message(), res.chats());
-                    controller.writeSettingsToFile();
-                    Log.i(AppController.LOG_TAG, res.message());
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                }
+                controller.setUserId(user.id);
+                controller.setUsername(username);
+                controller.setPassword(password);
+                controller.setDisplayName(displayName);
+                controller.setE2eePublicKey(user.publicKey);
+                controller.unpackPrivateKey(res.privateHash(), password);
+                dbHelper.saveUser(user, callback, res.message(), res.chats());
+                controller.writeSettingsToFile();
+                Log.i(AppController.LOG_TAG, res.message());
+
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -119,17 +131,10 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
-                    controller.setUserId(0);
-                    controller.setUsername(AppController.EMPTY_STRING);
-                    controller.setPassword(AppController.EMPTY_STRING);
-                    controller.setDisplayName(AppController.EMPTY_STRING);
-                    dbHelper.wipeAllData(callback, res.message(), res.message());
-                    controller.writeSettingsToFile();
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                }
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                controller.eraseUser();
+                dbHelper.wipeAllData(callback, res.message(), res.message());
+                controller.writeSettingsToFile();
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -142,8 +147,8 @@ public class NetworkService {
     public void editUser(String username, String password, @Nullable String dName, @Nullable String newPass, ResultCallback<String> callback) {
         Request request;
         try {
-            RequestBody body = RequestBody.create(gson.toJson(new EditUserRequest(username, hashPassword(password), dName, (newPass == null ? null : hashPassword(newPass)))),
-                    MediaType.parse(MEDIA_TYPE_JSON));
+            RequestBody body = RequestBody.create(gson.toJson(new EditUserRequest(username, hashPassword(password),
+                    dName, (newPass == null ? null : hashPassword(newPass)))), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/user").post(body).build();
         } catch (Exception e) {
             sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
@@ -151,20 +156,17 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
-                    if (dName != null) {
-                        controller.setDisplayName(dName);
-                        dbHelper.updateUserDisplayName(controller.getUserId(), dName);
-                    }
-                    if (newPass != null) {
-                        controller.setPassword(newPass);
-                    }
-                    sendSuccess(callback, res.message(), res.message());
-                    controller.writeSettingsToFile();
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                if (dName != null) {
+                    controller.setDisplayName(dName);
+                    dbHelper.updateUserDisplayName(dName);
                 }
+                if (newPass != null) {
+                    controller.setPassword(newPass);
+                }
+                sendSuccess(callback, res.message(), res.message());
+                controller.writeSettingsToFile();
+
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -173,30 +175,28 @@ public class NetworkService {
         }
     }
 
-    public void searchUser(String username, String password, String queryUsername, ResultCallback<User> callback) {
+    public void searchInterlocutor(String username, String password, @Nullable String queryUsername,
+                                   @Nullable Long chatId, ResultCallback<User> callback) {
         Request request;
         try {
             RequestBody body = RequestBody.create(
-                    gson.toJson(new SearchUserRequest(username, hashPassword(password), queryUsername)), MediaType.parse(MEDIA_TYPE_JSON));
-            request = new Request.Builder()
-                    .url(controller.getServerUrl() + "/user/search").post(body).build();
+                    gson.toJson(new SearchUserRequest(username, hashPassword(password), queryUsername, chatId)), MediaType.parse(MEDIA_TYPE_JSON));
+            request = new Request.Builder().url(controller.getServerUrl() + "/user/search").post(body).build();
         } catch (Exception e) {
             sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
             return;
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
-                    User user = new User();
-                    user.id = res.userId();
-                    user.username = queryUsername;
-                    user.displayName = res.displayName();
-                    dbHelper.saveUser(user, callback, user, null);
-                    Log.i(AppController.LOG_TAG, res.message());
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                }
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                User user = new User();
+                user.id = res.userId();
+                user.username = res.userName();
+                user.displayName = res.displayName();
+                user.publicKey = res.publicKey();
+                dbHelper.saveUser(user, callback, user, null);
+                Log.i(AppController.LOG_TAG, res.message());
+
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -218,17 +218,14 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
-                    Chat chat = new Chat();
-                    chat.id = res.chatId();
-                    chat.name = queryUser.displayName;
-                    chat.interlocutorId = queryUser.id;
-                    dbHelper.saveChat(chat, callback, chat);
-                    Log.i(AppController.LOG_TAG, res.message());
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                }
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                Chat chat = new Chat();
+                chat.id = res.chatId();
+                chat.name = queryUser.displayName;
+                chat.interlocutorId = queryUser.id;
+                dbHelper.saveChat(chat, callback, chat);
+                Log.i(AppController.LOG_TAG, res.message());
+
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -254,7 +251,7 @@ public class NetworkService {
         }
     }
 
-    public void setChatBlockedState(long chatId, ResultCallback<Boolean> callback) {
+    public void blockChat(long chatId, ResultCallback<Boolean> callback) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new BlockChatRequest(
@@ -266,12 +263,8 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
-                    dbHelper.setChatBlockedState(chatId, callback);
-                } else {
-                    sendError(callback, SERVER_RETURNED_ERROR + res.message());
-                }
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                dbHelper.setChatBlockedState(chatId, callback);
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -281,11 +274,16 @@ public class NetworkService {
     }
 
     public void sendTextMessage(Message msg) {
+        if (msg.interlocutorPublicKey == null) {
+            Log.e(AppController.LOG_TAG, "Cannot encrypt: recipient public key not found");
+            dbHelper.notConfirmMessageSent(msg);
+            return;
+        }
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()), msg.senderId, msg.chatId, msg.text, msg.type,
-                    msg.filePath, msg.fileName, msg.chatName)), MediaType.parse(MEDIA_TYPE_JSON));
+                    hashPassword(controller.getPassword()), msg.senderId, msg.chatId, controller.encryptMessage(msg.text, msg.interlocutorPublicKey),
+                    msg.type, msg.filePath, msg.fileName, msg.chatName)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
         } catch (Exception e) {
             Log.w(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
@@ -293,26 +291,23 @@ public class NetworkService {
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
                     msg.id = res.messageId();
                     msg.timestamp = res.timestamp();
                     if (msg.localId == Chat.INVALID_ID) {
-                        controller.getDbHelper().saveMsgBeforeSending(msg);
+                        dbHelper.saveMsgBeforeSending(msg);
                     }
                     dbHelper.confirmMessageSent(msg);
                     Log.i(AppController.LOG_TAG, res.message());
                     return;
-                } else {
-                    Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
-                }
+
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
             }
         } catch (Exception e) {
             Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
-        dbHelper.notConfirmMessageSent(msg.localId);
+        dbHelper.notConfirmMessageSent(msg);
     }
 
     public void sendMediaMessage(Message msg) {
@@ -329,48 +324,89 @@ public class NetworkService {
             Log.w(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             return;
         }
+        // 1. Получаем публичный ключ собеседника (он должен быть подгружен в ChatFragment)
+        // Если его нет, мы не сможем зашифровать.
+        // ВАЖНО: Тебе нужно добавить interlocutorPublicKey в объект Message или передавать отдельно.
+        // Предположим, мы берем его из базы или кэша.
+        if (msg.interlocutorPublicKey == null) {
+            Log.e(AppController.LOG_TAG, "Cannot encrypt: recipient public key not found");
+            dbHelper.notConfirmMessageSent(msg);
+            return;
+        }
 
         try (InputStream inputStream = controller.getContentResolver().openInputStream(uri)) {
-            if (inputStream == null) {
-                Log.w(AppController.LOG_TAG, "Cannot open input stream for: " + msg.filePath);
-                return;
-            }
+            if (inputStream == null) return;
+
+            // 2. Генерируем IV и шифруем заголовки
+            byte[] iv = new byte[12];
+            controller.getSecureRandom().nextBytes(iv);
+
+            String encText = controller.encryptMessage(msg.text, msg.interlocutorPublicKey);
+            String encFileName = controller.encryptMessage(msg.fileName, msg.interlocutorPublicKey);
+
+            // 3. Создаем RequestBody, который пишет IV, а потом шифрованные данные
+            RequestBody requestBody = new RequestBody() {
+                @Override
+                public MediaType contentType() {
+                    return MediaType.parse("application/octet-stream");
+                }
+
+                @Override
+                public long contentLength() {
+                    return 12 + fileSize + 16;
+                } // IV + Данные
+
+                @Override
+                public void writeTo(@NonNull BufferedSink sink) throws IOException {
+                    try {
+                        sink.write(iv); // Пишем IV в начало
+                        Cipher cipher = controller.getFileEncryptCipher(msg.interlocutorPublicKey, iv);
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = inputStream.read(buffer)) != -1) {
+                            sink.write(cipher.update(buffer, 0, read));
+                        }
+                        sink.write(cipher.doFinal());
+                    } catch (Exception e) {
+                        throw new IOException("Encryption error during upload", e);
+                    }
+                }
+            };
+
             Request request = new Request.Builder()
                     .url(controller.getServerUrl() + "/media/upload")
                     .header("X-Username", controller.getUsername())
                     .header("X-Password", hashPassword(controller.getPassword()))
                     .header("X-Sender-Id", String.valueOf(msg.senderId))
                     .header("X-Chat-Id", String.valueOf(msg.chatId))
-                    .header("X-Message-Text", encodeToHeader(msg.text))
+                    .header("X-Message-Text", encodeToHeader(encText))
                     .header("X-Message-Type", msg.type)
-                    .header("X-File-Name", encodeToHeader(msg.fileName))
-                    .header("X-Chat-Name", encodeToHeader(msg.chatName))
-                    .post(createRequestBodyFromStream(inputStream, fileSize))
+                    .header("X-File-Name", encodeToHeader(encFileName))
+                    .header("X-Chat-Name", encodeToHeader(msg.chatName)) // Его можно оставить открытым для синхронизации
+                    .post(requestBody)
                     .build();
 
             try (Response response = client.newCall(request).execute()) {
                 BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-                if (response.isSuccessful()) {
-                    if (BaseResponse.SUCCESS.equals(res.status())) {
+                if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
                         msg.id = res.messageId();
                         msg.timestamp = res.timestamp();
                         if (msg.localId == Chat.INVALID_ID) {
-                            controller.getDbHelper().saveMsgBeforeSending(msg);
+                            dbHelper.saveMsgBeforeSending(msg);
                         }
                         dbHelper.confirmMessageSent(msg);
                         Log.i(AppController.LOG_TAG, "Media message sent: " + res.message());
                         return;
-                    } else {
-                        Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
-                    }
+
                 } else {
                     Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 }
+
             }
         } catch (Exception e) {
-            Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+            Log.w(AppController.LOG_TAG, "Media send error: " + e.getMessage());
         }
-        dbHelper.notConfirmMessageSent(msg.localId);
+        dbHelper.notConfirmMessageSent(msg);
     }
 
     public void getNewMessages(long lastMessageId) {
@@ -387,14 +423,17 @@ public class NetworkService {
         Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
-            if (response.isSuccessful()) {
-                if (BaseResponse.SUCCESS.equals(res.status())) {
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                    for (Message msg : res.messages()) {
+                        msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
+                        if (msg.fileName != null && !msg.fileName.isEmpty()) {
+                            msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
+                        }
+                    }
                     dbHelper.saveIncomingMsgList(res.messages());
                     Log.i(AppController.LOG_TAG, res.message());
                     return;
-                } else {
-                    Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
-                }
+
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
             }
@@ -405,40 +444,43 @@ public class NetworkService {
     }
 
     public void downloadMedia(Message msg) {
+        if (msg.interlocutorPublicKey == null) {
+            Log.d(AppController.LOG_TAG, "download media null: " + msg.fileName);
+            controller.activeDownloadsCount.decrementAndGet();
+            return;
+        }
+        Log.d(AppController.LOG_TAG, "download media : " + msg.fileName);
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(),
                     hashPassword(controller.getPassword()), msg.chatId, msg.filePath)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
         } catch (Exception e) {
-            Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             controller.activeDownloadsCount.decrementAndGet();
             return;
         }
         try (Response response = client.newCall(request).execute()) {
             if (response.isSuccessful()) {
-                long expectedSize = response.body().contentLength();
+                InputStream is = response.body().byteStream();
+                // 1. Читаем IV из начала потока
+                byte[] iv = new byte[12];
+                if (is.read(iv) != 12) throw new IOException("Missing IV header");
+                // 2. Настраиваем CipherInputStream
+                CipherInputStream cis = new CipherInputStream(is, controller.getFileDecryptCipher(msg.interlocutorPublicKey, iv));
                 File localFile = new File(controller.getExternalFileDir(), msg.fileName);
-                try (InputStream is = response.body().byteStream(); FileOutputStream fos = new FileOutputStream(localFile)) {
+                try (FileOutputStream fos = new FileOutputStream(localFile)) {
                     byte[] buffer = new byte[8192];
                     int read;
-                    while ((read = is.read(buffer)) != -1) {
+                    while ((read = cis.read(buffer)) != -1) {
                         fos.write(buffer, 0, read);
                     }
                 }
-                if (localFile.length() == expectedSize) {
-                    dbHelper.updateFilePath(msg.localId, Uri.fromFile(localFile).toString());
-                    Log.d(AppController.LOG_TAG, "Файл успешно скачан: " + msg.fileName);
-                } else {
-                    localFile.delete(); // Удаляем битый файл
-                    throw new IOException("File size mismatch!");
-                }
-
+                dbHelper.updateFilePath(msg, Uri.fromFile(localFile).toString());
+                Log.d(AppController.LOG_TAG, "download file success: " + msg.fileName);
             } else {
-                dbHelper.setMediaStatusError(msg.localId);
+                dbHelper.setMediaStatusError(msg);
                 Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.message());
             }
-
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, "Download error: " + e.getMessage());
         }
@@ -498,33 +540,7 @@ public class NetworkService {
         return FILE_SIZE_LIMIT;
     }
 
-    private RequestBody createRequestBodyFromStream(final InputStream inputStream, final long size) {
-        return new RequestBody() {
-            @Nullable
-            @Override
-            public MediaType contentType() {
-                return MediaType.parse("application/octet-stream");
-            }
-
-            @Override
-            public long contentLength() {
-                return size;
-            }
-
-            @Override
-            public void writeTo(@NonNull BufferedSink bufferedSink) throws IOException {
-                try (inputStream) {
-                    byte[] buffer = new byte[4096];
-                    int read;
-                    while ((read = inputStream.read(buffer)) != -1) {
-                        bufferedSink.write(buffer, 0, read);
-                    }
-                }
-            }
-        };
-    }
-
-    private String encodeToHeader(String text) {
+    public static String encodeToHeader(String text) {
         if (text == null || text.isEmpty()) return AppController.EMPTY_STRING;
         try {
             return URLEncoder.encode(text, "UTF-8");

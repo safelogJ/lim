@@ -8,6 +8,7 @@ public class Message {
     public long id;
     public long chatId;
     public String chatName;
+    public String interlocutorPublicKey;
     public long senderId;
     public String text;
     public String type;      // "TEXT", "FILE", "IMAGE", "SYSTEM"

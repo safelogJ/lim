@@ -27,16 +27,20 @@ public class SearchUserHandler extends BaseHandler {
                 return;
             }
             // 2. Встроенная авторизация на лету
-            if (LimController.dbManager.authenticateUser(req.username(), req.password()) == null) {
+            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            if (user == null) {
                 sendUnauthorizedError(exchange, response);
                 return;
             }
             // 3. Ищем пользователя в базе данных
-            User user = LimController.dbManager.searchUserByUsername(req.queryUsername().trim());
-            if (user != null) {
-                response.userId = user.id;
-                response.displayName = user.displayName;
-                response.message = "user found success: " + user.displayName;
+            User interlocutor = req.queryUsername() == null ? LimController.dbManager.searchUserByChatId(user.id, req.chatId()) :
+                    LimController.dbManager.searchUserByUsername(req.queryUsername().trim());
+            if (interlocutor != null) {
+                response.userId = interlocutor.id;
+                response.userName = interlocutor.username;
+                response.displayName = interlocutor.displayName;
+                response.publicKey = interlocutor.publicKey;
+                response.message = "user found success: " + interlocutor.displayName;
                 sendSuccess(exchange, response);
             } else {
                 sendUserNotFoundError(exchange, response);

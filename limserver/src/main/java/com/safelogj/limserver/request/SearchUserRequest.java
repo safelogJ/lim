@@ -1,10 +1,12 @@
 package com.safelogj.limserver.request;
 
-public record SearchUserRequest(String username, String password, String queryUsername) {
+import org.jetbrains.annotations.Nullable;
+
+public record SearchUserRequest(String username, String password, @Nullable String queryUsername, @Nullable Long chatId) {
 
     public boolean isValidRequest() {
         return username != null && !username.isEmpty()
                 && password != null && !password.isEmpty()
-                && queryUsername != null && !queryUsername.isEmpty();
+                && ((queryUsername != null && !queryUsername.isEmpty()) || (chatId != null && chatId > 0));
     }
 }

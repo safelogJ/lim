@@ -31,7 +31,7 @@ public class BlockChatHandler extends BaseHandler {
                 return;
             }
 
-            if (LimController.dbManager.setChatBlockedState(req.chatId(), user.id)) {
+            if (LimController.dbManager.blockChat(req.chatId(), user.id)) {
                 response.message = "chat blocked successfully: " + req.chatId();
                 sendSuccess(exchange, response);
             } else {
