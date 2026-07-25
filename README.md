@@ -31,10 +31,15 @@ The server stores messages, transfers media files and manages user accounts. Com
 ## No external services
 
 Lim does not use Google Firebase, FCM, MQTT brokers or any other third-party messaging services.
+
 The server never initiates connections to Android devices.
+
 Because Android does not allow background applications to keep permanent network connections without push services, the client periodically polls the server for new messages.
+
 The minimum polling interval available while the application is in the background is **15 minutes**.
+
 This limitation is imposed by the Android operating system for applications that do not rely on push notification services.
+
 When the application is open, messages are exchanged immediately.
 
 ---
@@ -95,9 +100,9 @@ This keeps storage usage low.
 The server container uses two mounted directories.
 
 Android Client
-│
+      │
 HTTPS │
-▼
+      ▼
 +-----------------------+
 |  MikroTik CHR         |
 |-----------------------|
@@ -112,7 +117,6 @@ HTTPS │
 │     └── config
 │
 └── media/
-└── temporary files
 
 ### db
 
