@@ -99,24 +99,28 @@ This keeps storage usage low.
 
 The server container uses two mounted directories.
 
-Android Client
+```text
+          Android Client
+                │
+          HTTPS │
+                ▼
+     +-----------------------+
+     |     MikroTik CHR      |
+     |-----------------------|
+     |     Java Server       |
+     |     SQLite (HikariCP) |
+     |     HTTPS Server      |
+     +-----------------------+
+                │
+      ┌─────────┴─────────┐
+      │                   │
+    db/                media/
       │
-HTTPS │
-      ▼
-+-----------------------+
-|  MikroTik CHR         |
-|-----------------------|
-| Java Server           |
-| SQLite (HikariCP)     |
-| HTTPS                 |
-+-----------------------+
-│
-├── db/
-│     ├── database
-│     ├── certificate
-│     └── config
-│
-└── media/
+      │                   
+      ├── SQLite database 
+      ├── HTTPS certificate
+      └── server config
+```
 
 ### db
 
