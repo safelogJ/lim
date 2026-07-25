@@ -17,6 +17,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -204,10 +205,14 @@ public class ChatFragment extends Fragment {
             if (currentChatId == Chat.INVALID_ID && !inputText.isEmpty() && !inputText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
                 chatViewModel.checkChatInDb(inputText);
+                Log.d(AppController.LOG_TAG, "поиск");
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
+                Log.d(AppController.LOG_TAG, "отправка");
                 if (interlocutorPublicKey.isEmpty()) {
+                    Log.d(AppController.LOG_TAG, "отправка нет ключа");
                     chatViewModel.searchInterlocutorOnServer(null, currentChatId);
                 } else {
+                    Log.d(AppController.LOG_TAG, "отправка есть ключ");
                     sendMessage();
                 }
             }
@@ -256,6 +261,7 @@ public class ChatFragment extends Fragment {
             if (uri != null) {
                 // Показываем панель с именем файла
                 mBinding.attachmentPreview.setVisibility(View.VISIBLE);
+              //  mBinding.attachmentPreview.setBackground(AppCompatResources.getDrawable(controller, R.drawable.fielder_background_tr));
                 mBinding.fileNameText.setText(chatViewModel.getSelectedFileName());
             } else {
                 // Скрываем панель, если файл удален
@@ -278,6 +284,7 @@ public class ChatFragment extends Fragment {
     private void setObservePublicKey() {
         chatViewModel.getInterlocutorPublicKey().observe(getViewLifecycleOwner(), publicKey -> {
             if (publicKey != null) {
+                Log.d(AppController.LOG_TAG, "взяли ключ из БД: перед отправкой ответа начавшему чат ");
                 interlocutorPublicKey = publicKey;
                 sendMessage();
             }
@@ -287,6 +294,7 @@ public class ChatFragment extends Fragment {
     private void setObserveDbPublicKey() {
         chatViewModel.getDbPublicKey().observe(getViewLifecycleOwner(), chatKey -> {
             if (chatKey != null) {
+                Log.d(AppController.LOG_TAG, "взяли ключ из БД: при входе в чат " + chatKey);
                 interlocutorPublicKey = chatKey;
             }
         });
@@ -311,9 +319,11 @@ public class ChatFragment extends Fragment {
         if (inputText.isEmpty() && fileUri == null) {
             return;
         }
+
         mBinding.messageEditText.setText(AppController.EMPTY_STRING);
         chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
         chatViewModel.clearFile();
+        inputText = AppController.EMPTY_STRING;
         chatViewModel.loadDbMessages(currentChatId);
     }
 

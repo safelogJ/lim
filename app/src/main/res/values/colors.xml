@@ -25,5 +25,6 @@
     <color name="chat_name">#629BFB</color>
     <color name="main_backgroundo">#01457A</color>
     <color name="main_background">#16131B</color>
+    <color name="main_background_50">#D116131B</color>
     <color name="main_background_hard">#00335B</color>
 </resources>

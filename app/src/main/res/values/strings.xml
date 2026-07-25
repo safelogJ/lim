@@ -1,5 +1,10 @@
 <resources>
-    <string name="app_name">Lim</string>
+    <string name="app_name" translatable="false">Lim</string>
+    <string name="server_ip" translatable="false">192.168.10.10</string>
+    <string name="login" translatable="false">user</string>
+    <string name="password" translatable="false">yv45IuniNiH6nInIniiOIn</string>
+    <string name="display_name" translatable="false">^-^</string>
+
     <string name="cert_import_error">certificate import error</string>
     <string name="date_cert_before_error">error: the device date is earlier than the certificate issue date</string>
     <string name="date_cert_after_error">error: the certificate has expired</string>
@@ -7,19 +12,10 @@
     <string name="sign_cert_error">error: certificate signature verification failed</string>
     <string name="main_cert_error">error: certificate verification failed</string>
     <string name="search_user_error">error while searching for user</string>
-
-    <string name="server_ip" translatable="false">192.168.10.10</string>
     <string name="server_ip_help">server ip</string>
-    <string name="login" translatable="false">user</string>
     <string name="login_help">login</string>
-    <string name="password" translatable="false">yv45IuniNiH6nInIniiOIn</string>
     <string name="password_help">password</string>
-    <string name="display_name" translatable="false">^-^</string>
     <string name="display_name_help">display name</string>
-    <string name="next_email" translatable="false">https://cloud.example.com/remote.php/dav/files/username/</string>
-    <string name="next_email_help">nextcloud login or folder link</string>
-    <string name="next_pass" translatable="false">nAg3o-5vR6W-282u4-gliml-P8RqY</string>
-    <string name="next_pass_help">application password in nextcloud</string>
     <string name="reg_btn_text">register</string>
     <string name="youtube_btn_text">youtube</string>
     <string name="cert_btn_text">add certificate</string>
@@ -60,6 +56,10 @@
     <string name="select_file_error">no file selected for sending</string>
     <string name="send_login_hint">send your interlocutor\'s login to start a chat</string>
     <string name="msg_notification_channel_name">Messages</string>
+    <string name="new_msg">New message</string>
+    <string name="new_msgs">New messages</string>
+    <string name="new_msg_from">From:</string>
+    <string name="new_msgs_size">You have unread messages</string>
     <string name="image">image preview</string>
 
 

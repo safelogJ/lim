@@ -87,20 +87,21 @@ public class UserFragment extends Fragment {
     private final Runnable uiRunnable = new Runnable() {
         @Override
         public void run() {
-            controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
-                @Override
-                public void onSuccess(List<Chat> unreadChats) {
-                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: "+ unreadChats.size());
-                    if (!unreadChats.isEmpty()) {
-                        NotificationHelper.showNotification(controller, unreadChats);
+            if (controller.getUserId() > 0) {
+                controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
+                    @Override
+                    public void onSuccess(List<Chat> unreadChats) {
+                        if (!unreadChats.isEmpty()) {
+                            Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чатов: " + unreadChats.size());
+                            NotificationHelper.showNotification(controller, unreadChats);
+                        }
                     }
-                }
-
-                @Override
-                public void onError(String msg) {
-                    Log.e(AppController.LOG_TAG, msg);
-                }
-            });
+                    @Override
+                    public void onError(String msg) {
+                        Log.e(AppController.LOG_TAG, msg);
+                    }
+                });
+            }
             uiHandler.postDelayed(this, 4000);
         }
     };

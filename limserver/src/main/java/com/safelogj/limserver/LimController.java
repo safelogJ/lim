@@ -85,7 +85,6 @@ public class LimController {
     private static HttpsServer initHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
             CertificateException, UnrecoverableKeyException, KeyManagementException, IllegalArgumentException {
 
-       // ServerConfig prop = ServerConfig.load(System.getProperty(USER_DIR) +  "/server.properties");
         ServerConfig prop = ServerConfig.load(DB_PATH + "/server.properties");
         // 2. Загружаем Keystore в память Java
         KeyStore ks = KeyStore.getInstance("PKCS12");

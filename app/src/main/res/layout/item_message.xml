@@ -25,9 +25,11 @@
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/messageImage"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
+            android:layout_height="wrap_content"
             android:layout_marginBottom="4dp"
-            android:scaleType="centerCrop"
+            android:adjustViewBounds="true"
+            android:maxHeight="300dp"
+            android:scaleType="fitCenter"
             android:visibility="gone"
             app:shapeAppearanceOverlay="@style/RoundedImageView"
             tools:src="@tools:sample/backgrounds/scenic"

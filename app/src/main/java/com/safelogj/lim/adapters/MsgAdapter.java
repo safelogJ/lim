@@ -99,7 +99,6 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 binding.messageImage.setVisibility(View.VISIBLE);
                 Glide.with(itemView.getContext())
                         .load(Uri.parse(message.filePath))
-                        .centerCrop()
                         .into(binding.messageImage);
 
             } else if (Message.TYPE_FILE.equals(message.type) && (message.isLocalFile())) {

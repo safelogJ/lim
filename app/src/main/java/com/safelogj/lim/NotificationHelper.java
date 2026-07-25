@@ -28,7 +28,7 @@ public class NotificationHelper {
         if (manager == null) return;
 
         if (!manager.areNotificationsEnabled()) {
-            Log.w(AppController.LOG_TAG, "Уведомления запрещены пользователем в настройках системы!");
+            Log.w(AppController.LOG_TAG, "Notifications are disabled by the user in the system settings!");
             return;
         }
 
@@ -39,14 +39,14 @@ public class NotificationHelper {
         String text;
         if (unreadChats.size() == 1) {
             Chat chat = unreadChats.get(0);
-            title = "Новое сообщение";
-            text = "От: " + chat.name;
+            title = context.getString(R.string.new_msg);
+            text = context.getString(R.string.new_msg_from) + " " + chat.name;
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
         } else {
-            title = "Новые сообщения";
-            text = "У вас есть непрочитанные сообщения (" + unreadChats.size() + ")";
+            title = context.getString(R.string.new_msgs);
+            text = context.getString(R.string.new_msgs_size) + " (" + unreadChats.size() + ")";
             intent.putExtra(EXTRA_OPEN_CHAT_LIST, true);
         }
 

@@ -275,7 +275,7 @@ public class NetworkService {
 
     public void sendTextMessage(Message msg) {
         if (msg.interlocutorPublicKey == null) {
-            Log.e(AppController.LOG_TAG, "Cannot encrypt: recipient public key not found");
+            Log.e(AppController.LOG_TAG, "Send Text Cannot encrypt: recipient public key not found");
             dbHelper.notConfirmMessageSent(msg);
             return;
         }
@@ -329,7 +329,7 @@ public class NetworkService {
         // ВАЖНО: Тебе нужно добавить interlocutorPublicKey в объект Message или передавать отдельно.
         // Предположим, мы берем его из базы или кэша.
         if (msg.interlocutorPublicKey == null) {
-            Log.e(AppController.LOG_TAG, "Cannot encrypt: recipient public key not found");
+            Log.e(AppController.LOG_TAG, "Send Media Cannot encrypt: recipient public key not found");
             dbHelper.notConfirmMessageSent(msg);
             return;
         }
@@ -420,7 +420,7 @@ public class NetworkService {
             controller.activeDownloadsCount.decrementAndGet();
             return;
         }
-        Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
+        //  Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
@@ -467,7 +467,8 @@ public class NetworkService {
                 if (is.read(iv) != 12) throw new IOException("Missing IV header");
                 // 2. Настраиваем CipherInputStream
                 CipherInputStream cis = new CipherInputStream(is, controller.getFileDecryptCipher(msg.interlocutorPublicKey, iv));
-                File localFile = new File(controller.getExternalFileDir(), msg.fileName);
+              //  File localFile = new File(controller.getExternalFileDir(), msg.fileName);
+                File localFile = getUniquePath(msg);
                 try (FileOutputStream fos = new FileOutputStream(localFile)) {
                     byte[] buffer = new byte[8192];
                     int read;
@@ -540,12 +541,28 @@ public class NetworkService {
         return FILE_SIZE_LIMIT;
     }
 
-    public static String encodeToHeader(String text) {
+    private static String encodeToHeader(String text) {
         if (text == null || text.isEmpty()) return AppController.EMPTY_STRING;
         try {
             return URLEncoder.encode(text, "UTF-8");
         } catch (Exception e) {
             return AppController.EMPTY_STRING;
         }
+    }
+
+    private File getUniquePath(Message msg) {
+        String originalName = msg.fileName;
+        String serverName = new File(msg.filePath).getName(); // 1749466201123_7fa9b3c1
+        int underscore = serverName.lastIndexOf('_');
+        String suffix = underscore >= 0 ? serverName.substring(underscore + 1) : "";
+
+        int dot = originalName.lastIndexOf('.');
+        String localName;
+        if (dot > 0) {
+            localName = originalName.substring(0, dot) + "_" + suffix + originalName.substring(dot);
+        } else {
+            localName = originalName + "_" + suffix;
+        }
+        return new File(controller.getExternalFileDir(), localName);
     }
 }

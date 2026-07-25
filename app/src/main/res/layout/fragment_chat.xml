@@ -39,10 +39,10 @@
         android:id="@+id/messagesRecyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="8dp"
         android:clipToPadding="false"
-        android:padding="8dp"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         app:layout_constraintBottom_toTopOf="@+id/inputContainer"
         app:layout_constraintEnd_toEndOf="parent"
@@ -50,6 +50,68 @@
         app:layout_constraintTop_toBottomOf="@+id/chatNameTextScroll"
         app:stackFromEnd="true"
         tools:listitem="@layout/item_message" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/attachmentPreview"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:background="@color/main_background_50"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:paddingBottom="2dp"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toTopOf="@+id/inputContainer"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:visibility="visible">
+
+        <HorizontalScrollView
+            android:id="@+id/fileNameTextScroll"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="24dp"
+            android:background="@color/transparent"
+            android:fillViewport="true"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:scrollbars="none"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/clearFileButton"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <TextView
+                android:id="@+id/fileNameText"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:ellipsize="middle"
+                android:gravity="center_vertical|start"
+                android:singleLine="true"
+                android:textColor="@color/light_gray_aaa"
+                android:textSize="14sp" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/clearFileButton"
+            android:layout_width="38dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:clickable="true"
+            android:contentDescription="@string/remove_file_btn_text"
+            android:focusable="true"
+            android:gravity="center_horizontal|center_vertical"
+            android:text="[ - ]"
+            android:textColor="@color/light_gray_aaa"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- Нижняя панель ввода -->
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -60,7 +122,9 @@
         android:layout_marginEnd="4dp"
         android:layout_marginBottom="4dp"
         android:background="@drawable/fielder_background_tr"
-        android:padding="2dp"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:paddingBottom="2dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
@@ -81,72 +145,6 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@+id/messageEditText" />
-
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/attachmentPreview"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:layout_marginBottom="4dp"
-            android:background="@drawable/fielder_background_tr"
-            android:paddingStart="2dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="4dp"
-            android:paddingBottom="4dp"
-            android:visibility="invisible"
-            app:layout_constraintBottom_toTopOf="@+id/messageEditText"
-            app:layout_constraintEnd_toEndOf="@+id/sendButton"
-            app:layout_constraintStart_toStartOf="@+id/addFileButton"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:visibility="visible">
-
-            <HorizontalScrollView
-                android:id="@+id/fileNameTextScroll"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/fielder_background_tr"
-                android:fillViewport="true"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:scrollbars="none"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@+id/clearFileButton"
-                app:layout_constraintTop_toTopOf="parent">
-
-                <TextView
-                    android:id="@+id/fileNameText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:ellipsize="middle"
-                    android:gravity="center_vertical|start"
-                    android:singleLine="true"
-                    android:text="dsfgsdfdsfdsffdgfdgfdgfdgfdsfsdf.uut"
-                    android:textColor="@color/light_gray_aaa"
-                    android:textSize="14sp" />
-            </HorizontalScrollView>
-
-            <TextView
-                android:id="@+id/clearFileButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:clickable="true"
-                android:contentDescription="@string/remove_file_btn_text"
-                android:focusable="true"
-                android:gravity="center_horizontal|center_vertical"
-                android:text="[ - ]"
-                android:textColor="@color/light_gray_aaa"
-                android:textSize="24sp"
-                android:textStyle="bold"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
 
         <EditText
             android:id="@+id/messageEditText"

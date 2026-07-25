@@ -528,7 +528,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (msg.senderId == controller.getUserId()) {
             values.put(SEND_STATUS, Message.STATUS_SENT);
         } else {
-            if (!msg.isLocalFile()) {
+            if (msg.filePath != null && !msg.filePath.isEmpty() && !msg.isLocalFile()) {
+                Log.d(AppController.LOG_TAG, "в msg есть путь к серверному файлу, метим для загрузки " + msg.filePath);
                 values.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
             }
         }
@@ -613,7 +614,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try (Cursor cursor = database.rawQuery("SELECT MAX(id) FROM messages", null)) {
                 if (cursor.moveToFirst()) {
                     lastServerId = cursor.getLong(0);
-                    Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
+                 //   Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
                 } else {
                     Log.w(AppController.LOG_TAG, "не найдено последнего полученного сообщения");
                 }
@@ -633,9 +634,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try {
                 try (Cursor cursor = database.rawQuery(
                         "SELECT m.local_id, m.chat_id, m.chat_name, m.sender_id, " +
-                                "m.text, m.type, m.file_path, m.file_name, m.timestamp, c.local_id " +
+                                "m.text, m.type, m.file_path, m.file_name, " +
+                                "m.timestamp, c.local_id, u.public_key " +
                                 "FROM messages m " +
                                 "JOIN chats c ON m.chat_id = c.id " +
+                                "JOIN users u ON u.id = c.interlocutor_id " +
                                 "WHERE m.send_status = 3 " +
                                 "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
                     if (cursor.moveToFirst()) {
@@ -651,6 +654,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             msg.fileName = cursor.getString(7);
                             msg.timestamp = cursor.getLong(8);
                             msg.localChatId = cursor.getLong(9);
+                            msg.interlocutorPublicKey = cursor.getString(10);
                             messages.add(msg);
                             idsToUpdate.add(msg.localId);
                         } while (cursor.moveToNext());
@@ -659,7 +663,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (!idsToUpdate.isEmpty()) {
                     ContentValues v = new ContentValues();
                     v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
+
                     for (Long lid : idsToUpdate) {
+                        Log.w(AppController.LOG_TAG, "сообщение id статус 3 отправлено на до отправку " + lid);
                         database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
                     }
                 }
@@ -674,7 +680,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void loadMedia() {
-        // "SELECT local_id, chat_id, file_path, file_name FROM messages WHERE media_status = 1"
         try (Cursor cursor = database.rawQuery(
                 "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key " +
                         "FROM messages m " +
@@ -692,7 +697,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     controller.activeDownloadsCount.incrementAndGet();
                     controller.getNetStreams()[AppController.POOL_SIZE - 1].execute(() ->
                             controller.getNetworkService().downloadMedia(msg)); // Пнули загрузку!
-                    Log.d(AppController.LOG_TAG, "пнули загрузку");
+                    Log.d(AppController.LOG_TAG, "пнули загрузку для файла " + msg.filePath);
                 } while (cursor.moveToNext());
             }
         } catch (Exception e) {
