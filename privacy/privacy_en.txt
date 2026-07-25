@@ -1,56 +1,223 @@
-Privacy Policy for the Lim Application
-Last Updated: July 24, 2026
+Privacy Policy
 
-This Privacy Policy describes the principles of operation of the Lim application (hereinafter referred to as the Application) and the LimServer server module, and informs you about how your data is processed.
+Last updated: July 24, 2026
 
-The main feature of the Application is complete autonomy. We do not use centralized cloud servers. All data exchange occurs within your local network.
+This Privacy Policy explains how the Lim application ("Application") and the LimServer server module process data.
 
-1. Interpretation and Definitions
-• Application: The "Lim" mobile software installed on your Device.
-• Server (LimServer): A software module installed by the user or administrator independently (for example, in a Docker container on Mikrotik CHR).
-• Developer: Private person Evgenii Chekmazov (Email: simlog-app@yandex.ru).
-• You: The person using the Application for communication.
+Lim is designed to operate entirely within infrastructure controlled by its users. The Developer does not operate any cloud servers, relay servers, or messaging infrastructure. All communication takes place directly between the Application and a user-managed LimServer instance.
 
-2. Collection and Use of Data
-The Application is designed so that the Developer has no technical ability to access your data.
+1. Definitions
 
-Types of Processed Data:
-• Authorization Data: Login, password, and your local server address. This data is entered by you independently to connect to your server.
-• Messages and Media Files: Text messages and files that you send to other users of your server.
-• Technical Information: SSL certificate settings (.p12) created by your administrator to ensure a secure HTTPS connection.
+Application
+The Lim Android application installed on your Device.
+
+LimServer
+A Java server application installed and managed by the user or network administrator (for example, inside a Docker container on MikroTik CHR).
+
+Developer
+Evgenii Chekmazov
+Email: simlog-app@yandex.ru
+
+You
+The individual using the Application.
+
+Device
+Your Android phone or tablet running the Application.
+
+2. Data Processing
+
+The Developer does not control the servers used by the App and does not have technical access to your data.
+The App processes only the information necessary to communicate with your LimServer.
+
+Processed data may include:
+
+Credentials
+Username
+Password
+Display name
+Server address
+
+This information is entered manually by you.
+Passwords are never stored or transmitted in cleartext.
+
+Messages and Media Files
+
+The App processes:
+
+Text messages
+Transferred files
+Encrypted filenames
+
+This data is exchanged only between your device and your LimServer.
+
+Cryptographic Keys
+
+The App generates a public/private key pair for each user.
+
+The private and public keys are stored encrypted on your device.
+
+The public key is uploaded to your LimServer so that other users can encrypt messages addressed to you.
+
+The private key is encrypted with your password and uploaded to the server to enable syncing with your new device.
+
+Server Certificate
+
+The app can store an imported HTTPS server certificate (.crt), used to authenticate your LimServer.
+
+The imported certificate is stored locally in encrypted form.
 
 3. Data Storage
-On the mobile Device (Client):
-• Credentials: Login, password, name, and server address are stored in a protected internal directory of the Application in an encrypted file.
-• Local Database: Message history is stored in the Application's internal memory.
-• Downloaded Files: Files received from other users are saved in folders chosen by you on the Device. The Application may store links (Uri) to files downloaded by the user to the device to ensure quick access to them.
+On your Android device
 
-On the Server (LimServer):
-• The database and media files are stored on equipment controlled by your administrator (on a router/server).
-• File Security: Files are temporarily stored on the Server and are automatically deleted immediately after the recipient has successfully downloaded them.
+The app stores the following encrypted data:
 
-4. Security and Encryption
-We apply multi-layered data protection:
-• HTTPS: All data between the Device and the Server is transmitted over the encrypted HTTPS protocol using TLS certificates.
-• Certificate Import: The Application allows importing a server certificate file (.crt) for enhanced connection verification. In the absence of an imported certificate, the Application performs only a validity date check of the server certificate. Imported data is stored in an encrypted file on the Device.
-• Password Protection: The account password is hashed on the Application side before being sent and re-hashed on the Server side. Passwords are not stored in the database in plain text.
-• Message Encryption: Message text undergoes an end-to-end encryption (E2EE) procedure, which prevents anyone except the sender and recipient from reading them.
+Account settings;
+Local message database;
+Private encryption key;
+Public encryption key;
+Imported server certificate (if used).
 
-5. Transfer of Data to Third Parties
-The Application does not transfer information to the Developer or any third-party companies. All data exchange occurs exclusively between your Device and your local Server.
+Uploaded media files are stored in the app folder (/Android/data/com.safelogj.lim/files/) under unique names.
 
-6. Responsibility
-Since the Server (LimServer) is installed and configured by the user or network administrator independently:
-• The Developer is not responsible for the security of the data on the Server.
-• The security of the server.properties configuration file and the .p12 certificate on the Server side is the responsibility of the Server administrator.
+The app can store file URIs for quick access to uploaded files.
 
-7. Data Deletion
-• Account Deletion: Performed through the Application interface. The message database on the device is cleared. On the Server, a "soft delete" is applied (login is blocked, password is cleared, profile data is anonymized).
-• Application Deletion: When the Application is deleted from the Device, all local data (including encrypted settings and the database) is deleted automatically.
+On LimServer
 
-8. Changes to this Privacy Policy
-We may update this Policy. The current version is always available in the Application or on the official project page on GitHub. https://github.com/safelogJ/lim/tree/master/privacy
+The server stores the following encrypted data:
 
-9. Contact Us
-If you have any questions about this Privacy Policy, you can contact the Developer:
-• Email: simlog-app@yandex.ru
+Double hash of user passwords;
+Private encryption key;
+Messages;
+File names;
+Media files.
+
+The server stores the following in cleartext:
+Public encryption keys;
+Chat metadata, user IDs and names;
+Server settings, server certificate, and certificate password;
+
+Uploaded media files are stored temporarily and are automatically deleted after the recipient has successfully downloaded them.
+
+4. Security
+
+The application implements a multi-layered security system.
+
+HTTPS
+
+Data exchange between the application and LimServer is carried out via the HTTPS protocol.
+
+Server Certificate Verification
+
+The application supports importing your server's HTTPS certificate to verify the authenticity of your LimServer.
+
+This allows you to securely use self-signed certificates without disabling certificate verification.
+
+Password Protection
+
+Passwords are hashed by the application before transmission.
+
+The server re-hashes the received value before storing it.
+
+The server never stores user passwords in cleartext.
+
+End-to-end encryption
+
+Messages, transferred files, and file names are encrypted on the sender's device using the recipient's public key.
+
+Only the intended recipient can decrypt this information using their private key.
+
+The server stores only encrypted content and cannot decrypt user messages or transferred files.
+
+5. No External Services
+
+Lim does not use:
+
+Google Firebase
+Firebase Cloud Messaging (FCM)
+Google Analytics
+Crashlytics
+advertising networks
+push notification providers
+cloud messaging services
+telemetry services
+
+The Developer does not receive copies of user messages, files or any other communication data.
+
+All communication occurs exclusively between the Application and your own LimServer.
+
+6. Local Network Operation
+
+The Android client is intended for private network environments.
+
+The Application accepts connections only to private network IP addresses.
+
+Connections to public Internet IP addresses are rejected by the client.
+
+This restriction is intended to reduce the risk of accidental exposure of the Server to the public Internet.
+
+You can further restrict the server's operation in the local network using CHR settings.
+
+7. Background Operation
+
+Because Lim does not rely on push notification services such as Firebase Cloud Messaging (FCM), Android limits how frequently the Application can check for new messages while running in the background.
+
+When the Application is in the background, new messages are typically checked approximately every 15 minutes, depending on Android system restrictions.
+
+When the Application is open, communication with the Server occurs immediately.
+
+8. Sharing of Information
+
+The Developer does not collect, receive, process or store:
+
+usernames;
+passwords;
+messages;
+transferred files;
+contacts;
+IP addresses;
+device identifiers;
+advertising identifiers;
+analytics data;
+crash reports;
+usage statistics.
+
+The Application does not transmit user data to the Developer or third-party companies.
+
+9. Server Administrator Responsibility
+
+LimServer is installed and managed entirely by the user or network administrator.
+
+The security of the server infrastructure, operating system, configuration files and certificates is the responsibility of the Server administrator.
+
+The Developer is not responsible for the security of user-managed server installations.
+
+10. Data Deletion
+Account removal
+
+Removing an account through the Application clears the local message database.
+
+On LimServer, user data are anonymized, authentication data are removed and the account is disabled.
+
+Application removal
+
+Removing the Application deletes its local data, including:
+
+encrypted settings;
+local database;
+imported certificates;
+locally stored private encryption keys.
+
+Files downloaded to folders outside the Application remain on your Device until you remove them manually.
+
+11. Changes to this Privacy Policy
+
+This Privacy Policy may be updated from time to time.
+
+The latest version will always be available within the Application and on the project's GitHub page.
+
+12. Contact
+
+If you have any questions regarding this Privacy Policy, please contact:
+
+Evgenii Chekmazov
+Email: simlog-app@yandex.ru

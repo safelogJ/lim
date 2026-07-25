@@ -46,4 +46,8 @@ public class Message {
     public boolean isLocalFile() {
         return filePath != null && !filePath.isEmpty() && (filePath.startsWith("content://") || filePath.startsWith("file://"));
     }
+
+    public boolean hasServerPath() {
+        return filePath != null && !filePath.isEmpty() && !filePath.startsWith("content://") && !filePath.startsWith("file://");
+    }
 }

@@ -528,7 +528,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (msg.senderId == controller.getUserId()) {
             values.put(SEND_STATUS, Message.STATUS_SENT);
         } else {
-            if (msg.filePath != null && !msg.filePath.isEmpty() && !msg.isLocalFile()) {
+            if (msg.hasServerPath()) {
                 Log.d(AppController.LOG_TAG, "в msg есть путь к серверному файлу, метим для загрузки " + msg.filePath);
                 values.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
             }
