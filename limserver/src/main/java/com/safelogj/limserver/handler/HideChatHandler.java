@@ -14,7 +14,7 @@ public class HideChatHandler extends BaseHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         BaseResponse response = new BaseResponse();
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        if (!POST.equalsIgnoreCase(exchange.getRequestMethod())) {
             sendMethodError(exchange, response);
             return;
         }
