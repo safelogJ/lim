@@ -9,22 +9,45 @@ You may obtain a copy of the License at
 -------------------------------------------------------------------------
 This project contains components from the following third-party projects:
 
-1. AndroidX Libraries (Apache 2.0) - Copyright © 2018 The Android Open Source Project
-2. Material Components (Apache 2.0) - Copyright © 2015 Google LLC
-3. OkHttp (Apache 2.0) - Copyright © 2019 Square, Inc.
-4. Gson (Apache 2.0) - Copyright © 2008 Google LLC
-5. SQLite JDBC (Apache 2.0) - Copyright © 2007 Taro L. Saito
-6. HikariCP (Apache 2.0) - Copyright © 2013 Brett Wooldridge
-7. Espresso (Apache 2.0) - Copyright © 2014 The Android Open Source Project
-8. SLF4J (MIT) - Copyright © 2004 QOS.ch
-9. Glide (BSD 3-Clause) - Copyright © Google LLC, Bumptech Inc.
-10. Logback (EPL 1.0) - Copyright © 1999 QOS.ch
-11. JUnit 4 (EPL 1.0) - Copyright © 2002-2021 JUnit.org
+1. AndroidX Libraries (AppCompat, Activity, ConstraintLayout, DocumentFile, WorkManager) (Apache License 2.0)
+   Copyright © The Android Open Source Project
+
+2. Material Components for Android (Apache License 2.0)
+   Copyright © Google LLC
+
+3. OkHttp (Apache License 2.0)
+   Copyright © Square, Inc.
+
+4. Gson (Apache License 2.0)
+   Copyright © Google LLC
+
+5. SQLite JDBC (Apache License 2.0)
+   Copyright © Taro L. Saito
+
+6. HikariCP (Apache License 2.0)
+   Copyright © Brett Wooldridge
+
+7. Guava (Apache License 2.0)
+       Copyright © Google LLC
+
+8. Java Desugar Libraries (Apache License 2.0)
+       Copyright © Google LLC
+
+9. SLF4J (MIT License)
+   Copyright © QOS.ch
+
+10. Glide (BSD 3-Clause License)
+   Copyright © Google LLC, Bump Technologies, Inc.
+
+11. Logback Classic (EPL-1.0 or LGPL-2.1)
+   Copyright © QOS.ch
+
+
 
 -------------------------------------------------------------------------
 FULL LICENSE TEXTS:
 
---- [1-7] Apache License, Version 2.0 ---
+--- [1-8] Apache License, Version 2.0 ---
 
                                  Apache License
                            Version 2.0, January 2004
@@ -204,7 +227,7 @@ FULL LICENSE TEXTS:
    END OF TERMS AND CONDITIONS
 
 
---- [8] MIT License ---
+--- [9] MIT License ---
 
    Copyright (c) 2004-2024 QOS.ch
 
@@ -228,7 +251,7 @@ FULL LICENSE TEXTS:
    WITH THE PROGRAM OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
---- [9] BSD 3-Clause License ---
+--- [10] BSD 3-Clause License ---
 
    Copyright (c) Google LLC, Bumptech Inc. All rights reserved.
 
@@ -258,7 +281,7 @@ FULL LICENSE TEXTS:
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
---- [10-11] Eclipse Public License - v 1.0 ---
+--- [11] Eclipse Public License - v 1.0 ---
 
    THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE PUBLIC
    LICENSE ("AGREEMENT"). ANY USE, REPRODUCTION OR DISTRIBUTION OF THE PROGRAM
