@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.Target;
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemMessageBinding;
@@ -99,6 +100,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 binding.messageImage.setVisibility(View.VISIBLE);
                 Glide.with(itemView.getContext())
                         .load(Uri.parse(message.filePath))
+                        .override(Target.SIZE_ORIGINAL)
                         .into(binding.messageImage);
 
             } else if (Message.TYPE_FILE.equals(message.type) && (message.isLocalFile())) {
@@ -203,7 +205,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         }
 
         public void updateTime(String time) {
-            Log.d(AppController.EMPTY_STRING, "отображаемое время " + time);
+            Log.d(AppController.EMPTY_STRING, "time " + time);
             binding.messageTime.setText(time);
         }
     }

@@ -78,12 +78,12 @@ public class ChatListViewModel extends AndroidViewModel {
                 Log.d(AppController.LOG_TAG, errorMsg);
             }
         });
-        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 1)))].execute(()
+        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))].execute(()
                 -> controller.getNetworkService().hideChat(chat.id));
     }
 
     public void setChatBlockedState(Chat chat) {
-        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 1)))].execute(()
+        controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))].execute(()
                 -> controller.getNetworkService().blockChat(chat.id, new ResultCallback<>() {
 
             @Override

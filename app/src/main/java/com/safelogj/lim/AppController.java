@@ -93,7 +93,7 @@ public class AppController extends Application {
     public static final Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
-    public static final int POOL_SIZE = 5;
+    public static final int POOL_SIZE = 5;  // 0-2 отправка, 3 качает файлы, 4 получает сообщения
     public static final String NOTIFICATION_CHANNEL = "lim_messages";
     public static final String LIM_SYNC = "LimSync";
     private static final String USER_DATA = "userdata";
@@ -326,9 +326,9 @@ public class AppController extends Application {
             public void onSuccess(List<Message> messages) {
                 for (Message msg : messages) {
                     if (msg.type.equals(Message.TYPE_TEXT)) {
-                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendTextMessage(msg));
+                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg));
                     } else {
-                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 1)))].execute(() -> networkService.sendMediaMessage(msg));
+                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg));
                     }
                 }
             }

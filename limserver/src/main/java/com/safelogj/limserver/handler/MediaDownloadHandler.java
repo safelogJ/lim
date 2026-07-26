@@ -38,9 +38,9 @@ public class MediaDownloadHandler extends BaseHandler {
             }
             // 4. Проверка существования файла
             file = new File(LimController.MEDIA_PATH, req.filePath());
-            if (!file.exists() || file.isDirectory()) {
+            if (!file.exists() || file.isDirectory() || System.currentTimeMillis() - file.lastModified() > LimController.MEDIA_DOWNLOAD_LIFETIME) {
                 response.status = BaseResponse.ERROR;
-                response.message = "File not found or already deleted";
+                response.message = "File is no longer available";
                 sendResponse(exchange, 404, response);
                 return;
             }

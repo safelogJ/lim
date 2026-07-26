@@ -59,7 +59,7 @@ public class RegisterUserHandler extends BaseHandler {
                 }
                 response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
-                LimController.log.info("User '{}' login successfully: ", user.displayName);
+                LimController.log.info("User '{}' login successfully", user.displayName);
                 return;
             }
 
@@ -76,7 +76,7 @@ public class RegisterUserHandler extends BaseHandler {
                 response.publicKey = req.publicKey();
                 response.message = "registration successful: " + user.displayName;
                 sendSuccess(exchange, response);
-                LimController.log.info("User '{}' registered successfully: ", user.displayName);
+                LimController.log.info("User '{}' registered successfully", user.displayName);
             } else {
                 response.status = BaseResponse.ERROR;
                 response.message = "this username is already taken";

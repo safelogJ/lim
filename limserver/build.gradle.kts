@@ -10,8 +10,8 @@ java {
 
 tasks.getByName("shadowJar", {
     val shadowTask = this as com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-    shadowTask.archiveBaseName.set("limcontroller")
-    shadowTask.archiveClassifier.set("fat")
+    shadowTask.archiveBaseName.set("limserver")
+    shadowTask.archiveClassifier.set("full")
     shadowTask.archiveVersion.set("chr")
     shadowTask.manifest {
         attributes("Main-Class" to "com.safelogj.limserver.LimController")
@@ -43,8 +43,8 @@ tasks.register<JavaExec>("minifyJar") {
     mainClass.set("proguard.ProGuard")
 
     // ... все остальные твои args ...
-    args("-injars", "build/libs/limcontroller-chr-fat.jar")
-    args("-outjars", "build/libs/limcontroller-chr.jar")
+    args("-injars", "build/libs/limserver-chr-full.jar")
+    args("-outjars", "build/libs/limserver-chr.jar")
 
     val javaHome = System.getProperty("java.home")
     args("-libraryjars", "$javaHome/jmods")

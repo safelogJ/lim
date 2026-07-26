@@ -96,7 +96,7 @@ Public encryption keys;
 Chat metadata, user IDs and names;
 Server settings, server certificate, and certificate password;
 
-Uploaded media files are stored temporarily and are automatically deleted after the recipient has successfully downloaded them.
+Uploaded media files are stored temporarily and are automatically deleted after the recipient has successfully uploaded them, or after 30 days if the file has not been downloaded.
 
 4. Security
 

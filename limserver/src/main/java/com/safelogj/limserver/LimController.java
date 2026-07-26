@@ -22,13 +22,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -43,10 +46,19 @@ public class LimController {
     public static final String MEDIA_PATH = System.getProperty(USER_DIR) + "/media";
     public static final int ERROR = 1;
     public static final int DATA_ERR = 65;
+    public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
+    private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
     public static DatabaseManager dbManager;
 
     private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
             TimeUnit.MINUTES, new LinkedBlockingQueue<>(500), new ThreadPoolExecutor.CallerRunsPolicy());
+
+    private static final ScheduledExecutorService CLEANUP_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "cleanup-thread");
+                t.setDaemon(true);
+                return t;
+            });
 
 
     public static void main(String[] args) {
@@ -63,7 +75,6 @@ public class LimController {
             HttpsServer server = initHttpsServer();
             closeAppListener(server);
             server.createContext("/register", new RegisterUserHandler());
-          //  server.createContext("/auth", new AuthUserHandler());
             server.createContext("/user", new EditUserHandler());
             server.createContext("/chat/hide", new HideChatHandler());
             server.createContext("/chat/block", new BlockChatHandler());
@@ -75,6 +86,7 @@ public class LimController {
             server.createContext("/media/get", new MediaDownloadHandler());
             server.setExecutor(EXECUTOR_POOL);
             server.start();
+            CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
         } catch (Exception e) {
             log.error("critical error while creating server: ", e);
             System.exit(ERROR);
@@ -121,6 +133,7 @@ public class LimController {
             server.stop(1);
             log.info("HttpServer has stopped. New requests are not accepted..");
             EXECUTOR_POOL.shutdown();
+            CLEANUP_SCHEDULER.shutdown();
             log.info("⏳ Waiting for active tasks in the thread pool to complete...");
             try {
                 if (!EXECUTOR_POOL.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -133,8 +146,38 @@ public class LimController {
                 EXECUTOR_POOL.shutdownNow();
                 Thread.currentThread().interrupt();
             }
+            try {
+                if (!CLEANUP_SCHEDULER.awaitTermination(5, TimeUnit.SECONDS)) {
+                    log.info("Cleanup scheduler not complete on time...");
+                    CLEANUP_SCHEDULER.shutdownNow();
+                }
+                log.info("Cleanup scheduler stopped successfully..");
+            } catch (InterruptedException e) {
+                log.error("Error waiting for Cleanup scheduler to stop: ", e);
+                CLEANUP_SCHEDULER.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
             dbManager.close();
             log.info("🛑 All resources have been released. The container has been stopped successfully. Bye!");
         }));
+    }
+
+    private static void removeOldMedia() {
+        File mediaDir = new File(MEDIA_PATH);
+        long now = System.currentTimeMillis();
+        try {
+            File[] files = mediaDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile() && (now - file.lastModified() > MEDIA_DELETE_LIFETIME) && Files.deleteIfExists(file.toPath())) {
+                        log.info("File {} older than 31 days deleted successfully", file.getName());
+                    }
+                }
+            } else {
+                log.error("⚠️ Error getting file list in {}", mediaDir.getName());
+            }
+        } catch (Exception e) {
+            log.error("⚠️ Error deleting files in {}  {}", mediaDir.getName(), e.getMessage());
+        }
     }
 }

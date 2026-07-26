@@ -73,11 +73,11 @@ public class DatabaseManager {
     void initDatabase() {
         String createUsersTable = "CREATE TABLE IF NOT EXISTS users (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "username TEXT NOT NULL UNIQUE, " + // Уникальный логин (например, "ivan")
-                "password_hash TEXT NOT NULL, " +   // Хэш пароля (для безопасности)
+                "username TEXT NOT NULL UNIQUE, " +
+                "password_hash TEXT NOT NULL, " +
                 "public_key TEXT NOT NULL, " +   // Публичный ключ
                 "private_hash TEXT NOT NULL, " +   // Хэш приватного ключа
-                "display_name TEXT NOT NULL, " +    // Имя в чате (например, "Иван Иванович")
+                "display_name TEXT NOT NULL, " +
                 "created_at INTEGER NOT NULL, " +     // Дата регистрации
                 "is_deleted INTEGER NOT NULL DEFAULT 0" + // 0 = активен, 1 = удален
                 ")";
@@ -109,7 +109,7 @@ public class DatabaseManager {
                 "file_path TEXT, " +            // Путь к файлу на диске роутера
                 "file_name TEXT, " +            // Оригинальное имя файла
                 "chat_name TEXT NOT NULL, " +   // Название чата, если личное
-                "timestamp INTEGER NOT NULL" +  // Время в миллисекундах (System.currentTimeMillis())
+                "timestamp INTEGER NOT NULL" +  // Время в миллисекундах
                 ")";
 
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
@@ -169,10 +169,7 @@ public class DatabaseManager {
                 if (userId == -1) {
                     throw new SQLException("failed to retrieve new user id");
                 }
-
-                // Если дошли досюда — фиксируем изменения
                 conn.commit();
-                LimController.log.info("user '{}' has been successfully registered", username);
                 User user = new User();
                 user.id = userId;
                 user.displayName = displayName;
@@ -526,7 +523,6 @@ public class DatabaseManager {
 
     public long saveMessage(long chatId, long senderId, String text, String type, String chatName,
                             String filePath, String fileName, long timestamp) {
-        LimController.log.info("--- ПОПЫТКА СОХРАНЕНИЯ: чат={}, отправитель={} ---", chatId, senderId);
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
 
@@ -554,7 +550,7 @@ public class DatabaseManager {
                 try (ResultSet rs = insertStmt.getGeneratedKeys()) {
                     if (rs.next()) serverId = rs.getLong(1);
                 }
-                LimController.log.info("+++ СОХРАНЕНО: msg_id={}, в чат={}, от={} +++", serverId, chatId, senderId);
+                LimController.log.info("+++ save: msg_id={}, in chat={}, from id={} +++", serverId, chatId, senderId);
                 updateStmt.setLong(1, chatId);
                 updateStmt.executeUpdate();
                 updateBlock.setLong(1, chatId);

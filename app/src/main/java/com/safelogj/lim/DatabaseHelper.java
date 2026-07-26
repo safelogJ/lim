@@ -500,6 +500,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             // 5. Если чат не найден создаем его
                             database.insert(CHATS, null, chatValues);
                             Log.d(AppController.LOG_TAG, "Создан новый чат при синхронизации: " + msg.chatName);
+                            addInterlocutorToUsers(msg);
                         }
                     }
                     database.setTransactionSuccessful();
@@ -680,6 +681,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void loadMedia() {
+        Log.d(AppController.LOG_TAG, "зашли в loadmedia, задачи загрузок " + controller.activeDownloadsCount.get());
         try (Cursor cursor = database.rawQuery(
                 "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key " +
                         "FROM messages m " +
@@ -695,7 +697,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     msg.fileName = cursor.getString(3);
                     msg.interlocutorPublicKey = cursor.getString(4);
                     controller.activeDownloadsCount.incrementAndGet();
-                    controller.getNetStreams()[AppController.POOL_SIZE - 1].execute(() ->
+                    controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() ->
                             controller.getNetworkService().downloadMedia(msg)); // Пнули загрузку!
                     Log.d(AppController.LOG_TAG, "пнули загрузку для файла " + msg.filePath);
                 } while (cursor.moveToNext());
@@ -704,6 +706,22 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             Log.d(AppController.LOG_TAG, "error loading media message for download");
         }
         controller.activeDownloadsCount.decrementAndGet(); // конец задачи загрузки новых сообщений
+    }
+
+    private void addInterlocutorToUsers(Message msg) {
+        controller.getNetStreams()[AppController.POOL_SIZE - 1].execute(() ->
+                controller.getNetworkService().searchInterlocutor(controller.getUsername(), controller.getPassword(), null,
+                        msg.chatId, new ResultCallback<>() {
+                            @Override
+                            public void onSuccess(User result) {
+                                Log.d(AppController.LOG_TAG, "The interlocutor's data has been added to the user table.");
+                            }
+
+                            @Override
+                            public void onError(String errorMsg) {
+                                Log.d(AppController.LOG_TAG, "An error occurred while adding the interlocutor's data to the users table.");
+                            }
+                        }));
     }
 
 }

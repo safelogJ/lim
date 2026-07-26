@@ -78,7 +78,7 @@ public class MediaUploadHandler extends BaseHandler {
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;
-                response.message = "file uploaded successfully: " + fileName;
+                response.message = "File uploaded successfully: " + fileName;
                 sendSuccess(exchange, response);
             } else {
                 throw new IOException("Save message after file upload error " + fileName);
