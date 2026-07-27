@@ -17,7 +17,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -201,7 +200,7 @@ public class ChatFragment extends Fragment {
 
     private void setSendBtnListener() {
         mBinding.sendButton.setOnClickListener(v -> {
-            inputText = mBinding.messageEditText.getText().toString().trim();
+            inputText = Message.replaceEmoji(mBinding.messageEditText.getText().toString().trim());
             if (currentChatId == Chat.INVALID_ID && !inputText.isEmpty() && !inputText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
                 chatViewModel.checkChatInDb(inputText);

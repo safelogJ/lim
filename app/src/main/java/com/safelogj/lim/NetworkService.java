@@ -32,6 +32,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.Cipher;
@@ -316,7 +320,7 @@ public class NetworkService {
         try {
             uri = Uri.parse(msg.filePath);
             fileSize = getFileSize(uri);
-            if (fileSize > FILE_SIZE_LIMIT) {
+            if (fileSize >= FILE_SIZE_LIMIT) {
                 Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.big_file_error));
                 return;
             }
@@ -404,7 +408,7 @@ public class NetworkService {
 
             }
         } catch (Exception e) {
-            Log.w(AppController.LOG_TAG, "Media send error: " + e.getMessage());
+            Log.e(AppController.LOG_TAG, "Media send error: " + e.getMessage());
         }
         dbHelper.notConfirmMessageSent(msg);
     }
@@ -420,7 +424,6 @@ public class NetworkService {
             controller.activeDownloadsCount.decrementAndGet();
             return;
         }
-        //  Log.d(AppController.LOG_TAG, "ищем новые сообщения после id " + lastMessageId);
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
@@ -431,22 +434,67 @@ public class NetworkService {
                         }
                     }
                     dbHelper.saveIncomingMsgList(res.messages());
+                    controller.activeDownloadsCount.decrementAndGet();
                     Log.i(AppController.LOG_TAG, res.message());
-                    return;
-
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
+                controller.activeDownloadsCount.decrementAndGet();
             }
         } catch (Exception e) {
-            Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+            Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+            controller.activeDownloadsCount.decrementAndGet();
         }
-        controller.activeDownloadsCount.decrementAndGet();
+        checkMediaThread();
     }
 
-    public void downloadMedia(Message msg) {
+    private void checkMediaThread() {
+        if (controller.startedActivities.get() > 0) {
+            dbHelper.getMediaList(new ResultCallback<>() {
+                @Override
+                public void onSuccess(List<Message> mediaList) {
+                    for (Message msg: mediaList) {
+                        Log.d(AppController.LOG_TAG, "пнули загрузку в нити " + controller.getNetStreams()[AppController.POOL_SIZE - 2].toString());
+                        controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(()-> downloadMedia(msg));
+                    }
+                }
+                @Override
+                public void onError(String errorMsg) {
+                    Log.d(AppController.LOG_TAG, errorMsg);
+                }
+            });
+        } else {
+            List<Message> list = new ArrayList<>();
+            CountDownLatch latch = new CountDownLatch(1);
+            dbHelper.getMediaList(new ResultCallback<>() {
+                @Override
+                public void onSuccess(List<Message> mediaList) {
+                    list.addAll(mediaList);
+                    latch.countDown();
+                }
+                @Override
+                public void onError(String errorMsg) {
+                    latch.countDown();
+                    Log.d(AppController.LOG_TAG, errorMsg);
+                }
+            });
+
+            try {
+                if (latch.await(10, TimeUnit.SECONDS)) {
+                    for (Message msg: list) {
+                        Log.d(AppController.LOG_TAG, "пнули загрузку для в воркере " + Thread.currentThread().getName());
+                        downloadMedia(msg);
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void downloadMedia(Message msg) {
         if (msg.interlocutorPublicKey == null) {
             Log.d(AppController.LOG_TAG, "download media null: " + msg.fileName);
-            controller.activeDownloadsCount.decrementAndGet();
+            dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
             return;
         }
         Log.d(AppController.LOG_TAG, "download media : " + msg.fileName);
@@ -456,7 +504,7 @@ public class NetworkService {
                     hashPassword(controller.getPassword()), msg.chatId, msg.filePath)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
         } catch (Exception e) {
-            controller.activeDownloadsCount.decrementAndGet();
+            dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
             return;
         }
         try (Response response = client.newCall(request).execute()) {
@@ -467,7 +515,6 @@ public class NetworkService {
                 if (is.read(iv) != 12) throw new IOException("Missing IV header");
                 // 2. Настраиваем CipherInputStream
                 CipherInputStream cis = new CipherInputStream(is, controller.getFileDecryptCipher(msg.interlocutorPublicKey, iv));
-              //  File localFile = new File(controller.getExternalFileDir(), msg.fileName);
                 File localFile = getUniquePath(msg);
                 try (FileOutputStream fos = new FileOutputStream(localFile)) {
                     byte[] buffer = new byte[8192];
@@ -479,13 +526,13 @@ public class NetworkService {
                 dbHelper.updateFilePath(msg, Uri.fromFile(localFile).toString());
                 Log.d(AppController.LOG_TAG, "download file success: " + msg.fileName);
             } else {
-                dbHelper.setMediaStatusError(msg);
+                dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_ERROR);
                 Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.message());
             }
         } catch (Exception e) {
+            dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
             Log.e(AppController.LOG_TAG, "Download error: " + e.getMessage());
         }
-        controller.activeDownloadsCount.decrementAndGet();
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {

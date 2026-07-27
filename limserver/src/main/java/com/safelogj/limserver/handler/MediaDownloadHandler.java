@@ -64,10 +64,9 @@ public class MediaDownloadHandler extends BaseHandler {
             while ((count = fis.read(buffer)) != -1) {
                 os.write(buffer, 0, count);
             }
+            Files.deleteIfExists(file.toPath());
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
-            return;
         }
-        Files.deleteIfExists(file.toPath());
     }
 }

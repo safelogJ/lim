@@ -184,10 +184,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try {
                 ContentValues values = new ContentValues();
                 values.put(DISPLAY_NAME, newName);
-               if (database.update(USERS, values, ID_ANCHOR, new String[]{String.valueOf(controller.getUserId())}) > 0) {
-                   Log.d(AppController.LOG_TAG, "change name " + newName + " success");
-                   return;
-               }
+                if (database.update(USERS, values, ID_ANCHOR, new String[]{String.valueOf(controller.getUserId())}) > 0) {
+                    Log.d(AppController.LOG_TAG, "change name " + newName + " success");
+                    return;
+                }
             } catch (Exception e) {
                 Log.e(AppController.LOG_TAG, "error change name: ", e);
             }
@@ -510,7 +510,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     database.endTransaction();
                 }
             }
-            loadMedia();
         });
     }
 
@@ -555,11 +554,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void setMediaStatusError(Message msg) {
+    public void setMediaStatus(Message msg, int status) {
         dbExecutor.execute(() -> {
             try {
                 ContentValues v = new ContentValues();
-                v.put(MEDIA_STATUS, Message.MEDIA_STATUS_ERROR);
+                v.put(MEDIA_STATUS, status);
                 if (database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(msg.localId)}) > 0) {
                     return;
                 }
@@ -615,7 +614,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try (Cursor cursor = database.rawQuery("SELECT MAX(id) FROM messages", null)) {
                 if (cursor.moveToFirst()) {
                     lastServerId = cursor.getLong(0);
-                 //   Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
+                    //   Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
                 } else {
                     Log.w(AppController.LOG_TAG, "не найдено последнего полученного сообщения");
                 }
@@ -680,32 +679,47 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    private void loadMedia() {
-        Log.d(AppController.LOG_TAG, "зашли в loadmedia, задачи загрузок " + controller.activeDownloadsCount.get());
-        try (Cursor cursor = database.rawQuery(
-                "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key " +
-                        "FROM messages m " +
-                        "JOIN chats c ON c.id = m.chat_id " +
-                        "JOIN users u ON u.id = c.interlocutor_id " +
-                        "WHERE m.media_status = 1", null)) {
-            if (cursor.moveToFirst()) {
-                do {
-                    Message msg = new Message();
-                    msg.localId = cursor.getLong(0);
-                    msg.chatId = cursor.getLong(1);
-                    msg.filePath = cursor.getString(2);
-                    msg.fileName = cursor.getString(3);
-                    msg.interlocutorPublicKey = cursor.getString(4);
-                    controller.activeDownloadsCount.incrementAndGet();
-                    controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() ->
-                            controller.getNetworkService().downloadMedia(msg)); // Пнули загрузку!
-                    Log.d(AppController.LOG_TAG, "пнули загрузку для файла " + msg.filePath);
-                } while (cursor.moveToNext());
+    public void getMediaList(ResultCallback<List<Message>> callback) {
+        dbExecutor.execute(() -> {
+            List<Long> idsToUpdate = new ArrayList<>();
+            List<Message> medialist = new ArrayList<>();
+            database.beginTransaction();
+            try {
+                try (Cursor cursor = database.rawQuery(
+                        "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key " +
+                                "FROM messages m " +
+                                "JOIN chats c ON c.id = m.chat_id " +
+                                "JOIN users u ON u.id = c.interlocutor_id " +
+                                "WHERE m.media_status = 1", null)) {
+                    if (cursor.moveToFirst()) {
+                        do {
+                            Message msg = new Message();
+                            msg.localId = cursor.getLong(0);
+                            msg.chatId = cursor.getLong(1);
+                            msg.filePath = cursor.getString(2);
+                            msg.fileName = cursor.getString(3);
+                            msg.interlocutorPublicKey = cursor.getString(4);
+                            medialist.add(msg);
+                            idsToUpdate.add(msg.localId);
+                        } while (cursor.moveToNext());
+                    }
+                }
+
+                if (!idsToUpdate.isEmpty()) {
+                    ContentValues v = new ContentValues();
+                    v.put(MEDIA_STATUS, Message.MEDIA_STATUS_LOADING);
+                    for (Long lid : idsToUpdate) {
+                        database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
+                    }
+                }
+                database.setTransactionSuccessful();
+                callback.onSuccess(medialist);
+            } catch (Exception e) {
+                callback.onError("error loading media message for download: " + e.getMessage());
+            } finally {
+                database.endTransaction();
             }
-        } catch (Exception e) {
-            Log.d(AppController.LOG_TAG, "error loading media message for download");
-        }
-        controller.activeDownloadsCount.decrementAndGet(); // конец задачи загрузки новых сообщений
+        });
     }
 
     private void addInterlocutorToUsers(Message msg) {

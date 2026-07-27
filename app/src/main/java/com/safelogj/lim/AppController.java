@@ -617,7 +617,7 @@ public class AppController extends Application {
                             }
                             startSendingMsgList();
                         }
-                    }, 4000, 4000, TimeUnit.MILLISECONDS);
+                    }, 4, 4, TimeUnit.SECONDS);
                 }
             }
 

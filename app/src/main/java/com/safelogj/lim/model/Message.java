@@ -2,6 +2,9 @@ package com.safelogj.lim.model;
 
 import androidx.annotation.NonNull;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class Message {
 
     public static final String TYPE_TEXT = "TEXT";
@@ -18,6 +21,9 @@ public class Message {
     public static final int MEDIA_STATUS_PENDING = 1;   // Файл на сервере, нужно скачать
     public static final int MEDIA_STATUS_DOWNLOADED = 2; // Файл скачан и доступен локально
     public static final int MEDIA_STATUS_ERROR = 3;  // Критическая ошибка (404/403), больше не качаем
+    public static final int MEDIA_STATUS_LOADING = 4;  // качаем
+
+    private static final Map<String, String> EMOJI_MAP = new LinkedHashMap<>();
 
 
     public long id;
@@ -49,5 +55,67 @@ public class Message {
 
     public boolean hasServerPath() {
         return filePath != null && !filePath.isEmpty() && !filePath.startsWith("content://") && !filePath.startsWith("file://");
+    }
+
+    public static String replaceEmoji(String text) {
+        for (Map.Entry<String, String> e : EMOJI_MAP.entrySet()) {
+            text = text.replace(e.getKey(), e.getValue());
+        }
+        return text;
+    }
+
+    static {
+        // Happy
+        EMOJI_MAP.put(" :-)", " 🙂");
+        EMOJI_MAP.put(" :)", " 🙂");
+        EMOJI_MAP.put(" (:", " 🙂");
+        EMOJI_MAP.put(" :-D", " 😃");
+        EMOJI_MAP.put(" :D", " 😃");
+        EMOJI_MAP.put(" =D", " 😃");
+        EMOJI_MAP.put(" XD", " 😆");
+        EMOJI_MAP.put(" xD", " 😆");
+        EMOJI_MAP.put(" X-D", " 😆");
+        EMOJI_MAP.put(" ^_^", " 😊");
+        EMOJI_MAP.put(" ^^", " 😊");
+        EMOJI_MAP.put(" :-(", " 🙁");
+        EMOJI_MAP.put(" :(", " 🙁");
+        EMOJI_MAP.put(" :'-(", " 😢");
+        EMOJI_MAP.put(" :'(", " 😢");
+        EMOJI_MAP.put(" T_T", " 😭");
+        EMOJI_MAP.put(" ;-)", " 😉");
+        EMOJI_MAP.put(" ;)", " 😉");
+        EMOJI_MAP.put(" :-P", " 😛");
+        EMOJI_MAP.put(" :P", " 😛");
+        EMOJI_MAP.put(" :-p", " 😛");
+        EMOJI_MAP.put(" :p", " 😛");
+        EMOJI_MAP.put(" :-*", " 😘");
+        EMOJI_MAP.put(" :*", " 😘");
+        EMOJI_MAP.put(" :-O", " 😮");
+        EMOJI_MAP.put(" :O", " 😮");
+        EMOJI_MAP.put(" :-o", " 😮");
+        EMOJI_MAP.put(" :o", " 😮");
+        EMOJI_MAP.put(" :-|", " 😐");
+        EMOJI_MAP.put(" :|", " 😐");
+        EMOJI_MAP.put(" :-/", " 😕");
+        EMOJI_MAP.put(" :/", " 😕");
+        EMOJI_MAP.put(" :-\\", " 😕");
+        EMOJI_MAP.put(" :\\", " 😕");
+        EMOJI_MAP.put(" >:(", " 😠");
+        EMOJI_MAP.put(" >:O", " 🤬");
+        EMOJI_MAP.put(" B-)", " 😎");
+        EMOJI_MAP.put(" 8-)", " 😎");
+        EMOJI_MAP.put(" O:-)", " 😇");
+        EMOJI_MAP.put(" O:)", " 😇");
+        EMOJI_MAP.put(" }:)", " 😈");
+        EMOJI_MAP.put(" :-X", " 🤐");
+        EMOJI_MAP.put(" :X", " 🤐");
+        EMOJI_MAP.put(" :-$", " 🙄");
+        EMOJI_MAP.put(" |-)", " 😴");
+        EMOJI_MAP.put(" 8-|", " 🤓");
+        EMOJI_MAP.put(" B|", " 😎");
+        EMOJI_MAP.put(" [:|]", " 🤖");
+        EMOJI_MAP.put(" =^.^=", " 🐱");
+        EMOJI_MAP.put(" \\o/", "🙌");
+        EMOJI_MAP.put(" \\o", "👋");
     }
 }
