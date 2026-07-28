@@ -34,6 +34,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -63,18 +64,25 @@ public class NetworkService {
     private final Gson gson = new Gson();
     private final AppController controller;
     private final DatabaseHelper dbHelper;
-    private MessageDigest mDigest;
+    private static final ThreadLocal<MessageDigest> DIGEST =
+            ThreadLocal.withInitial(() -> {
+                try {
+                    return MessageDigest.getInstance("SHA-256"); // или MD5
+                } catch (NoSuchAlgorithmException e) {
+                    throw new IllegalStateException(e);
+                }
+            });
 
     public NetworkService(AppController controller) {
         this.controller = controller;
         client = controller.getOkHttpClient();
         dbHelper = controller.getDbHelper();
-        try {
-            mDigest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            controller.setInitAppError(true);
-            Log.w(AppController.LOG_TAG, "Ошибка инициализации MessageDigest");
-        }
+//        try {
+//            mDigest = MessageDigest.getInstance("SHA-256");
+//        } catch (NoSuchAlgorithmException e) {
+//            controller.setInitAppError(true);
+//            Log.w(AppController.LOG_TAG, "Ошибка инициализации MessageDigest");
+//        }
     }
 
     public void register(String username, String password, String displayName, ResultCallback<String> callback) {
@@ -111,7 +119,7 @@ public class NetworkService {
                 controller.setDisplayName(displayName);
                 controller.setE2eePublicKey(user.publicKey);
                 controller.unpackPrivateKey(res.privateHash(), password);
-                dbHelper.saveUser(user, callback, res.message(), res.chats());
+                dbHelper.saveUser(user, callback, res.message(), null);
                 controller.writeSettingsToFile();
                 Log.i(AppController.LOG_TAG, res.message());
 
@@ -198,7 +206,7 @@ public class NetworkService {
                 user.username = res.userName();
                 user.displayName = res.displayName();
                 user.publicKey = res.publicKey();
-                dbHelper.saveUser(user, callback, user, null);
+                dbHelper.saveUser(user, callback, user, chatId);
                 Log.i(AppController.LOG_TAG, res.message());
 
             } else {
@@ -291,19 +299,21 @@ public class NetworkService {
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
         } catch (Exception e) {
             Log.w(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            dbHelper.notConfirmMessageSent(msg);
             return;
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
-                    msg.id = res.messageId();
-                    msg.timestamp = res.timestamp();
-                    if (msg.localId == Chat.INVALID_ID) {
-                        dbHelper.saveMsgBeforeSending(msg);
-                    }
-                    dbHelper.confirmMessageSent(msg);
-                    Log.i(AppController.LOG_TAG, res.message());
-                    return;
+                msg.id = res.messageId();
+                msg.timestamp = res.timestamp();
+                if (msg.localId == Chat.INVALID_ID) {
+                    Log.e(AppController.LOG_TAG, "сообщение отправлено, но локал id -1, снова сохраняем его локально");
+                    dbHelper.saveMsgBeforeSending(msg);
+                }
+                dbHelper.confirmMessageSent(msg);
+                Log.i(AppController.LOG_TAG, res.message());
+                return;
 
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
@@ -322,10 +332,12 @@ public class NetworkService {
             fileSize = getFileSize(uri);
             if (fileSize >= FILE_SIZE_LIMIT) {
                 Log.w(AppController.LOG_TAG, controller.getResources().getString(R.string.big_file_error));
+                dbHelper.notConfirmMessageSent(msg);
                 return;
             }
         } catch (Exception e) {
             Log.w(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            dbHelper.notConfirmMessageSent(msg);
             return;
         }
         // 1. Получаем публичный ключ собеседника (он должен быть подгружен в ChatFragment)
@@ -339,7 +351,10 @@ public class NetworkService {
         }
 
         try (InputStream inputStream = controller.getContentResolver().openInputStream(uri)) {
-            if (inputStream == null) return;
+            if (inputStream == null) {
+                dbHelper.notConfirmMessageSent(msg);
+                return;
+            }
 
             // 2. Генерируем IV и шифруем заголовки
             byte[] iv = new byte[12];
@@ -393,14 +408,15 @@ public class NetworkService {
             try (Response response = client.newCall(request).execute()) {
                 BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
                 if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
-                        msg.id = res.messageId();
-                        msg.timestamp = res.timestamp();
-                        if (msg.localId == Chat.INVALID_ID) {
-                            dbHelper.saveMsgBeforeSending(msg);
-                        }
-                        dbHelper.confirmMessageSent(msg);
-                        Log.i(AppController.LOG_TAG, "Media message sent: " + res.message());
-                        return;
+                    msg.id = res.messageId();
+                    msg.timestamp = res.timestamp();
+                    if (msg.localId == Chat.INVALID_ID) {
+                        Log.e(AppController.LOG_TAG, "сообщение отправлено, но локал id -1, снова сохраняем его локально");
+                        dbHelper.saveMsgBeforeSending(msg);
+                    }
+                    dbHelper.confirmMessageSent(msg);
+                    Log.i(AppController.LOG_TAG, "Media message sent: " + res.message());
+                    return;
 
                 } else {
                     Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
@@ -427,15 +443,15 @@ public class NetworkService {
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
-                    for (Message msg : res.messages()) {
-                        msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
-                        if (msg.fileName != null && !msg.fileName.isEmpty()) {
-                            msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
-                        }
+                for (Message msg : res.messages()) {
+                    msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
+                    if (msg.fileName != null && !msg.fileName.isEmpty()) {
+                        msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
                     }
-                    dbHelper.saveIncomingMsgList(res.messages());
-                    controller.activeDownloadsCount.decrementAndGet();
-                    Log.i(AppController.LOG_TAG, res.message());
+                }
+                dbHelper.saveIncomingMsgList(res.messages());
+                controller.activeDownloadsCount.decrementAndGet();
+                //  Log.i(AppController.LOG_TAG, res.message());
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 controller.activeDownloadsCount.decrementAndGet();
@@ -452,11 +468,12 @@ public class NetworkService {
             dbHelper.getMediaList(new ResultCallback<>() {
                 @Override
                 public void onSuccess(List<Message> mediaList) {
-                    for (Message msg: mediaList) {
+                    for (Message msg : mediaList) {
                         Log.d(AppController.LOG_TAG, "пнули загрузку в нити " + controller.getNetStreams()[AppController.POOL_SIZE - 2].toString());
-                        controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(()-> downloadMedia(msg));
+                        controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
                     }
                 }
+
                 @Override
                 public void onError(String errorMsg) {
                     Log.d(AppController.LOG_TAG, errorMsg);
@@ -471,6 +488,7 @@ public class NetworkService {
                     list.addAll(mediaList);
                     latch.countDown();
                 }
+
                 @Override
                 public void onError(String errorMsg) {
                     latch.countDown();
@@ -480,9 +498,10 @@ public class NetworkService {
 
             try {
                 if (latch.await(10, TimeUnit.SECONDS)) {
-                    for (Message msg: list) {
+                    for (Message msg : list) {
                         Log.d(AppController.LOG_TAG, "пнули загрузку для в воркере " + Thread.currentThread().getName());
                         downloadMedia(msg);
+
                     }
                 }
             } catch (InterruptedException e) {
@@ -548,19 +567,7 @@ public class NetworkService {
 
     @NonNull
     private String hashPassword(@NonNull String clientPasswordHash) {
-        byte[] hash;
-        digestLock.lock();
-        try {
-            mDigest.reset();
-            hash = mDigest.digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8));
-        } finally {
-            digestLock.unlock();
-        }
-        if (hash.length == 0) {
-            Log.d(AppController.LOG_TAG, "Сбой при вычислении хэша пароля MD5/SHA:");
-            return AppController.EMPTY_STRING;
-        }
-        return bytesToHex(hash);
+        return bytesToHex(Objects.requireNonNull(DIGEST.get()).digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8)));
     }
 
     @NonNull

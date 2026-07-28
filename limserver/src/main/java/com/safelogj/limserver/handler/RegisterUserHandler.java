@@ -49,17 +49,13 @@ public class RegisterUserHandler extends BaseHandler {
 
             User user = LimController.dbManager.authenticateUser(username, req.password());
             if (user != null) {
-                List<Chat> chats = LimController.dbManager.getActiveChats(user.id);
                 response.userId = user.id;
                 response.displayName = user.displayName;
                 response.publicKey = user.publicKey;
                 response.privateHash = user.privateHash;
-                if (!chats.isEmpty()) {
-                    response.chats = chats;
-                }
                 response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
-                LimController.log.info("User '{}' login successfully", user.displayName);
+                   LimController.log.info("User '{}' login successfully, список чатов ", user.displayName);
                 return;
             }
 

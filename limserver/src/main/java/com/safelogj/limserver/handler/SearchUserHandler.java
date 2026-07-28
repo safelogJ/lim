@@ -40,7 +40,7 @@ public class SearchUserHandler extends BaseHandler {
                 response.userName = interlocutor.username;
                 response.displayName = interlocutor.displayName;
                 response.publicKey = interlocutor.publicKey;
-                response.message = "user found success: " + interlocutor.displayName;
+                response.message = "user found success: " + interlocutor.displayName + " ключ " + interlocutor.publicKey;
                 sendSuccess(exchange, response);
             } else {
                 sendUserNotFoundError(exchange, response);

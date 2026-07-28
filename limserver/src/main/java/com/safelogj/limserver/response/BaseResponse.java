@@ -26,5 +26,4 @@ public class BaseResponse {
     public String interlocutorPublicKey;
     public String privateHash;
     public List<Message> messages;
-    public List<Chat> chats;
 }

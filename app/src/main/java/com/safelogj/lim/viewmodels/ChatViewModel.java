@@ -85,16 +85,16 @@ public class ChatViewModel extends AndroidViewModel {
 
             @Override
             public void onError(String errorMsg) {
-                Log.d(AppController.LOG_TAG, "the interlocutor's public key is not in the database.");
+                Log.d(AppController.LOG_TAG, errorMsg);
             }
         });
     }
 
     public void sendMessage(Message msg, long localChatId) {
         controller.getDbHelper().saveMsgBeforeSending(msg);
-
+        Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + localChatId + " (отправлено в нити "
+                + Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2))) + ")");
         if (Message.TYPE_TEXT.equals(msg.type)) {
-            Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + localChatId + " (отправлено в нити " + Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2))) + ")");
             controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
                     controller.getNetworkService().sendTextMessage(msg));
         } else {

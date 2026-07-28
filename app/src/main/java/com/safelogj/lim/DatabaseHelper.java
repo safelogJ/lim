@@ -136,47 +136,35 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public <T> void saveUser(User user, ResultCallback<T> callback, T result, @Nullable List<Chat> chats) {
-        dbExecutor.execute(() -> { // Начинаем транзакцию для максимальной скорости и надежности
+    public <T> void saveUser(User user, ResultCallback<T> callback, T result, @Nullable Long chatId) {
+        dbExecutor.execute(() -> {
             database.beginTransaction();
-            try { // 1. Сохраняем (или обновляем) данные пользователя
+            try {  // Сохраняем пользователя
                 ContentValues userValues = new ContentValues();
                 userValues.put(ID, user.id);
                 userValues.put(USERNAME, user.username);
                 userValues.put(DISPLAY_NAME, user.displayName);
                 userValues.put(PUBLIC_KEY, user.publicKey);
-                database.insertWithOnConflict(USERS, null, userValues, SQLiteDatabase.CONFLICT_REPLACE);
-                fillChats(chats);
+                database.insertWithOnConflict(USERS,null, userValues, SQLiteDatabase.CONFLICT_REPLACE);
+                // Если известен чат — привязываем к нему собеседника
+                if (chatId != null) {
+                    ContentValues chatValues = new ContentValues();
+                    chatValues.put(INTERLOCUTOR_ID, user.id);
+                   if (database.update(CHATS, chatValues,ID_ANCHOR, new String[]{String.valueOf(chatId)}) == 0) {
+                       Log.w(AppController.LOG_TAG,"Chat " + chatId + " not found while linking user " + user.id);
+                   } else {
+                       Log.d(AppController.LOG_TAG,"Saved user id=" + user.id + " username=" + user.username + " display=" + user.displayName);
+                   }
+                }
                 database.setTransactionSuccessful();
                 callback.onSuccess(result);
-                Log.d(AppController.LOG_TAG, "user data and " + (chats != null ? chats.size() : 0) + " chats successfully saved.");
             } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "error while batch saving data: ", e);
+                Log.e(AppController.LOG_TAG, "error while saving user", e);
                 callback.onError("error saving user: " + user.displayName);
             } finally {
                 database.endTransaction();
             }
         });
-    }
-
-    private void fillChats(List<Chat> chats) {
-        if (chats != null) {
-            for (Chat chat : chats) {
-                ContentValues chatValues = new ContentValues();
-                chatValues.put(ID, chat.id);
-                chatValues.put(NAME, chat.name);
-                chatValues.put(IS_GROUP, chat.isGroup ? 1 : 0);
-                chatValues.put(INTERLOCUTOR_ID, chat.interlocutorId);
-                //  chatValues.put(LAST_MESSAGE, chat.lastMessage);
-                //   chatValues.put(LAST_MESSAGE, AppController.EMPTY_STRING);
-                chatValues.put(IS_HIDDEN, chat.isHidden ? 1 : 0); // Сохраняем статус видимости
-                chatValues.put(IS_BLOCKED, chat.isBlocked ? 1 : 0); // Сохраняем статус блокировки
-                chatValues.put(LAST_TIMESTAMP, chat.lastTimestamp);
-                database.insertWithOnConflict(CHATS, null, chatValues, SQLiteDatabase.CONFLICT_REPLACE);
-            }
-        } else {
-            Log.d(AppController.LOG_TAG, "fillChats = null ");
-        }
     }
 
     public void updateUserDisplayName(String newName) {
@@ -196,6 +184,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void getInterlocutorPublicKey(long chatId, ResultCallback<String> callback) {
+        dbExecutor.execute(() -> {
+            try (Cursor cursor = database.rawQuery(
+                    "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1",
+                    new String[]{String.valueOf(chatId)})) {
+                if (cursor.moveToFirst()) {
+                     callback.onSuccess(cursor.getString(0));
+                } else {
+                    callback.onError("chat or interlocutor not found locally for id: " + chatId);
+                }
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Error getting public key from DB", e);
+                callback.onError("database error: " + e.getMessage());
+            }
+        });
+    }
+
+    public void setInterlocutorPublicKey(long chatId, ResultCallback<String> callback) {
         dbExecutor.execute(() -> {
             try (Cursor cursor = database.rawQuery(
                     "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1",
@@ -429,7 +434,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 ContentValues values = new ContentValues();
                 values.put(HAS_NEW_MSG, 0);
                 if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
-                    Log.d(AppController.LOG_TAG, "chat mark as read " + chatId);
                     return;
                 }
             } catch (Exception e) {
@@ -489,7 +493,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
                         } else {
-                            chatValues.put(INTERLOCUTOR_ID, msg.receiverId);
+                          //  chatValues.put(INTERLOCUTOR_ID, msg.receiverId);
                             chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
                             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
                         }
@@ -560,7 +564,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 ContentValues v = new ContentValues();
                 v.put(MEDIA_STATUS, status);
                 if (database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(msg.localId)}) > 0) {
+                    //  Log.d(AppController.LOG_TAG, "set media status " + status);
                     return;
+                } else {
+                  //  Log.d(AppController.LOG_TAG, " проблемный set media status " + status);
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "set error status media error ", e);
@@ -665,7 +672,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
 
                     for (Long lid : idsToUpdate) {
-                        Log.w(AppController.LOG_TAG, "сообщение id статус 3 отправлено на до отправку " + lid);
+                        Log.w(AppController.LOG_TAG, "сообщение c статус 3 отправлено на до отправку localid " + lid);
                         database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
                     }
                 }

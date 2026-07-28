@@ -62,6 +62,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -115,6 +116,23 @@ public class AppController extends Application {
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";    // Константы для E2EE
     private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final ThreadLocal<MessageDigest> SHA256 =
+            ThreadLocal.withInitial(() -> {
+                try {
+                    return MessageDigest.getInstance("SHA-256");
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+    private static final ThreadLocal<KeyAgreement> ECDH =
+            ThreadLocal.withInitial(() -> {
+                try {
+                    return KeyAgreement.getInstance("ECDH");
+                } catch (NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+    private static final KeyFactory EC_KEY_FACTORY;
     public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
@@ -126,6 +144,7 @@ public class AppController extends Application {
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault());
     private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
     private final SecureRandom secureRandom = new SecureRandom();
+    private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
@@ -152,9 +171,15 @@ public class AppController extends Application {
     private volatile String serverUrl = EMPTY_STRING;
     @NonNull
     private volatile String serverIp = EMPTY_STRING;
-    private volatile String cachedInterlocutorPubKey = EMPTY_STRING;
-    private volatile SecretKey cachedSharedKey = null;
 
+
+    static {
+        try {
+            EC_KEY_FACTORY = KeyFactory.getInstance("EC");
+        } catch (NoSuchAlgorithmException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     public boolean isInitAppError() {
         return initAppError;
@@ -803,48 +828,41 @@ public class AppController extends Application {
             return null;
         }
     }
-    /**
-     * Вспомогательный метод для вычисления Общего Секрета (Shared Secret) по алгоритму ECDH.
-     * Использует кэш последнего ключа для ускорения работы.
-     */
-    private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NoSuchAlgorithmException,
-            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
-        // 1. Проверяем кэш
-        if (theirPublicKeyBase64.equals(cachedInterlocutorPubKey) && cachedSharedKey != null) {
-            return cachedSharedKey;
-        }
-        // 2. Если в кэше нет или ключ другой - вычисляем
-        KeyFactory kf = KeyFactory.getInstance("EC");
-        KeyAgreement ka = KeyAgreement.getInstance("ECDH");
-        ka.init(kf.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
-        ka.doPhase(kf.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
 
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        byte[] aesKeyBytes = sha.digest(ka.generateSecret());
-        SecretKey newKey = new SecretKeySpec(aesKeyBytes, "AES");
-        // 3. Обновляем кэш
-        cachedInterlocutorPubKey = theirPublicKeyBase64;
-        cachedSharedKey = newKey;
-        return newKey;
+    private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
+            UnsupportedOperationException, IllegalStateException {
+        return sharedKeys.computeIfAbsent(theirPublicKeyBase64, key -> {
+            try {
+                return calculateSharedKey(key);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
-
+    private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
+            UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
+        KeyAgreement ka = ECDH.get();
+        ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
+        ka.doPhase(EC_KEY_FACTORY.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
+        byte[] aesKeyBytes = SHA256.get().digest(ka.generateSecret());
+        return new SecretKeySpec(aesKeyBytes, "AES");
+    }
     /**
      * Создает Cipher для потокового шифрования файла.
      * Мы добавим IV в начало файла вручную в NetworkService.
      */
     public Cipher getFileEncryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
-            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, NoSuchPaddingException,
             InvalidKeyException, InvalidAlgorithmParameterException {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
         return cipher;
     }
-
     /**
      * Создает Cipher для потоковой расшифровки файла.
      */
     public Cipher getFileDecryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
-            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+            NullPointerException, UnsupportedOperationException, IllegalStateException, NoSuchPaddingException,
             InvalidKeyException, InvalidAlgorithmParameterException {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));

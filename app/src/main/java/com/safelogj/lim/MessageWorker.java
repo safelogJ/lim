@@ -26,7 +26,6 @@ public class MessageWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
-        Log.d(AppController.LOG_TAG, "MessageWorker.doWork()");
         AppController controller = (AppController) getApplicationContext();
         if (controller.getUserId() > 0 && controller.startedActivities.get() == 0) {
             return startDownloadNewMsg(controller);
@@ -87,13 +86,12 @@ public class MessageWorker extends Worker {
         try {
             if (latch.await(10, TimeUnit.SECONDS)) {
                 for (Message msg : list) {
-                    if (controller.startedActivities.get() == 0) {
-                        if (msg.type.equals(Message.TYPE_TEXT)) {
-                            controller.getNetworkService().sendTextMessage(msg);
-                        } else {
-                              controller.getNetworkService().sendMediaMessage(msg);
-                        }
+                    if (msg.type.equals(Message.TYPE_TEXT)) {
+                        controller.getNetworkService().sendTextMessage(msg);
+                    } else {
+                        controller.getNetworkService().sendMediaMessage(msg);
                     }
+
                 }
             }
         } catch (InterruptedException e) {

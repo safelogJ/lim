@@ -34,7 +34,6 @@ public class MediaUploadHandler extends BaseHandler {
             sendResponse(exchange, 413, response);
             return;
         }
-
         String username = exchange.getRequestHeaders().getFirst("X-Username");
         String password = exchange.getRequestHeaders().getFirst("X-Password");
         long senderId = parsePositiveLong(exchange.getRequestHeaders().getFirst("X-Sender-Id"));
@@ -49,19 +48,19 @@ public class MediaUploadHandler extends BaseHandler {
             sendFieldMissingError(exchange, response);
             return;
         }
-
         User user = LimController.dbManager.authenticateUser(username, password);
         if (user == null) {
             sendUnauthorizedError(exchange, response);
             return;
         }
         // 2. Генерация уникального имени файла
-         long timestamp = System.currentTimeMillis();
+        long timestamp = System.currentTimeMillis();
         String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8);
         File targetFile = new File(LimController.MEDIA_PATH, serverFileName);
 
         // 3. Стриминг файла из сети на диск
         try (InputStream is = exchange.getRequestBody(); FileOutputStream fos = new FileOutputStream(targetFile)) {
+
             byte[] buffer = new byte[8192]; // 8KB
             int bytesRead;
             long totalRead = 0L;
@@ -73,8 +72,7 @@ public class MediaUploadHandler extends BaseHandler {
                 fos.write(buffer, 0, bytesRead);
             }
             // 4. Возвращаем клиенту имя файла на сервере
-            long messageId = LimController.dbManager.saveMessage(chatId, user.id, text,
-                    type, chatName, serverFileName, fileName, timestamp);
+            long messageId = LimController.dbManager.saveMessage(chatId, user.id, text, type, chatName, serverFileName, fileName, timestamp);
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;

@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -22,18 +23,25 @@ import com.zaxxer.hikari.HikariPoolMXBean;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class DatabaseManager {
 
     public static final long FILE_SIZE_LIMIT = 50_000_000L;
     private static final String DB_FILE = "lim.db";
-
+    private static final ThreadLocal<MessageDigest> DIGEST =
+            ThreadLocal.withInitial(() -> {
+                try {
+                    return MessageDigest.getInstance("SHA-256"); // или MD5
+                } catch (NoSuchAlgorithmException e) {
+                    throw new IllegalStateException(e);
+                }
+            });
     @NotNull
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private final HikariDataSource dataSource;
     private final HikariPoolMXBean poolProxy;
-    private MessageDigest mDigest;
 
     @NotNull
     private final ReentrantLock digestLock = new ReentrantLock();
@@ -117,7 +125,6 @@ public class DatabaseManager {
             stmt.execute(createChatsTable);
             stmt.execute(createChatMembersTable);
             stmt.execute(createMessagesTable);
-            mDigest = MessageDigest.getInstance("SHA-256");
             LimController.log.info("The SQLite database has been successfully initialized. Tables have been verified..");
         } catch (Exception e) {
             LimController.log.error("critical error while initializing database: ", e);
@@ -371,66 +378,6 @@ public class DatabaseManager {
         }
     }
 
-    public List<Chat> getActiveChats(long userId) {
-        List<Chat> activeChats = new ArrayList<>();
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT c.id, c.name, c.is_group, cm.is_hidden, cm.is_blocked, " +
-                     //   "(SELECT text FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1), " +
-                             "(SELECT timestamp FROM messages WHERE chat_id = c.id ORDER BY id DESC LIMIT 1) " +
-                             "FROM chats c " +
-                             "JOIN chat_members cm ON c.id = cm.chat_id " +
-                             "WHERE cm.user_id = ? " +
-                             "ORDER BY last_time DESC")) {
-
-            stmt.setLong(1, userId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Chat chat = new Chat();
-                    chat.id = rs.getLong(1);
-                    chat.name = rs.getString(2);
-                    chat.isGroup = rs.getInt(3) == 1;
-                    chat.isHidden = rs.getInt(4) == 1;
-                    chat.isBlocked = rs.getInt(5) == 1;
-                 //   chat.lastMessage = rs.getString(6);
-                 //   chat.lastMessage = LimController.EMPTY_STRING;
-                    chat.lastTimestamp = rs.getLong(6);
-                    // Для личных чатов вытягиваем инфо о собеседнике
-                    if (!chat.isGroup) {
-                        User interlocutor = getInterlocutorInfo(conn, chat.id, userId);
-                        if (interlocutor != null) {
-                            chat.name = interlocutor.displayName;
-                            chat.interlocutorId = interlocutor.id;
-                        }
-                    }
-                    activeChats.add(chat);
-                }
-            }
-        } catch (SQLException e) {
-            LimController.log.error("error retrieving active chats for user {}: ", userId, e);
-        }
-        return activeChats;
-    }
-
-    private User getInterlocutorInfo(Connection conn, long chatId, long myUserId) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement(
-                "SELECT u.id, u.display_name FROM users u " +
-                        "JOIN chat_members cm ON u.id = cm.user_id " +
-                        "WHERE cm.chat_id = ? AND cm.user_id != ? LIMIT 1")) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, myUserId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    User user = new User();
-                    user.id = rs.getLong(1);
-                    user.displayName = rs.getString(2);
-                    return user;
-                }
-            }
-        }
-        return null;
-    }
-
     @Nullable
     public User updateUser(long userId, @NotNull EditUserRequest req, boolean isNewDisplayName, boolean isNewPassword) {
         String newDisplayName = req.newDisplayName();
@@ -478,8 +425,8 @@ public class DatabaseManager {
 
     @Nullable
     public User searchUserByUsername(@NotNull String targetUsername) {
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement("SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0")) {
             stmt.setString(1, targetUsername);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -636,19 +583,11 @@ public class DatabaseManager {
 
     @NotNull
     private String hashPassword(@NotNull String clientPasswordHash) {
-        byte[] hash;
-        digestLock.lock();
-        try {
-            mDigest.reset();
-            hash = mDigest.digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8));
-        } finally {
-            digestLock.unlock();
-        }
-        if (hash == null || hash.length == 0) {
-            LimController.log.error("error calculating MD5/SHA password hash:");
-            return LimController.EMPTY_STRING;
-        }
-        return bytesToHex(hash);
+//        MessageDigest digest = DIGEST.get();
+//        digest.reset();
+//        byte[] hash = digest.digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8));
+//        return bytesToHex(hash);
+        return bytesToHex(Objects.requireNonNull(DIGEST.get()).digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8)));
     }
 
     @NotNull

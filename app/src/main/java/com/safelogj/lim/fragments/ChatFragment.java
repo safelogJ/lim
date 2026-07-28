@@ -100,7 +100,6 @@ public class ChatFragment extends Fragment {
             controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
                 @Override
                 public void onSuccess(List<Chat> unreadChats) {
-                    Log.w(AppController.LOG_TAG, "список чатов для уведомлений: " + unreadChats.size());
                     unreadChats.removeIf(chat -> chat.id == currentChatId);
                     if (!unreadChats.isEmpty()) {
                         NotificationHelper.showNotification(controller, unreadChats);
@@ -208,7 +207,7 @@ public class ChatFragment extends Fragment {
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
                 Log.d(AppController.LOG_TAG, "отправка");
                 if (interlocutorPublicKey.isEmpty()) {
-                    Log.d(AppController.LOG_TAG, "отправка нет ключа");
+                    Log.d(AppController.LOG_TAG, "отправка нет ключа для чата " + currentChatId);
                     chatViewModel.searchInterlocutorOnServer(null, currentChatId);
                 } else {
                     Log.d(AppController.LOG_TAG, "отправка есть ключ");
@@ -243,6 +242,7 @@ public class ChatFragment extends Fragment {
                     }
                 }
                 messages.clear();
+                msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
                     if (msgList.size() > lastMessageCount) {
@@ -283,7 +283,7 @@ public class ChatFragment extends Fragment {
     private void setObservePublicKey() {
         chatViewModel.getInterlocutorPublicKey().observe(getViewLifecycleOwner(), publicKey -> {
             if (publicKey != null) {
-                Log.d(AppController.LOG_TAG, "взяли ключ из БД: перед отправкой ответа начавшему чат ");
+                Log.d(AppController.LOG_TAG, "взяли ключ от сервера: перед отправкой ответа начавшему чат ");
                 interlocutorPublicKey = publicKey;
                 sendMessage();
             }
@@ -348,6 +348,7 @@ public class ChatFragment extends Fragment {
         Log.d(AppController.LOG_TAG, "Добавляем системное сообщение: " + text);
         msg.senderId = Message.SYSTEM_SENDER_ID;
         messages.add(msg);
+        messages.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
         adapter.submitList(new ArrayList<>(messages), () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
     }
 
