@@ -20,6 +20,7 @@ public class NotificationHelper {
     public static final String EXTRA_CHAT_ID = "extra_chat_id";
     public static final String EXTRA_CHAT_LOCAL_ID = "extra_chat_local_id";
     public static final String EXTRA_CHAT_NAME = "extra_chat_name";
+    public static final String EXTRA_CHAT_COLOR = "extra_chat_color";
     public static final String EXTRA_OPEN_CHAT_LIST = "extra_open_chat_list";
     public static final int MULTI_CHAT_ID = -2;
 
@@ -44,6 +45,7 @@ public class NotificationHelper {
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
+            intent.putExtra(EXTRA_CHAT_COLOR, chat.color);
         } else {
             title = context.getString(R.string.new_msgs);
             text = context.getString(R.string.new_msgs_size) + " (" + unreadChats.size() + ")";
@@ -66,12 +68,11 @@ public class NotificationHelper {
                 .setAutoCancel(true)
                 .addExtras(new Bundle());
 
-        if (unreadChats.size() == 1) {
-            builder.getExtras().putLong(EXTRA_CHAT_ID, unreadChats.get(0).id);
-        } else {
-            builder.getExtras().putLong(EXTRA_CHAT_ID, MULTI_CHAT_ID);
-        }
-
+//        if (unreadChats.size() == 1) {
+//            builder.getExtras().putLong(EXTRA_CHAT_ID, unreadChats.get(0).id);
+//        } else {
+//            builder.getExtras().putLong(EXTRA_CHAT_ID, MULTI_CHAT_ID);
+//        }
         manager.notify(NOTIFICATION_ID, builder.build());
     }
 

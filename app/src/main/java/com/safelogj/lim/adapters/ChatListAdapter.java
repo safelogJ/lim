@@ -27,6 +27,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
     private static final String SEND = "send";
     private static final String NAME = "name";
     private static final String MSG = "msg";
+    private static final String COLOR = "color";
     private final OnChatClickListener listener;
 
     public interface OnChatClickListener {
@@ -64,6 +65,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                     if (diff.containsKey(TIME)) holder. binding.timeText.setText(chat.lastTimestampFormatted);
                     if (diff.containsKey(BLOCK)) holder.updateBlockStatus(chat);
                     if (diff.containsKey(SEND)) holder.updateSendStatus(chat);
+                    if (diff.containsKey(COLOR)) chat.color = diff.getInt(COLOR);
                     if (diff.containsKey(NAME)) holder.binding.chatName.setText(chat.name);
                     if (diff.containsKey(MSG)) holder.binding.lastMessage.setText(chat.lastMessage);
                 }
@@ -150,6 +152,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                     oldItem.lastTimestamp == newItem.lastTimestamp &&
                     oldItem.isBlocked == newItem.isBlocked &&
                     oldItem.lastSendStatus == newItem.lastSendStatus &&
+                    oldItem.color == newItem.color &&
                     Objects.equals(oldItem.name, newItem.name) &&
                     Objects.equals(oldItem.lastMessage, newItem.lastMessage);
         }
@@ -162,6 +165,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             if (oldItem.lastTimestamp != newItem.lastTimestamp) diff.putBoolean(TIME, true);
             if (oldItem.isBlocked != newItem.isBlocked) diff.putBoolean(BLOCK, true);
             if (oldItem.lastSendStatus != newItem.lastSendStatus) diff.putBoolean(SEND, true);
+            if (oldItem.color != newItem.color) diff.putInt(COLOR, newItem.color);
             if (!Objects.equals(oldItem.name, newItem.name)) diff.putBoolean(NAME, true);
             if (!Objects.equals(oldItem.lastMessage, newItem.lastMessage)) diff.putBoolean(MSG, true);
             return diff.isEmpty() ? null : diff;

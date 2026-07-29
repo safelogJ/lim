@@ -51,7 +51,7 @@ public class LimController {
     public static DatabaseManager dbManager;
 
     private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
-            TimeUnit.MINUTES, new LinkedBlockingQueue<>(500), new ThreadPoolExecutor.CallerRunsPolicy());
+            TimeUnit.MINUTES, new LinkedBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
 
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {

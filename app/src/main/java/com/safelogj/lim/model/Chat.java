@@ -14,6 +14,7 @@ public class Chat {
     public String lastMessage;
     public long lastSendStatus;
     public boolean isHidden;
+    public int color;
     public boolean isBlocked;
     public boolean hasNewMsg;
     public long lastTimestamp;

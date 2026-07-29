@@ -1,6 +1,7 @@
 package com.safelogj.limserver.handler;
 
 import com.safelogj.limserver.DatabaseManager;
+import com.safelogj.limserver.FileCacheUtils;
 import com.safelogj.limserver.LimController;
 import com.safelogj.limserver.model.Message;
 import com.safelogj.limserver.model.User;
@@ -57,20 +58,23 @@ public class MediaUploadHandler extends BaseHandler {
         long timestamp = System.currentTimeMillis();
         String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8);
         File targetFile = new File(LimController.MEDIA_PATH, serverFileName);
-
         // 3. Стриминг файла из сети на диск
-        try (InputStream is = exchange.getRequestBody(); FileOutputStream fos = new FileOutputStream(targetFile)) {
-
-            byte[] buffer = new byte[8192]; // 8KB
-            int bytesRead;
-            long totalRead = 0L;
-            while ((bytesRead = is.read(buffer)) != -1) {
-                totalRead += bytesRead;
-                if (totalRead > DatabaseManager.FILE_SIZE_LIMIT + 28) {
-                    throw new IOException("File size limit exceeded during upload");
+        boolean uploadSuccessful = false;
+        try {
+            try (InputStream is = exchange.getRequestBody(); FileOutputStream fos = new FileOutputStream(targetFile)) {
+                byte[] buffer = new byte[1048576];
+                int bytesRead;
+                long totalRead = 0L;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    totalRead += bytesRead;
+                    if (totalRead > DatabaseManager.FILE_SIZE_LIMIT + 28) {
+                        throw new IOException("File size limit exceeded during upload");
+                    }
+                    fos.write(buffer, 0, bytesRead);
                 }
-                fos.write(buffer, 0, bytesRead);
+                fos.flush();
             }
+            FileCacheUtils.dropFileFromCache(targetFile);
             // 4. Возвращаем клиенту имя файла на сервере
             long messageId = LimController.dbManager.saveMessage(chatId, user.id, text, type, chatName, serverFileName, fileName, timestamp);
             if (messageId != Message.INVALID_MSG_ID) {
@@ -78,19 +82,39 @@ public class MediaUploadHandler extends BaseHandler {
                 response.timestamp = timestamp;
                 response.message = "File uploaded successfully: " + fileName;
                 sendSuccess(exchange, response);
+                uploadSuccessful = true;
             } else {
                 throw new IOException("Save message after file upload error " + fileName);
             }
 
         } catch (Exception e) {
-            if (Files.deleteIfExists(targetFile.toPath())) {
-                LimController.log.error("Deleted temporary file: {}", targetFile.getAbsolutePath());
-            } else {
-                LimController.log.error("Failed to delete temporary file: {}", targetFile.getAbsolutePath());
-            }
             LimController.log.error("File upload error: ", e);
             sendCatchError(exchange, response, e);
+        } finally {
+            if (!uploadSuccessful && targetFile.exists()) {
+                deleteFileWithRetry(targetFile);
+            }
         }
+    }
+
+    private void deleteFileWithRetry(File file) {
+        int retries = 3;
+        while (retries > 0) {
+            try {
+                if (Files.deleteIfExists(file.toPath())) {
+                    LimController.log.info("Successfully deleted incomplete file: {}", file.getAbsolutePath());
+                    return;
+                }
+            } catch (Exception e) {
+                // Игнорируем и пробуем еще раз через 50мс
+            }
+            retries--;
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException ignored) {
+            }
+        }
+        LimController.log.error("CRITICAL: Failed to delete incomplete file after retries: {}", file.getAbsolutePath());
     }
 
     private String decodeFromHeader(String text) {
@@ -115,4 +139,5 @@ public class MediaUploadHandler extends BaseHandler {
             return 0;
         }
     }
+
 }

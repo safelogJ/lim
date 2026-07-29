@@ -39,10 +39,12 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     private static final String FILE_PATH = "file_path";
 
     private final long userId;
+    private final int chatColor;
 
-    public MsgAdapter(long userId) {
+    public MsgAdapter(long userId, int chatColor) {
         super(new DiffCallback());
         this.userId = userId;
+        this.chatColor = chatColor;
     }
 
     @NonNull
@@ -55,7 +57,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
-        holder.bind(getItem(position), userId);
+        holder.bind(getItem(position), userId, chatColor);
     }
 
     @Override
@@ -68,7 +70,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(STATUS)) holder.updateStatus(message.sendStatus);
                     if (diff.containsKey(TIME)) holder.updateTime(message.formattedTime);
-                    if (diff.containsKey(FILE_PATH)) holder.bind(message, userId);
+                    if (diff.containsKey(FILE_PATH)) holder.bind(message, userId, chatColor);
                 }
             }
             holder.setListeners(message, userId);
@@ -83,7 +85,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             this.binding = binding;
         }
 
-        public void bind(Message message, long currentUserId) {
+        public void bind(Message message, long currentUserId, int color) {
             // Сбрасываем видимость перед установкой (важно для RecyclerView)
             binding.messageImage.setVisibility(View.GONE);
             binding.fileContainer.setVisibility(View.GONE);
@@ -138,7 +140,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
                 default: // TYPE_INCOMING
                     constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.0f);
-                    binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_green);
+                 //   binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_green);
+                 //   binding.messageBubble.setBackgroundResource(getInterlocutorBackground(color));
+                    binding.messageBubble.setBackgroundResource(AppController.getInterlocutorBackground(color));
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.main_background));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.main_background));
@@ -162,6 +166,15 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         public void setListeners(Message message, long currentUserId) {
             binding.messageImage.setOnClickListener(v -> openFile(message, currentUserId));
             binding.fileContainer.setOnClickListener(v -> openFile(message, currentUserId));
+        }
+
+        private int getInterlocutorBackground(int color) {
+            return switch (color) {
+                case AppController.CHAT_COLOR_PINK -> R.drawable.interlocutor_background_pink;
+                case AppController.CHAT_COLOR_YELLOW -> R.drawable.interlocutor_background_yellow;
+                case AppController.CHAT_COLOR_BLUE -> R.drawable.interlocutor_background_blue;
+                default -> R.drawable.interlocutor_background_green;
+            };
         }
 
         private void openFile(Message msg, long userId) {
@@ -236,8 +249,10 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         public Object getChangePayload(@NonNull Message oldItem, @NonNull Message newItem) {
             Bundle diff = new Bundle();
             if (oldItem.sendStatus != newItem.sendStatus) diff.putBoolean(STATUS, true);
-            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) diff.putBoolean(TIME, true);
-            if (!Objects.equals(oldItem.filePath, newItem.filePath)) diff.putBoolean(FILE_PATH, true);
+            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime))
+                diff.putBoolean(TIME, true);
+            if (!Objects.equals(oldItem.filePath, newItem.filePath))
+                diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }
     }

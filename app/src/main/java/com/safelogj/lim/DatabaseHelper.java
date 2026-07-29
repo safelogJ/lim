@@ -29,6 +29,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String PUBLIC_KEY = "public_key";
     private static final String IS_GROUP = "is_group";
     private static final String IS_HIDDEN = "is_hidden";
+    private static final String COLOR = "color";
     private static final String IS_BLOCKED = "is_blocked";
     private static final String HAS_NEW_MSG = "has_new_msg";
     private static final String INTERLOCUTOR_ID = "interlocutor_id";
@@ -79,6 +80,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     "last_message TEXT, " +
                     "last_send_status INTEGER DEFAULT 1, " + // 1 - "Sending", 2 - "Sent"
                     "is_hidden INTEGER DEFAULT 0, " + // 0 = visible, 1 = hidden
+                    "color INTEGER DEFAULT 0, " + // 0 green
                     "is_blocked INTEGER DEFAULT 0, " + // 0 = not blocked, 1 = blocked
                     "has_new_msg INTEGER DEFAULT 0, " + // 0 = no, 1 = yes
                     "last_timestamp INTEGER DEFAULT 0)");
@@ -342,12 +344,28 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
+    public void setChatColor(long chatId, int color) {
+        dbExecutor.execute(() -> {
+            try {
+                ContentValues v = new ContentValues();
+                v.put(COLOR, color);
+                if (database.update(CHATS, v, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
+                    Log.d(AppController.LOG_TAG, "set color success " + color);
+                    return;
+                }
+            } catch (Exception e) {
+                Log.d(AppController.LOG_TAG, "error set color " + color, e);
+            }
+            Log.d(AppController.LOG_TAG, "error set color " + color);
+        });
+    }
+
     public void getChatList(ResultCallback<List<Chat>> callback) {
         dbExecutor.execute(() -> {
             List<Chat> chats = new ArrayList<>();
             try (Cursor cursor = database.rawQuery(
                     "SELECT local_id, id, name, is_group, interlocutor_id, " +
-                            "last_message, last_send_status, is_blocked, has_new_msg, last_timestamp " +
+                            "last_message, last_send_status, is_blocked, color, has_new_msg, last_timestamp " +
                             "FROM chats WHERE is_hidden = 0 ORDER BY has_new_msg DESC, last_timestamp DESC", null)) {
                 if (cursor.moveToFirst()) {
                     do {
@@ -360,8 +378,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         chat.lastMessage = cursor.getString(5);
                         chat.lastSendStatus = cursor.getLong(6);
                         chat.isBlocked = cursor.getInt(7) == 1;
-                        chat.hasNewMsg = cursor.getInt(8) == 1;
-                        chat.lastTimestamp = cursor.getLong(9);
+                        chat.color = cursor.getInt(8);
+                        Log.d(AppController.LOG_TAG, "цвет чата " + chat.color);
+                        chat.hasNewMsg = cursor.getInt(9) == 1;
+                        chat.lastTimestamp = cursor.getLong(10);
                         chat.lastTimestampFormatted = AppController.formatSmartTime(controller, chat.lastTimestamp);
                         chats.add(chat);
                     } while (cursor.moveToNext());

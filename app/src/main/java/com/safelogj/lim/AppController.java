@@ -116,6 +116,10 @@ public class AppController extends Application {
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";    // Константы для E2EE
     private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256";
+    public static final int CHAT_COLOR_GREEN = 0;
+    public static final int CHAT_COLOR_PINK = 1;
+    public static final int CHAT_COLOR_YELLOW = 2;
+    public static final int CHAT_COLOR_BLUE = 3;
     private static final ThreadLocal<MessageDigest> SHA256 =
             ThreadLocal.withInitial(() -> {
                 try {
@@ -607,7 +611,7 @@ public class AppController extends Application {
                     .connectTimeout(60, TimeUnit.SECONDS) // Время на установку связи с роутером
                     .writeTimeout(15, TimeUnit.SECONDS)   // Время на отправку данных
                     .readTimeout(60, TimeUnit.SECONDS)    // Время на ожидание ответа от роутера
-                    .callTimeout(70, TimeUnit.SECONDS) // Общее время на весь запрос с ответом, чтоб не переподключалось много раз
+                    .callTimeout(180, TimeUnit.SECONDS) // Общее время на весь запрос с ответом, чтоб не переподключалось много раз
                     .retryOnConnectionFailure(true)
                     .build();
         } catch (Exception e) {
@@ -628,12 +632,12 @@ public class AppController extends Application {
     private void regActivityListener() {
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
-            public void onActivityCreated(@androidx.annotation.NonNull Activity activity, @Nullable Bundle savedInstanceState) {
+            public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
                 //
             }
 
             @Override
-            public void onActivityStarted(@androidx.annotation.NonNull Activity activity) {
+            public void onActivityStarted(@NonNull Activity activity) {
                 if (startedActivities.incrementAndGet() == 1) {
                     syncTask = syncExecutor.scheduleWithFixedDelay(() -> {
                         if (userId > 0 && isNetworkActive.get()) {
@@ -647,29 +651,29 @@ public class AppController extends Application {
             }
 
             @Override
-            public void onActivityResumed(@androidx.annotation.NonNull Activity activity) {
+            public void onActivityResumed(@NonNull Activity activity) {
                 //
             }
 
             @Override
-            public void onActivityPaused(@androidx.annotation.NonNull Activity activity) {
+            public void onActivityPaused(@NonNull Activity activity) {
                 //
             }
 
             @Override
-            public void onActivityStopped(@androidx.annotation.NonNull Activity activity) {
+            public void onActivityStopped(@NonNull Activity activity) {
                 if (startedActivities.decrementAndGet() == 0 && syncTask != null && !syncTask.isCancelled()) {
                     syncTask.cancel(false);
                 }
             }
 
             @Override
-            public void onActivitySaveInstanceState(@androidx.annotation.NonNull Activity activity, @androidx.annotation.NonNull Bundle outState) {
+            public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
                 //
             }
 
             @Override
-            public void onActivityDestroyed(@androidx.annotation.NonNull Activity activity) {
+            public void onActivityDestroyed(@NonNull Activity activity) {
                 //
             }
         });
@@ -745,7 +749,7 @@ public class AppController extends Application {
         KeyPair kp = kpg.generateKeyPair();
         // Превращаем ключи в обычные строки (Base64)
         e2eePrivateKey = Base64.encodeToString(kp.getPrivate().getEncoded(), Base64.NO_WRAP);
-        e2eePublicKey = Base64.encodeToString(kp.getPublic().getEncoded(),Base64.NO_WRAP);
+        e2eePublicKey = Base64.encodeToString(kp.getPublic().getEncoded(), Base64.NO_WRAP);
     }
 
     public String getPrivateHash(String pass) throws IllegalArgumentException, NoSuchAlgorithmException,
@@ -780,7 +784,7 @@ public class AppController extends Application {
     private SecretKey deriveKeyFromPassword(String password, byte[] salt) throws IllegalArgumentException, NoSuchAlgorithmException,
             NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException {
         return new SecretKeySpec(SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
-                .generateSecret(new PBEKeySpec(password.toCharArray(), salt, 10000,  AES_KEY_SIZE))
+                .generateSecret(new PBEKeySpec(password.toCharArray(), salt, 10000, AES_KEY_SIZE))
                 .getEncoded(), "AES");
     }
 
@@ -839,6 +843,7 @@ public class AppController extends Application {
             }
         });
     }
+
     private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
         KeyAgreement ka = ECDH.get();
@@ -847,6 +852,7 @@ public class AppController extends Application {
         byte[] aesKeyBytes = SHA256.get().digest(ka.generateSecret());
         return new SecretKeySpec(aesKeyBytes, "AES");
     }
+
     /**
      * Создает Cipher для потокового шифрования файла.
      * Мы добавим IV в начало файла вручную в NetworkService.
@@ -858,6 +864,7 @@ public class AppController extends Application {
         cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
         return cipher;
     }
+
     /**
      * Создает Cipher для потоковой расшифровки файла.
      */
@@ -867,5 +874,15 @@ public class AppController extends Application {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
         return cipher;
+    }
+
+    public static int getInterlocutorBackground(int color) {
+        return switch (color) {
+            case AppController.CHAT_COLOR_PINK -> R.drawable.interlocutor_background_pink;
+            case AppController.CHAT_COLOR_YELLOW -> R.drawable.interlocutor_background_yellow;
+            case AppController.CHAT_COLOR_BLUE -> R.drawable.interlocutor_background_blue;
+            default -> R.drawable.interlocutor_background_green;
+        };
+
     }
 }

@@ -76,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
                     .setReorderingAllowed(true) // Оптимизация анимаций
                     .add(R.id.main_container, new ChatListFragment())
                     .commit();
+            handleIntent(getIntent());
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -84,7 +85,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         setDarkStatusBar();
-        handleIntent(getIntent());
     }
 
     @Override
@@ -103,8 +103,13 @@ public class MainActivity extends AppCompatActivity {
         }
         if (chatId != Chat.INVALID_ID) {
             showFragment(ChatFragment.newInstance(chatId, intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, Chat.INVALID_ID),
-                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)));
+                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME), intent.getIntExtra(NotificationHelper.EXTRA_CHAT_COLOR, 0)));
         }
+        intent.removeExtra(NotificationHelper.EXTRA_CHAT_ID);
+        intent.removeExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID);
+        intent.removeExtra(NotificationHelper.EXTRA_CHAT_NAME);
+        intent.removeExtra(NotificationHelper.EXTRA_CHAT_COLOR);
+        intent.removeExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST);
     }
 
     private void setDarkStatusBar() {

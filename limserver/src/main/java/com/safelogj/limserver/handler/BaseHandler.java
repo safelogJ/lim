@@ -91,5 +91,6 @@ public abstract class BaseHandler implements HttpHandler {
     protected boolean isUsernameValid(@NotNull String username) {
         return (username.length() >= 3 && username.length() <= 20) && USERNAME_PATTERN.matcher(username).matches();
     }
+
 }
 

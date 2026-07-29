@@ -1,7 +1,6 @@
 package com.safelogj.limserver.handler;
 
 import com.safelogj.limserver.LimController;
-import com.safelogj.limserver.model.Chat;
 import com.safelogj.limserver.model.User;
 import com.safelogj.limserver.request.RegisterRequest;
 import com.safelogj.limserver.response.BaseResponse;
@@ -10,7 +9,6 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.regex.Pattern;
 
 public class RegisterUserHandler extends BaseHandler {
@@ -55,7 +53,7 @@ public class RegisterUserHandler extends BaseHandler {
                 response.privateHash = user.privateHash;
                 response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
-                   LimController.log.info("User '{}' login successfully, список чатов ", user.displayName);
+                LimController.log.info("User '{}' login successfully", user.displayName);
                 return;
             }
 

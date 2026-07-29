@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.sqlite)
     implementation(libs.hikari)
+    implementation(libs.jna)
     proguardConfig(libs.proguardbase)
 }
 

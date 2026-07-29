@@ -5,6 +5,7 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -24,6 +25,8 @@ import com.safelogj.lim.adapters.ChatListAdapter;
 import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.viewmodels.ChatListViewModel;
+
+import java.util.ArrayList;
 
 public class ChatListFragment extends Fragment {
 
@@ -70,12 +73,12 @@ public class ChatListFragment extends Fragment {
                 MainActivity activity = (MainActivity) requireActivity();
                 if (chat.id == Chat.INVALID_ID) {
                     if (controller.getUserId() > 0) {
-                        activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name));
+                        activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name, chat.color));
                     } else {
                         activity.showFragment(new UserFragment());
                     }
                 } else {
-                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name));
+                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name, chat.color));
                 }
             }
 
@@ -85,7 +88,7 @@ public class ChatListFragment extends Fragment {
                 if (chat.id == Chat.INVALID_ID) {
                     activity.showFragment(new UserFragment());
                 } else {
-                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name));
+                    activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name, chat.color));
                 }
             }
 
@@ -103,7 +106,7 @@ public class ChatListFragment extends Fragment {
         viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> adapter.submitList(chatList));
 
         viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
-            if ( isHidden != null && isHidden) {
+            if (isHidden != null && isHidden) {
                 viewModel.loadDbChatList();
             }
         });
@@ -123,13 +126,36 @@ public class ChatListFragment extends Fragment {
 
     private void showChatOptionsDialog(Chat chat) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_chat_options, null);
-        AlertDialog dialog = new AlertDialog.Builder(requireContext())
-                .setView(dialogView)
-                .create();
+        AlertDialog dialog = new AlertDialog.Builder(requireContext()).setView(dialogView).create();
 
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
+
+        dialogView.findViewById(R.id.colorGreen).setOnClickListener(v -> {
+            chat.color = AppController.CHAT_COLOR_GREEN;
+            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_GREEN);
+            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_GREEN);
+        });
+
+        dialogView.findViewById(R.id.colorPink).setOnClickListener(v -> {
+            chat.color = AppController.CHAT_COLOR_PINK;
+            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_PINK);
+            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_PINK);
+        });
+
+        dialogView.findViewById(R.id.colorYellow).setOnClickListener(v -> {
+            chat.color = AppController.CHAT_COLOR_YELLOW;
+            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_YELLOW);
+            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_YELLOW);
+        });
+
+        dialogView.findViewById(R.id.colorBlue).setOnClickListener(v -> {
+            chat.color = AppController.CHAT_COLOR_BLUE;
+            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_BLUE);
+            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_BLUE);
+        });
+        setDialogBackground(dialogView.findViewById(R.id.dialogOuter), chat.color);
 
         TextInputEditText editText = dialogView.findViewById(R.id.renameEditText);
         editText.setText(chat.name);
@@ -149,11 +175,16 @@ public class ChatListFragment extends Fragment {
         });
 
         dialogView.findViewById(R.id.btnBlock).setOnClickListener(v -> {
-            viewModel.setChatBlockedState(chat);
+            viewModel.setChatBlocked(chat);
             dialog.dismiss();
         });
 
         dialog.show();
+    }
+
+    private void setDialogBackground(View view, int color) {
+        view.setBackground(ResourcesCompat.getDrawable(getResources(),
+                AppController.getInterlocutorBackground(color), controller.getTheme()));
     }
 
     @Override
@@ -168,6 +199,7 @@ public class ChatListFragment extends Fragment {
         super.onStop();
         uiHandler.removeCallbacks(uiRunnable);
     }
+
     @Override
     public void onDestroyView() {
         super.onDestroyView();
