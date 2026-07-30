@@ -10,7 +10,6 @@ import com.safelogj.limserver.handler.SearchChatHandler;
 import com.safelogj.limserver.handler.SearchUserHandler;
 import com.safelogj.limserver.handler.SendMessageHandler;
 import com.safelogj.limserver.handler.EditUserHandler;
-import com.safelogj.limserver.ServerThreadPool;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsParameters;
