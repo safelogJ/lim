@@ -336,7 +336,7 @@ public class ChatFragment extends Fragment {
         msg.chatName = currentChatName;
         msg.senderId = controller.getUserId();
         msg.interlocutorPublicKey = interlocutorPublicKey;
-        msg.text = inputText;
+        msg.text = inputText.isEmpty() ? fileName : inputText; // для синхронизации с другими устройствами
         msg.type = fileUri == null ? Message.TYPE_TEXT : getMessageType(fileUri);
         msg.filePath = fileUri == null ? null : fileUri.toString();
         msg.fileName = fileName;

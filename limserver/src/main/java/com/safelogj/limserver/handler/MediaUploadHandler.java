@@ -62,7 +62,7 @@ public class MediaUploadHandler extends BaseHandler {
         boolean uploadSuccessful = false;
         try {
             try (InputStream is = exchange.getRequestBody(); FileOutputStream fos = new FileOutputStream(targetFile)) {
-                byte[] buffer = new byte[1048576];
+                byte[] buffer = new byte[8192];
                 int bytesRead;
                 long totalRead = 0L;
                 while ((bytesRead = is.read(buffer)) != -1) {

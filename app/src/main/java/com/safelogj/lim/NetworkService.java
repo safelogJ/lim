@@ -2,6 +2,7 @@ package com.safelogj.lim;
 
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import android.util.Log;
 
@@ -593,6 +594,18 @@ public class NetworkService {
             cursor.close();
         }
         return FILE_SIZE_LIMIT;
+    }
+
+    private boolean fileExists(Uri uri) {
+        if ("file".equals(uri.getScheme())) {
+            return new File(uri.getPath()).exists();
+        }
+
+        try (ParcelFileDescriptor pfd = controller.getContentResolver().openFileDescriptor(uri, "r")) {
+            return pfd != null;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String encodeToHeader(String text) {

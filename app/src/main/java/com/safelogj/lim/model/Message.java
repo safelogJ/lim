@@ -17,7 +17,7 @@ public class Message {
     public static final int STATUS_SENT = 2;
     public static final int STATUS_WAITING = 3;
     public static final int SYSTEM_SENDER_ID = -1;
-    public static final int MEDIA_STATUS_NONE = 0;      // Обычное текстовое сообщение
+    public static final int MEDIA_STATUS_NO_MEDIA = 0;      // Обычное текстовое сообщение или файла для отправки уже нет
     public static final int MEDIA_STATUS_PENDING = 1;   // Файл на сервере, нужно скачать
     public static final int MEDIA_STATUS_DOWNLOADED = 2; // Файл скачан и доступен локально
     public static final int MEDIA_STATUS_ERROR = 3;  // Критическая ошибка (404/403), больше не качаем

@@ -10,6 +10,7 @@ import com.safelogj.limserver.handler.SearchChatHandler;
 import com.safelogj.limserver.handler.SearchUserHandler;
 import com.safelogj.limserver.handler.SendMessageHandler;
 import com.safelogj.limserver.handler.EditUserHandler;
+import com.safelogj.limserver.ServerThreadPool;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsParameters;
@@ -30,7 +31,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -50,8 +50,10 @@ public class LimController {
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
     public static DatabaseManager dbManager;
 
-    private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
-            TimeUnit.MINUTES, new LinkedBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
+//    private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
+//            TimeUnit.MINUTES, new LinkedBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
+
+    private static final ThreadPoolExecutor EXECUTOR_POOL = ServerThreadPool.createSmartPool(2, 8, 30L, 2);
 
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {

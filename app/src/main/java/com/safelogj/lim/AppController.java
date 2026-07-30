@@ -611,7 +611,7 @@ public class AppController extends Application {
                     .connectTimeout(60, TimeUnit.SECONDS) // Время на установку связи с роутером
                     .writeTimeout(15, TimeUnit.SECONDS)   // Время на отправку данных
                     .readTimeout(60, TimeUnit.SECONDS)    // Время на ожидание ответа от роутера
-                    .callTimeout(180, TimeUnit.SECONDS) // Общее время на весь запрос с ответом, чтоб не переподключалось много раз
+                    .callTimeout(80, TimeUnit.SECONDS) // Общее время на весь запрос с ответом, чтоб не переподключалось много раз
                     .retryOnConnectionFailure(true)
                     .build();
         } catch (Exception e) {

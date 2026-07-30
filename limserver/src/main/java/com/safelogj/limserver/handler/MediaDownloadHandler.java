@@ -61,7 +61,7 @@ public class MediaDownloadHandler extends BaseHandler {
         exchange.sendResponseHeaders(200, file.length());
         try {
             try (FileInputStream fis = new FileInputStream(file); OutputStream os = exchange.getResponseBody()) {
-                byte[] buffer = new byte[1048576];
+                byte[] buffer = new byte[8192];
                 int count;
                 while ((count = fis.read(buffer)) != -1) {
                     os.write(buffer, 0, count);
@@ -72,7 +72,7 @@ public class MediaDownloadHandler extends BaseHandler {
             return;
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
-            LimController.log.info("MediaDownloadHandler error: чистим кэш {}", file.getPath());
+            LimController.log.info("MediaDownloadHandler error: clear the cache from the file {}", file.getPath());
         }
         FileCacheUtils.dropFileFromCache(file);
     }
