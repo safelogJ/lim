@@ -47,10 +47,11 @@ public class DatabaseManager {
         // Путь к базе
         config.setJdbcUrl("jdbc:sqlite:" + dbFolderPath + "/" + DB_FILE);
         // Настройки пула
-        config.setMaximumPoolSize(poolSize); // 8 соединений будут всегда "под рукой"
-        config.setMinimumIdle(2);      // Минимум 2 всегда открыты
+        config.setMaximumPoolSize(poolSize);
+        config.setMinimumIdle(2); // Минимум 2 всегда открыты
         config.setConnectionTimeout(5000); // Ждать соединение из пула не более 5 сек
-        config.setIdleTimeout(1800000);    // Закрывать лишние через 30 мин простоя
+        config.setIdleTimeout(1200000);    // Закрывать лишние через 20 мин простоя
+        config.setMaxLifetime(3600000);     // Макс. время жизни соединения
         // Оптимизации SQLite прямо в URL или через свойства
         config.addDataSourceProperty("journal_mode", "WAL");
         config.addDataSourceProperty("busy_timeout", "5000");
@@ -577,12 +578,23 @@ public class DatabaseManager {
         }
     }
 
+
+    public boolean isMemberOfChat(long userId, long chatId) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
+                "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1")) {
+            stmt.setLong(1, chatId);
+            stmt.setLong(2, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LimController.log.error("Security check error: ", e);
+            return false;
+        }
+    }
+
     @NotNull
     private String hashPassword(@NotNull String clientPasswordHash) {
-//        MessageDigest digest = DIGEST.get();
-//        digest.reset();
-//        byte[] hash = digest.digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8));
-//        return bytesToHex(hash);
         return bytesToHex(Objects.requireNonNull(DIGEST.get()).digest(clientPasswordHash.getBytes(StandardCharsets.UTF_8)));
     }
 

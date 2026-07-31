@@ -35,6 +35,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -78,12 +79,6 @@ public class NetworkService {
         this.controller = controller;
         client = controller.getOkHttpClient();
         dbHelper = controller.getDbHelper();
-//        try {
-//            mDigest = MessageDigest.getInstance("SHA-256");
-//        } catch (NoSuchAlgorithmException e) {
-//            controller.setInitAppError(true);
-//            Log.w(AppController.LOG_TAG, "Ошибка инициализации MessageDigest");
-//        }
     }
 
     public void register(String username, String password, String displayName, ResultCallback<String> callback) {
@@ -430,11 +425,11 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg);
     }
 
-    public void getNewMessages(long lastMessageId) {
+    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()), lastMessageId)), MediaType.parse(MEDIA_TYPE_JSON));
+                    hashPassword(controller.getPassword()), lastMessageId, interlocutorIds)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
@@ -451,6 +446,7 @@ public class NetworkService {
                     }
                 }
                 dbHelper.saveIncomingMsgList(res.messages());
+                fillChatStatus(res.onlineStatuses());
                 controller.activeDownloadsCount.decrementAndGet();
                 //  Log.i(AppController.LOG_TAG, res.message());
             } else {
@@ -462,6 +458,15 @@ public class NetworkService {
             controller.activeDownloadsCount.decrementAndGet();
         }
         checkMediaThread();
+    }
+
+    private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {
+        if (onlineStatuses == null) return;
+        for (Map.Entry<Long, Boolean> userStatus : onlineStatuses.entrySet()) {
+            Map<Long, Boolean> chat = AppController.onlineUsersChats.get(userStatus.getKey());
+            if (chat == null) continue;
+            chat.replaceAll((id, oldStatus) -> userStatus.getValue());
+        }
     }
 
     private void checkMediaThread() {

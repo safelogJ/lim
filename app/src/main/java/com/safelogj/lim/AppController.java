@@ -16,6 +16,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.lifecycle.MutableLiveData;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -59,9 +60,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -92,6 +96,7 @@ import okhttp3.OkHttpClient;
 public class AppController extends Application {
     public static final String LOG_TAG = "lim";
     public static final Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+    public static final Map<Long, Map<Long, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
     public static final int POOL_SIZE = 5;  // 0-2 отправка, 3 качает файлы, 4 получает сообщения
@@ -326,6 +331,9 @@ public class AppController extends Application {
         networkService = new NetworkService(this);
         initStreams();
         dbHelper.initDatabase();
+        if (userId > 0) {
+            dbHelper.initOnlineStatuses();
+        }
         createNotificationChannel();
         setupWorkManager();
     }
@@ -339,7 +347,7 @@ public class AppController extends Application {
             @Override
             public void onSuccess(Long lastServerId) {
                 activeDownloadsCount.incrementAndGet();
-                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId));
+                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, new ArrayList<>(onlineUsersChats.keySet())));
             }
 
             @Override

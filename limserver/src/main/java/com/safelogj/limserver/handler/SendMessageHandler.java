@@ -29,7 +29,7 @@ public class SendMessageHandler extends BaseHandler {
                 return;
             }
             User user = LimController.dbManager.authenticateUser(req.username(), req.password());
-            if (user == null) {
+            if (user == null || !LimController.dbManager.isMemberOfChat(user.id, req.chatId())) {
                 LimController.log.error("sendUnauthorizedError ");
                 sendUnauthorizedError(exchange, response);
                 return;

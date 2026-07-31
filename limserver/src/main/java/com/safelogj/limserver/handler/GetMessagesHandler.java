@@ -10,7 +10,9 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class GetMessagesHandler extends BaseHandler {
     @Override
@@ -43,8 +45,16 @@ public class GetMessagesHandler extends BaseHandler {
             response.userId = user.id;
             response.displayName = user.displayName;
             response.messages = messages;
-            sendSuccess(exchange, response);
 
+            LimController.onlineUsers.put(user.id, System.currentTimeMillis());
+            if (req.interlocutorIds() != null && !req.interlocutorIds().isEmpty()) {
+                Map<Long, Boolean> statuses = new HashMap<>();
+                for (Long id : req.interlocutorIds()) {
+                    statuses.put(id, LimController.onlineUsers.containsKey(id));
+                }
+                response.onlineStatuses = statuses;
+            }
+            sendSuccess(exchange, response);
         } catch (Exception e) {
             LimController.log.error("GetMessagesHandler error: ", e);
             sendCatchError(exchange, response, e);

@@ -42,14 +42,24 @@ public class NotificationHelper {
             Chat chat = unreadChats.get(0);
             title = context.getString(R.string.new_msg);
             text = context.getString(R.string.new_msg_from) + " " + chat.name;
+            Log.w(AppController.LOG_TAG, "делаем интент чат " + chat.id + " local id " + chat.localId );
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
             intent.putExtra(EXTRA_CHAT_COLOR, chat.color);
+
+            intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
             title = context.getString(R.string.new_msgs);
             text = context.getString(R.string.new_msgs_size) + " (" + unreadChats.size() + ")";
             intent.putExtra(EXTRA_OPEN_CHAT_LIST, true);
+            Log.w(AppController.LOG_TAG, "делаем интент в чат лист " + intent.getLongExtra(EXTRA_CHAT_ID, 10000)
+                    + " local id " + intent.getLongExtra(EXTRA_CHAT_LOCAL_ID, 20000) );
+
+            intent.removeExtra(EXTRA_CHAT_ID);
+            intent.removeExtra(EXTRA_CHAT_LOCAL_ID);
+            intent.removeExtra(EXTRA_CHAT_NAME);
+            intent.removeExtra(EXTRA_CHAT_COLOR);
         }
 
         PendingIntent pendingIntent = PendingIntent.getActivity(

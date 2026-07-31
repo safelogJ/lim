@@ -57,7 +57,7 @@ public class MessageWorker extends Worker {
                     && controller.startedActivities.get() == 0
                     && controller.activeDownloadsCount.get() == 0) {
                 controller.activeDownloadsCount.incrementAndGet();
-                controller.getNetworkService().getNewMessages(lastId.get());
+                controller.getNetworkService().getNewMessages(lastId.get(), null);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

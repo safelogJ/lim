@@ -30,8 +30,7 @@
         app:layout_constraintBottom_toBottomOf="@id/avatarBackground"
         app:layout_constraintEnd_toEndOf="@id/avatarBackground"
         app:layout_constraintStart_toStartOf="@id/avatarBackground"
-        app:layout_constraintTop_toTopOf="@id/avatarBackground"
-        app:tint="@color/light_gray" />
+        app:layout_constraintTop_toTopOf="@id/avatarBackground" />
 
 
     <!-- Имя чата / "Начать новый чат" -->

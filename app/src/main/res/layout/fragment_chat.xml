@@ -7,6 +7,18 @@
     android:layout_height="match_parent"
     android:background="@color/main_background">
 
+    <TextView
+        android:id="@+id/onlineStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:background="@drawable/cloud_48px"
+        android:textColor="@color/chat_name"
+        android:textSize="24sp"
+        app:layout_constraintBottom_toBottomOf="@+id/chatNameTextScroll"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/chatNameTextScroll" />
+
     <HorizontalScrollView
         android:id="@+id/chatNameTextScroll"
         android:layout_width="0dp"
@@ -19,7 +31,7 @@
         android:paddingEnd="8dp"
         android:scrollbars="none"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/onlineStatus"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView

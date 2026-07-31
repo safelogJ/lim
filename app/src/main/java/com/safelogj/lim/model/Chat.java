@@ -16,6 +16,7 @@ public class Chat {
     public boolean isHidden;
     public int color;
     public boolean isBlocked;
+    public boolean isOnline;
     public boolean hasNewMsg;
     public long lastTimestamp;
     public String lastTimestampFormatted;

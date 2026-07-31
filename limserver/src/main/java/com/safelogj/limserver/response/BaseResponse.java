@@ -1,9 +1,9 @@
 package com.safelogj.limserver.response;
 
-import com.safelogj.limserver.model.Chat;
 import com.safelogj.limserver.model.Message;
 
 import java.util.List;
+import java.util.Map;
 
 public class BaseResponse {
 
@@ -26,4 +26,5 @@ public class BaseResponse {
     public String interlocutorPublicKey;
     public String privateHash;
     public List<Message> messages;
+    public Map<Long, Boolean> onlineStatuses;
 }

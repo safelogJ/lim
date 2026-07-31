@@ -66,7 +66,7 @@ public class ChatListViewModel extends AndroidViewModel {
     }
 
     public void hideChat(Chat chat) {
-        controller.getDbHelper().hideChatLocally(chat.id, new ResultCallback<>() {
+        controller.getDbHelper().hideChatLocally(chat, new ResultCallback<>() {
 
             @Override
             public void onSuccess(Boolean result) {

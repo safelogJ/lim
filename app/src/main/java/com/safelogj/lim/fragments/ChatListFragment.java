@@ -26,7 +26,7 @@ import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.viewmodels.ChatListViewModel;
 
-import java.util.ArrayList;
+import java.util.Map;
 
 public class ChatListFragment extends Fragment {
 
@@ -66,6 +66,7 @@ public class ChatListFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
+        setChatListObserve();
         setObservers();
         adapter = new ChatListAdapter(new ChatListAdapter.OnChatClickListener() {
             @Override
@@ -102,9 +103,24 @@ public class ChatListFragment extends Fragment {
         mBinding.chatsRecyclerView.setAdapter(adapter);
     }
 
-    private void setObservers() {
-        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> adapter.submitList(chatList));
+    private void setChatListObserve() {
+        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> {
+            if (chatList != null) {
+                for (Chat chat : chatList) {
+                    if (chat.id != Chat.INVALID_ID) {
+                        Map<Long, Boolean> userChats = AppController.onlineUsersChats.get(chat.interlocutorId);
+                        if (userChats != null && userChats.containsKey(chat.id)) {
+                            Boolean status = userChats.get(chat.id);
+                            chat.isOnline = status != null && status;
+                        }
+                    }
+                }
+            }
+            adapter.submitList(chatList);
+        });
+    }
 
+    private void setObservers() {
         viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
             if (isHidden != null && isHidden) {
                 viewModel.loadDbChatList();

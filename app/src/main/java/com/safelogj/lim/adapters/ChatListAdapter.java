@@ -28,11 +28,14 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
     private static final String NAME = "name";
     private static final String MSG = "msg";
     private static final String COLOR = "color";
+    private static final String ONLINE = "online";
     private final OnChatClickListener listener;
 
     public interface OnChatClickListener {
         void onChatClick(Chat chat);
+
         void onAvatarClick(Chat chat);
+
         void onChatLongClick(Chat chat);
     }
 
@@ -62,15 +65,17 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             for (Object payload : payloads) {
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(HAS_NEW)) holder.updateNewMsgStatus(chat.hasNewMsg);
-                    if (diff.containsKey(TIME)) holder. binding.timeText.setText(chat.lastTimestampFormatted);
+                    if (diff.containsKey(TIME))
+                        holder.binding.timeText.setText(chat.lastTimestampFormatted);
                     if (diff.containsKey(BLOCK)) holder.updateBlockStatus(chat);
                     if (diff.containsKey(SEND)) holder.updateSendStatus(chat);
                     if (diff.containsKey(COLOR)) chat.color = diff.getInt(COLOR);
                     if (diff.containsKey(NAME)) holder.binding.chatName.setText(chat.name);
                     if (diff.containsKey(MSG)) holder.binding.lastMessage.setText(chat.lastMessage);
+                    if (diff.containsKey(ONLINE)) holder.updateOnlineStatus(chat);
                 }
             }
-              holder.setListeners(chat, listener);
+            holder.setListeners(chat, listener);
         }
     }
 
@@ -88,20 +93,20 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                 binding.chatIcon.setImageResource(R.drawable.person_48px);
                 binding.timeText.setVisibility(View.GONE);
             } else {
-                binding.chatIcon.setImageResource(R.drawable.add_comment_48px);
+                binding.chatIcon.setImageResource(R.drawable.cloud_48px);
                 binding.timeText.setVisibility(View.VISIBLE);
             }
 
-            // Цвет времени (статус отправки последнего)
-            if (chat.lastSendStatus == Message.STATUS_SENT) {
-                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.last_time));
-            } else {
-                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
-            }
-
-            // Цвет имени (заблокирован или нет)
-            binding.chatName.setTextColor(itemView.getContext().getColor(
-                    chat.isBlocked ? R.color.light_gray_aaa : R.color.chat_name));
+//            // Цвет времени (статус отправки последнего)
+//            if (chat.lastSendStatus == Message.STATUS_SENT) {
+//                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.last_time));
+//            } else {
+//                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
+//            }
+//
+//            // Цвет имени (заблокирован или нет)
+//            binding.chatName.setTextColor(itemView.getContext().getColor(
+//                    chat.isBlocked ? R.color.light_gray_aaa : R.color.chat_name));
 
             binding.chatName.setText(chat.name);
             binding.lastMessage.setText(chat.lastMessage);
@@ -109,6 +114,9 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
             // Настраиваем фон аватара (новое сообщение)
             updateNewMsgStatus(chat.hasNewMsg);
+            updateBlockStatus(chat);
+            updateSendStatus(chat);
+            updateOnlineStatus(chat);
             setListeners(chat, listener);
         }
 
@@ -138,6 +146,13 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                 binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
             }
         }
+
+        public void updateOnlineStatus(Chat chat) {
+            if (chat.id != Chat.INVALID_ID) {
+                binding.chatIcon.getDrawable().setTint(
+                        itemView.getContext().getColor(chat.isOnline ? R.color.last_time : R.color.light_gray_aaa));
+            }
+        }
     }
 
     private static class ChatDiffCallback extends DiffUtil.ItemCallback<Chat> {
@@ -153,6 +168,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                     oldItem.isBlocked == newItem.isBlocked &&
                     oldItem.lastSendStatus == newItem.lastSendStatus &&
                     oldItem.color == newItem.color &&
+                    oldItem.isOnline == newItem.isOnline &&
                     Objects.equals(oldItem.name, newItem.name) &&
                     Objects.equals(oldItem.lastMessage, newItem.lastMessage);
         }
@@ -166,8 +182,10 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             if (oldItem.isBlocked != newItem.isBlocked) diff.putBoolean(BLOCK, true);
             if (oldItem.lastSendStatus != newItem.lastSendStatus) diff.putBoolean(SEND, true);
             if (oldItem.color != newItem.color) diff.putInt(COLOR, newItem.color);
+            if (oldItem.isOnline != newItem.isOnline) diff.putBoolean(ONLINE, true);
             if (!Objects.equals(oldItem.name, newItem.name)) diff.putBoolean(NAME, true);
-            if (!Objects.equals(oldItem.lastMessage, newItem.lastMessage)) diff.putBoolean(MSG, true);
+            if (!Objects.equals(oldItem.lastMessage, newItem.lastMessage))
+                diff.putBoolean(MSG, true);
             return diff.isEmpty() ? null : diff;
         }
     }

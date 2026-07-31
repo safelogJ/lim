@@ -47,6 +47,7 @@ import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ChatFragment extends Fragment {
 
@@ -97,6 +98,7 @@ public class ChatFragment extends Fragment {
             if (currentChatId != Chat.INVALID_ID) {
                 chatViewModel.loadDbMessages(currentChatId);
                 controller.getDbHelper().markChatAsRead(currentChatId);
+                updateOnlineStatusUI();
             }
             controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
                 @Override
@@ -424,6 +426,24 @@ public class ChatFragment extends Fragment {
 
                 manager.cancel(NotificationHelper.NOTIFICATION_ID);
             }
+        }
+    }
+
+    /**
+     * Проверяет онлайн-статус текущего чата в глобальной карте и обновляет иконку.
+     */
+    private void updateOnlineStatusUI() {
+        if (mBinding == null) return;
+        Boolean isOnline = false;
+        for (Map<Long, Boolean> userChats : AppController.onlineUsersChats.values()) {
+            if (userChats.containsKey(currentChatId)) {
+                isOnline = userChats.get(currentChatId);
+                break;
+            }
+        }
+        if (mBinding.onlineStatus.getBackground() != null) {
+            mBinding.onlineStatus.getBackground().setTint(ContextCompat.getColor(
+                    controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
         }
     }
 

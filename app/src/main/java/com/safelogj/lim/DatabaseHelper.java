@@ -18,6 +18,7 @@ import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
@@ -119,6 +120,26 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    public void initOnlineStatuses() {
+        dbExecutor.execute(() -> {
+            try (Cursor cursor = database.rawQuery("SELECT interlocutor_id, id FROM chats WHERE is_hidden = 0", null)) {
+                int count = 0;
+                while (cursor.moveToNext()) {
+                    long interlocutorId = cursor.getLong(0);
+                    long chatId = cursor.getLong(1);
+                    if (interlocutorId != controller.getUserId()) {
+                        AppController.onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, false);
+                        count++;
+                    }
+                }
+                Log.d(AppController.LOG_TAG, "Карта онлайн-статусов инициализирована. Найдено собеседников: "
+                        + AppController.onlineUsersChats.size() + " в " + count + " чатах.");
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Ошибка инициализации карты статусов: ", e);
+            }
+        });
+    }
+
     public <T> void wipeAllData(ResultCallback<T> callback, T result, String log) {
         dbExecutor.execute(() -> {
             database.beginTransaction();
@@ -127,6 +148,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 database.delete(CHATS, null, null);
                 database.delete(USERS, null, null);
                 database.setTransactionSuccessful();
+                AppController.onlineUsersChats.clear();
                 callback.onSuccess(result);
                 Log.i(AppController.LOG_TAG, log);
             } catch (Exception e) {
@@ -147,16 +169,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 userValues.put(USERNAME, user.username);
                 userValues.put(DISPLAY_NAME, user.displayName);
                 userValues.put(PUBLIC_KEY, user.publicKey);
-                database.insertWithOnConflict(USERS,null, userValues, SQLiteDatabase.CONFLICT_REPLACE);
+                database.insertWithOnConflict(USERS, null, userValues, SQLiteDatabase.CONFLICT_REPLACE);
                 // Если известен чат — привязываем к нему собеседника
                 if (chatId != null) {
                     ContentValues chatValues = new ContentValues();
                     chatValues.put(INTERLOCUTOR_ID, user.id);
-                   if (database.update(CHATS, chatValues,ID_ANCHOR, new String[]{String.valueOf(chatId)}) == 0) {
-                       Log.w(AppController.LOG_TAG,"Chat " + chatId + " not found while linking user " + user.id);
-                   } else {
-                       Log.d(AppController.LOG_TAG,"Saved user id=" + user.id + " username=" + user.username + " display=" + user.displayName);
-                   }
+                    if (database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(chatId)}) == 0) {
+                        Log.w(AppController.LOG_TAG, "Chat " + chatId + " not found while linking user " + user.id);
+                    } else {
+                        AppController.onlineUsersChats.computeIfAbsent(user.id, k -> new ConcurrentHashMap<>()).put(chatId, false);
+                        Log.d(AppController.LOG_TAG, "Saved user id=" + user.id + " username=" + user.username + " display=" + user.displayName);
+                    }
                 }
                 database.setTransactionSuccessful();
                 callback.onSuccess(result);
@@ -186,23 +209,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void getInterlocutorPublicKey(long chatId, ResultCallback<String> callback) {
-        dbExecutor.execute(() -> {
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1",
-                    new String[]{String.valueOf(chatId)})) {
-                if (cursor.moveToFirst()) {
-                     callback.onSuccess(cursor.getString(0));
-                } else {
-                    callback.onError("chat or interlocutor not found locally for id: " + chatId);
-                }
-            } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "Error getting public key from DB", e);
-                callback.onError("database error: " + e.getMessage());
-            }
-        });
-    }
-
-    public void setInterlocutorPublicKey(long chatId, ResultCallback<String> callback) {
         dbExecutor.execute(() -> {
             try (Cursor cursor = database.rawQuery(
                     "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1",
@@ -251,6 +257,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     values.put(IS_HIDDEN, 0);
                     database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(foundChat.id)});
                     database.setTransactionSuccessful();
+                    AppController.onlineUsersChats.computeIfAbsent(foundChat.interlocutorId, k -> new ConcurrentHashMap<>()).put(foundChat.id, false);
                     callback.onSuccess(foundChat);
                 } else {
                     database.setTransactionSuccessful();
@@ -273,6 +280,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 v.put(NAME, chat.name);
                 v.put(INTERLOCUTOR_ID, chat.interlocutorId);
                 if (database.insertWithOnConflict(CHATS, null, v, SQLiteDatabase.CONFLICT_REPLACE) != -1) {
+                    AppController.onlineUsersChats.computeIfAbsent(chat.interlocutorId, k -> new ConcurrentHashMap<>()).put(chat.id, false);
                     callback.onSuccess(result);
                     return;
                 }
@@ -312,12 +320,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void hideChatLocally(long chatId, ResultCallback<Boolean> callback) {
+    public void hideChatLocally(Chat chat, ResultCallback<Boolean> callback) {
         dbExecutor.execute(() -> {
             try {
                 ContentValues values = new ContentValues();
                 values.put(IS_HIDDEN, 1); // 1 - "Hidden"
-                if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
+                if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chat.id)}) > 0) {
+                    AppController.onlineUsersChats.remove(chat.interlocutorId);
                     callback.onSuccess(true);
                     return;
                 }
@@ -401,10 +410,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (cursor.moveToFirst()) {
                     do {
                         Chat chat = new Chat();
-                        chat.id = cursor.getLong(0);
-                        chat.localId = cursor.getLong(1);
+                        chat.localId = cursor.getLong(0);
+                        chat.id = cursor.getLong(1);
                         chat.name = cursor.getString(2);
                         unreadChats.add(chat);
+                        Log.i(AppController.LOG_TAG, " БД новое сообщение в чате : " + chat.id);
                     } while (cursor.moveToNext());
                 }
                 callback.onSuccess(unreadChats);
@@ -512,8 +522,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         if (msg.senderId != controller.getUserId()) {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
+                            AppController.onlineUsersChats.computeIfAbsent(msg.senderId, k -> new ConcurrentHashMap<>()).put(msg.chatId, false);
                         } else {
-                          //  chatValues.put(INTERLOCUTOR_ID, msg.receiverId);
                             chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
                             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
                         }
@@ -557,7 +567,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 values.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
             }
         }
-        Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id);
+        Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id + " в чать id " + msg.chatId);
         return values;
     }
 
@@ -587,7 +597,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     //  Log.d(AppController.LOG_TAG, "set media status " + status);
                     return;
                 } else {
-                  //  Log.d(AppController.LOG_TAG, " проблемный set media status " + status);
+                    //  Log.d(AppController.LOG_TAG, " проблемный set media status " + status);
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "set error status media error ", e);

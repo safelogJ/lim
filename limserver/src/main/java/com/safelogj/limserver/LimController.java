@@ -29,6 +29,8 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -39,6 +41,7 @@ import javax.net.ssl.SSLContext;
 
 public class LimController {
     public static final Logger log = LoggerFactory.getLogger(LimController.class);
+    public static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
     public static final String EMPTY_STRING = "";
     private static final String USER_DIR = "user.dir";
     private static final String DB_PATH = System.getProperty(USER_DIR) + "/db";
@@ -79,6 +82,7 @@ public class LimController {
             server.createContext("/media/get", new MediaDownloadHandler());
             server.start();
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
+            CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOfflineUsers, 10, 10, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.error("critical error while creating server: ", e);
             System.exit(ERROR);
@@ -174,5 +178,10 @@ public class LimController {
         } catch (Exception e) {
             log.error("⚠️ Error deleting files in {}  {}", mediaDir.getName(), e.getMessage());
         }
+    }
+
+    private static void removeOfflineUsers() {
+        long now = System.currentTimeMillis();
+        onlineUsers.entrySet().removeIf(entry -> (now - entry.getValue() > 12000));
     }
 }

@@ -68,10 +68,9 @@ public class ServerConfig {
         if (pass.length() < 4) {
             throw new IllegalArgumentException("Config error: 'keystore.password' is too short (minimum 4 characters).");
         }
-
-        int poolSize = Integer.parseInt(props.getProperty("server.pool.size", "8"));
-        int queueSize = Integer.parseInt(props.getProperty("server.queue.size", "2"));
-        int dbPoolSize = Integer.parseInt(props.getProperty("db.connect.size", "8"));
-        return new ServerConfig(path, pass.toCharArray(), poolSize, queueSize, dbPoolSize);
+        return new ServerConfig(path, pass.toCharArray(),
+                Integer.parseInt(props.getProperty("server.pool.size", "8")),
+                Integer.parseInt(props.getProperty("server.queue.size", "2")),
+                Integer.parseInt(props.getProperty("db.connect.size", "8")));
     }
 }

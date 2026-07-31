@@ -50,7 +50,7 @@ public class MediaUploadHandler extends BaseHandler {
             return;
         }
         User user = LimController.dbManager.authenticateUser(username, password);
-        if (user == null) {
+        if (user == null || !LimController.dbManager.isMemberOfChat(user.id, chatId)) {
             sendUnauthorizedError(exchange, response);
             return;
         }
