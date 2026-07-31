@@ -545,9 +545,12 @@ public class NetworkService {
                 }
                 dbHelper.updateFilePath(msg, Uri.fromFile(localFile).toString());
                 Log.d(AppController.LOG_TAG, "download file success: " + msg.fileName);
+            } else if (response.code() == 429) {
+                dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
+                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code() + " " + response.message());
             } else {
                 dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_ERROR);
-                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.message());
+                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code() + " " + response.message());
             }
         } catch (Exception e) {
             dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);

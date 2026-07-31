@@ -24,7 +24,6 @@ import com.zaxxer.hikari.HikariPoolMXBean;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class DatabaseManager {
 
@@ -43,15 +42,12 @@ public class DatabaseManager {
     private final HikariDataSource dataSource;
     private final HikariPoolMXBean poolProxy;
 
-    @NotNull
-    private final ReentrantLock digestLock = new ReentrantLock();
-
-    DatabaseManager(String dbFolderPath) {
+    DatabaseManager(String dbFolderPath, int poolSize) {
         HikariConfig config = new HikariConfig();
         // Путь к базе
         config.setJdbcUrl("jdbc:sqlite:" + dbFolderPath + "/" + DB_FILE);
         // Настройки пула
-        config.setMaximumPoolSize(4); // 4 соединений будут всегда "под рукой"
+        config.setMaximumPoolSize(poolSize); // 8 соединений будут всегда "под рукой"
         config.setMinimumIdle(2);      // Минимум 2 всегда открыты
         config.setConnectionTimeout(5000); // Ждать соединение из пула не более 5 сек
         config.setIdleTimeout(1800000);    // Закрывать лишние через 30 мин простоя

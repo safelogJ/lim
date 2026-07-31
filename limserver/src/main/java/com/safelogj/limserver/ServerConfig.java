@@ -8,10 +8,16 @@ import java.util.Properties;
 public class ServerConfig {
     private final String keystorePath;
     private final char[] keystorePassword;
+    private final int serverPoolSize;
+    private final int serverQueueSize;
+    private final int dbPoolSize;
 
-    private ServerConfig(String keystorePath, char[] keystorePassword) {
+    private ServerConfig(String keystorePath, char[] keystorePassword, int serverPoolSize, int serverQueueSize, int dbPoolSize) {
         this.keystorePath = keystorePath;
         this.keystorePassword = keystorePassword;
+        this.serverPoolSize = serverPoolSize;
+        this.serverQueueSize = serverQueueSize;
+        this.dbPoolSize = dbPoolSize;
     }
 
     public String getKeystorePath() {
@@ -21,6 +27,19 @@ public class ServerConfig {
     public char[] getKeystorePassword() {
         return keystorePassword;
     }
+
+    public int getServerPoolSize() {
+        return serverPoolSize;
+    }
+
+    public int getServerQueueSize() {
+        return serverQueueSize;
+    }
+
+    public int getDbPoolSize() {
+        return dbPoolSize;
+    }
+
 
     public static ServerConfig load(String configPath) throws IllegalArgumentException, IOException {
         Properties props = new Properties();
@@ -50,6 +69,9 @@ public class ServerConfig {
             throw new IllegalArgumentException("Config error: 'keystore.password' is too short (minimum 4 characters).");
         }
 
-        return new ServerConfig(path, pass.toCharArray());
+        int poolSize = Integer.parseInt(props.getProperty("server.pool.size", "8"));
+        int queueSize = Integer.parseInt(props.getProperty("server.queue.size", "2"));
+        int dbPoolSize = Integer.parseInt(props.getProperty("db.connect.size", "8"));
+        return new ServerConfig(path, pass.toCharArray(), poolSize, queueSize, dbPoolSize);
     }
 }

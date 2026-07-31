@@ -48,19 +48,13 @@ public class LimController {
     public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
     public static DatabaseManager dbManager;
-
-//    private static final ThreadPoolExecutor EXECUTOR_POOL = new ThreadPoolExecutor(2, 8, 30L,
-//            TimeUnit.MINUTES, new LinkedBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
-
-    private static final ThreadPoolExecutor EXECUTOR_POOL = ServerThreadPool.createSmartPool(2, 8, 30L, 2);
-
+    private static ThreadPoolExecutor EXECUTOR_POOL;
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "cleanup-thread");
                 t.setDaemon(true);
                 return t;
             });
-
 
     public static void main(String[] args) {
         try {
@@ -71,9 +65,7 @@ public class LimController {
                 log.error("folders db and media not found");
                 System.exit(DATA_ERR);
             }
-            dbManager = new DatabaseManager(DB_PATH);
-            dbManager.initDatabase();
-            HttpsServer server = initHttpsServer();
+            HttpsServer server = initDbAndHttpsServer();
             closeAppListener(server);
             server.createContext("/register", new RegisterUserHandler());
             server.createContext("/user", new EditUserHandler());
@@ -85,7 +77,6 @@ public class LimController {
             server.createContext("/messages/get", new GetMessagesHandler());
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
-            server.setExecutor(EXECUTOR_POOL);
             server.start();
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
         } catch (Exception e) {
@@ -95,16 +86,17 @@ public class LimController {
         log.info("LimServer run");
     }
 
-    private static HttpsServer initHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
+    private static HttpsServer initDbAndHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
             CertificateException, UnrecoverableKeyException, KeyManagementException, IllegalArgumentException {
 
         ServerConfig prop = ServerConfig.load(DB_PATH + "/server.properties");
+        dbManager = new DatabaseManager(DB_PATH, prop.getDbPoolSize());
+        dbManager.initDatabase();
         // 2. Загружаем Keystore в память Java
         KeyStore ks = KeyStore.getInstance("PKCS12");
         try (FileInputStream fis = new FileInputStream(prop.getKeystorePath())) {
             ks.load(fis, prop.getKeystorePassword());
         }
-
         // 3. Инициализируем менеджер ключей
         KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
         kmf.init(ks, prop.getKeystorePassword());
@@ -125,6 +117,8 @@ public class LimController {
                 }
             }
         });
+        EXECUTOR_POOL = ServerThreadPool.createPool(prop.getServerPoolSize(), prop.getServerQueueSize());
+        server.setExecutor(EXECUTOR_POOL);
         return server;
     }
 

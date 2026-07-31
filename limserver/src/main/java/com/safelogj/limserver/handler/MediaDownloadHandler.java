@@ -14,8 +14,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MediaDownloadHandler extends BaseHandler {
+    private static final Set<String> activeFileLocks = ConcurrentHashMap.newKeySet();
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -57,9 +60,17 @@ public class MediaDownloadHandler extends BaseHandler {
             return;
         }
 
-        exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
-        exchange.sendResponseHeaders(200, file.length());
+        String path = file.getAbsolutePath();
+        if (!activeFileLocks.add(path)) {
+            response.status = BaseResponse.ERROR;
+            response.message = "File is already being downloaded by another device";
+            sendResponse(exchange, 429, response); // Too Many Requests
+            return;
+        }
+
         try {
+            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.sendResponseHeaders(200, file.length());
             try (FileInputStream fis = new FileInputStream(file); OutputStream os = exchange.getResponseBody()) {
                 byte[] buffer = new byte[8192];
                 int count;
@@ -69,10 +80,13 @@ public class MediaDownloadHandler extends BaseHandler {
                 os.flush();
             }
             Files.deleteIfExists(file.toPath());
+            LimController.log.info("MediaDownloadHandler delete the file after successful upload {}", file.getPath());
             return;
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
             LimController.log.info("MediaDownloadHandler error: clear the cache from the file {}", file.getPath());
+        } finally {
+            activeFileLocks.remove(path);
         }
         FileCacheUtils.dropFileFromCache(file);
     }
