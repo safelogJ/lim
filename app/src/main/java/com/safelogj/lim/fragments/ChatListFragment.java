@@ -47,7 +47,6 @@ public class ChatListFragment extends Fragment {
         // Required empty public constructor
     }
 
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -105,15 +104,14 @@ public class ChatListFragment extends Fragment {
 
     private void setChatListObserve() {
         viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> {
-            if (chatList != null) {
-                for (Chat chat : chatList) {
-                    if (chat.id != Chat.INVALID_ID) {
-                        Map<Long, Boolean> userChats = AppController.onlineUsersChats.get(chat.interlocutorId);
-                        if (userChats != null && userChats.containsKey(chat.id)) {
-                            Boolean status = userChats.get(chat.id);
-                            chat.isOnline = status != null && status;
-                        }
+            for (Chat chat : chatList) {
+                if (chat.id != Chat.INVALID_ID) {
+                    Map<Long, Boolean> userChats = AppController.getChatStatuses(chat.interlocutorId);
+                    if (userChats != null && userChats.containsKey(chat.id)) {
+                        Boolean status = userChats.get(chat.id);
+                        chat.isOnline = status != null && status;
                     }
+                    chat.color = AppController.getChatColor(chat.id, chat.color);
                 }
             }
             adapter.submitList(chatList);
@@ -148,30 +146,19 @@ public class ChatListFragment extends Fragment {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
 
-        dialogView.findViewById(R.id.colorGreen).setOnClickListener(v -> {
-            chat.color = AppController.CHAT_COLOR_GREEN;
-            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_GREEN);
-            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_GREEN);
-        });
+        dialogView.findViewById(R.id.colorGreen).setOnClickListener(v ->
+                setChatColorDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_GREEN, chat));
 
-        dialogView.findViewById(R.id.colorPink).setOnClickListener(v -> {
-            chat.color = AppController.CHAT_COLOR_PINK;
-            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_PINK);
-            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_PINK);
-        });
+        dialogView.findViewById(R.id.colorPink).setOnClickListener(v ->
+                setChatColorDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_PINK, chat));
 
-        dialogView.findViewById(R.id.colorYellow).setOnClickListener(v -> {
-            chat.color = AppController.CHAT_COLOR_YELLOW;
-            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_YELLOW);
-            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_YELLOW);
-        });
+        dialogView.findViewById(R.id.colorYellow).setOnClickListener(v ->
+                setChatColorDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_YELLOW, chat));
 
-        dialogView.findViewById(R.id.colorBlue).setOnClickListener(v -> {
-            chat.color = AppController.CHAT_COLOR_BLUE;
-            controller.getDbHelper().setChatColor(chat.id, AppController.CHAT_COLOR_BLUE);
-            setDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_BLUE);
-        });
-        setDialogBackground(dialogView.findViewById(R.id.dialogOuter), chat.color);
+        dialogView.findViewById(R.id.colorBlue).setOnClickListener(v ->
+                setChatColorDialogBackground(dialogView.findViewById(R.id.dialogOuter), AppController.CHAT_COLOR_BLUE, chat));
+
+        setChatColorDialogBackground(dialogView.findViewById(R.id.dialogOuter), chat.color, chat);
 
         TextInputEditText editText = dialogView.findViewById(R.id.renameEditText);
         editText.setText(chat.name);
@@ -198,7 +185,10 @@ public class ChatListFragment extends Fragment {
         dialog.show();
     }
 
-    private void setDialogBackground(View view, int color) {
+    private void setChatColorDialogBackground(View view, int color, Chat chat) {
+        chat.color = color;
+        AppController.updateChatColor(chat.id, color);
+        controller.getDbHelper().setChatColor(chat.id, color);
         view.setBackground(ResourcesCompat.getDrawable(getResources(),
                 AppController.getInterlocutorBackground(color), controller.getTheme()));
     }

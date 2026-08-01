@@ -42,7 +42,6 @@ public class NotificationHelper {
             Chat chat = unreadChats.get(0);
             title = context.getString(R.string.new_msg);
             text = context.getString(R.string.new_msg_from) + " " + chat.name;
-            Log.w(AppController.LOG_TAG, "делаем интент чат " + chat.id + " local id " + chat.localId );
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
@@ -53,8 +52,6 @@ public class NotificationHelper {
             title = context.getString(R.string.new_msgs);
             text = context.getString(R.string.new_msgs_size) + " (" + unreadChats.size() + ")";
             intent.putExtra(EXTRA_OPEN_CHAT_LIST, true);
-            Log.w(AppController.LOG_TAG, "делаем интент в чат лист " + intent.getLongExtra(EXTRA_CHAT_ID, 10000)
-                    + " local id " + intent.getLongExtra(EXTRA_CHAT_LOCAL_ID, 20000) );
 
             intent.removeExtra(EXTRA_CHAT_ID);
             intent.removeExtra(EXTRA_CHAT_LOCAL_ID);
@@ -77,12 +74,6 @@ public class NotificationHelper {
                 .setSilent(false)
                 .setAutoCancel(true)
                 .addExtras(new Bundle());
-
-//        if (unreadChats.size() == 1) {
-//            builder.getExtras().putLong(EXTRA_CHAT_ID, unreadChats.get(0).id);
-//        } else {
-//            builder.getExtras().putLong(EXTRA_CHAT_ID, MULTI_CHAT_ID);
-//        }
         manager.notify(NOTIFICATION_ID, builder.build());
     }
 

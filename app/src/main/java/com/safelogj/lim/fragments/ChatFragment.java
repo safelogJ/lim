@@ -435,7 +435,7 @@ public class ChatFragment extends Fragment {
     private void updateOnlineStatusUI() {
         if (mBinding == null) return;
         Boolean isOnline = false;
-        for (Map<Long, Boolean> userChats : AppController.onlineUsersChats.values()) {
+        for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
             if (userChats.containsKey(currentChatId)) {
                 isOnline = userChats.get(currentChatId);
                 break;

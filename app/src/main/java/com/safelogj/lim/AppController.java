@@ -9,6 +9,8 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -16,7 +18,6 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.lifecycle.MutableLiveData;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -62,7 +63,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -96,7 +97,6 @@ import okhttp3.OkHttpClient;
 public class AppController extends Application {
     public static final String LOG_TAG = "lim";
     public static final Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
-    public static final Map<Long, Map<Long, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
     public static final int POOL_SIZE = 5;  // 0-2 отправка, 3 качает файлы, 4 получает сообщения
@@ -142,8 +142,16 @@ public class AppController extends Application {
                 }
             });
     private static final KeyFactory EC_KEY_FACTORY;
+    private static final Map<Long, Map<Long, Boolean>> ONLINE_USERS_CHATS = new ConcurrentHashMap<>();
+    private static final Map<Long, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
     public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
+    public final Handler offlineHandler = new Handler(Looper.getMainLooper());
+    public final Runnable resetStatusesRunnable = () -> {
+        for (Map<Long, Boolean> chatMap : ONLINE_USERS_CHATS.values()) {
+            chatMap.replaceAll((id, status) -> false);
+        }
+    };
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -154,6 +162,7 @@ public class AppController extends Application {
     private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
     private final SecureRandom secureRandom = new SecureRandom();
     private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
+
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
@@ -188,6 +197,39 @@ public class AppController extends Application {
         } catch (NoSuchAlgorithmException e) {
             throw new ExceptionInInitializerError(e);
         }
+    }
+
+    public static void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
+        ONLINE_USERS_CHATS.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
+    }
+
+    public static void clearOnlineStatuses() {
+        ONLINE_USERS_CHATS.clear();
+    }
+
+    public static void clearOnlineStatus(long interlocutorId) {
+        ONLINE_USERS_CHATS.remove(interlocutorId);
+    }
+
+    public static Map<Long, Boolean> getChatStatuses(long interlocutorId) {
+        return ONLINE_USERS_CHATS.get(interlocutorId);
+    }
+
+    public static Collection <Map<Long, Boolean>> getChatsStatuses() {
+       return ONLINE_USERS_CHATS.values();
+    }
+
+    public static void updateChatColor(long chatId, int color) {
+        CHAT_COLORS.put(chatId, color);
+    }
+
+    public static int getChatColor(long chatId, int defaultColor) {
+        Integer color = CHAT_COLORS.get(chatId);
+        return color != null ? color : defaultColor;
+    }
+
+    public static void clearChatColors() {
+        CHAT_COLORS.clear();
     }
 
     public boolean isInitAppError() {
@@ -347,7 +389,7 @@ public class AppController extends Application {
             @Override
             public void onSuccess(Long lastServerId) {
                 activeDownloadsCount.incrementAndGet();
-                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, new ArrayList<>(onlineUsersChats.keySet())));
+                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, new ArrayList<>(ONLINE_USERS_CHATS.keySet())));
             }
 
             @Override
@@ -730,11 +772,16 @@ public class AppController extends Application {
                 @Override
                 public void onAvailable(@NonNull Network network) {
                     isNetworkActive.set(true);
+                    offlineHandler.removeCallbacks(resetStatusesRunnable);
+                    Log.d(LOG_TAG, "Network is back. Offline reset canceled.");
                 }
 
                 @Override
                 public void onLost(@NonNull Network network) {
                     isNetworkActive.set(false);
+                    offlineHandler.postDelayed(resetStatusesRunnable, 15000);
+                    Log.d(LOG_TAG, "Network lost. Scheduled offline reset in 15s...");
+
                 }
             });
         }

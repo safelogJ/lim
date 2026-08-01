@@ -447,14 +447,15 @@ public class NetworkService {
                 }
                 dbHelper.saveIncomingMsgList(res.messages());
                 fillChatStatus(res.onlineStatuses());
-                controller.activeDownloadsCount.decrementAndGet();
-                //  Log.i(AppController.LOG_TAG, res.message());
+                controller.offlineHandler.removeCallbacks(controller.resetStatusesRunnable);
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
-                controller.activeDownloadsCount.decrementAndGet();
+                controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
             }
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+            controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
+        } finally {
             controller.activeDownloadsCount.decrementAndGet();
         }
         checkMediaThread();
@@ -463,7 +464,7 @@ public class NetworkService {
     private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {
         if (onlineStatuses == null) return;
         for (Map.Entry<Long, Boolean> userStatus : onlineStatuses.entrySet()) {
-            Map<Long, Boolean> chat = AppController.onlineUsersChats.get(userStatus.getKey());
+            Map<Long, Boolean> chat = AppController.getChatStatuses(userStatus.getKey());
             if (chat == null) continue;
             chat.replaceAll((id, oldStatus) -> userStatus.getValue());
         }

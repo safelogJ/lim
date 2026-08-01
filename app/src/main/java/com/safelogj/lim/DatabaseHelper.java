@@ -18,7 +18,6 @@ import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
@@ -122,18 +121,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public void initOnlineStatuses() {
         dbExecutor.execute(() -> {
-            try (Cursor cursor = database.rawQuery("SELECT interlocutor_id, id FROM chats WHERE is_hidden = 0", null)) {
-                int count = 0;
+            try (Cursor cursor = database.rawQuery("SELECT interlocutor_id, id, color FROM chats WHERE is_hidden = 0", null)) {
                 while (cursor.moveToNext()) {
                     long interlocutorId = cursor.getLong(0);
                     long chatId = cursor.getLong(1);
+                    int color = cursor.getInt(2);
                     if (interlocutorId != controller.getUserId()) {
-                        AppController.onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, false);
-                        count++;
+                        AppController.updateOnlineStatus(interlocutorId, chatId, false);
+                        AppController.updateChatColor(chatId, color);
                     }
                 }
-                Log.d(AppController.LOG_TAG, "Карта онлайн-статусов инициализирована. Найдено собеседников: "
-                        + AppController.onlineUsersChats.size() + " в " + count + " чатах.");
             } catch (Exception e) {
                 Log.e(AppController.LOG_TAG, "Ошибка инициализации карты статусов: ", e);
             }
@@ -148,7 +145,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 database.delete(CHATS, null, null);
                 database.delete(USERS, null, null);
                 database.setTransactionSuccessful();
-                AppController.onlineUsersChats.clear();
+                AppController.clearOnlineStatuses();
+                AppController.clearChatColors();
                 callback.onSuccess(result);
                 Log.i(AppController.LOG_TAG, log);
             } catch (Exception e) {
@@ -177,7 +175,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     if (database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(chatId)}) == 0) {
                         Log.w(AppController.LOG_TAG, "Chat " + chatId + " not found while linking user " + user.id);
                     } else {
-                        AppController.onlineUsersChats.computeIfAbsent(user.id, k -> new ConcurrentHashMap<>()).put(chatId, false);
+                        AppController.updateOnlineStatus(user.id, chatId, false);
                         Log.d(AppController.LOG_TAG, "Saved user id=" + user.id + " username=" + user.username + " display=" + user.displayName);
                     }
                 }
@@ -257,7 +255,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     values.put(IS_HIDDEN, 0);
                     database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(foundChat.id)});
                     database.setTransactionSuccessful();
-                    AppController.onlineUsersChats.computeIfAbsent(foundChat.interlocutorId, k -> new ConcurrentHashMap<>()).put(foundChat.id, false);
+                    AppController.updateOnlineStatus(foundChat.interlocutorId, foundChat.id, false);
                     callback.onSuccess(foundChat);
                 } else {
                     database.setTransactionSuccessful();
@@ -280,7 +278,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 v.put(NAME, chat.name);
                 v.put(INTERLOCUTOR_ID, chat.interlocutorId);
                 if (database.insertWithOnConflict(CHATS, null, v, SQLiteDatabase.CONFLICT_REPLACE) != -1) {
-                    AppController.onlineUsersChats.computeIfAbsent(chat.interlocutorId, k -> new ConcurrentHashMap<>()).put(chat.id, false);
+                    AppController.updateOnlineStatus(chat.interlocutorId, chat.id, false);
                     callback.onSuccess(result);
                     return;
                 }
@@ -326,7 +324,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 ContentValues values = new ContentValues();
                 values.put(IS_HIDDEN, 1); // 1 - "Hidden"
                 if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chat.id)}) > 0) {
-                    AppController.onlineUsersChats.remove(chat.interlocutorId);
+                    AppController.clearOnlineStatus(chat.interlocutorId);
                     callback.onSuccess(true);
                     return;
                 }
@@ -522,7 +520,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         if (msg.senderId != controller.getUserId()) {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
-                            AppController.onlineUsersChats.computeIfAbsent(msg.senderId, k -> new ConcurrentHashMap<>()).put(msg.chatId, false);
+                            AppController.updateOnlineStatus(msg.senderId, msg.chatId, false);
                         } else {
                             chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
                             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
