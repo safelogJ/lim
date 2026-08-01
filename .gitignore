@@ -19,6 +19,7 @@ gen/
 db/lim.*
 Rules
 AGENTS.md
+keepRules/
 
 # --- Client Specific ---
 app/src/androidTest/
