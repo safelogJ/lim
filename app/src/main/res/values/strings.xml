@@ -4,6 +4,7 @@
     <string name="login" translatable="false">user</string>
     <string name="password" translatable="false">yv45IuniNiH6nInIniiOIn</string>
     <string name="display_name" translatable="false">^-^</string>
+    <string name="zero_time" translatable="false">00:00</string>
 
     <string name="cert_import_error">certificate import error</string>
     <string name="date_cert_before_error">error: the device date is earlier than the certificate issue date</string>

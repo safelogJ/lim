@@ -428,7 +428,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try (Cursor cursor = database.rawQuery(
                     "SELECT local_id, id, chat_id, chat_name, sender_id, " +
                             "text, type, file_path, file_name, timestamp, send_status " +
-                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + (lastMsgListSize == 0 ? 10 : lastMsgListSize),
+                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + (lastMsgListSize == 0 ? 50 : lastMsgListSize),
                     new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     do {
@@ -459,12 +459,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void loadMoreMessages(long chatId, long lastLoadedLocalId, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
-            // Ищем сообщения, чей local_id МЕНЬШЕ, чем у самого старого на экране
             try (Cursor cursor = database.rawQuery(
                     "SELECT local_id, id, chat_id, chat_name, sender_id, " +
                     "text, type, file_path, file_name, timestamp, send_status " +
                     "FROM messages WHERE chat_id = ? AND local_id < ? " +
-                    "ORDER BY local_id DESC LIMIT 10", new String[]{String.valueOf(chatId), String.valueOf(lastLoadedLocalId)})) {
+                    "ORDER BY local_id DESC LIMIT 50", new String[]{String.valueOf(chatId), String.valueOf(lastLoadedLocalId)})) {
                 if (cursor.moveToFirst()) {
                     do {
                         Message msg = new Message();
@@ -483,7 +482,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         messages.add(msg);
                     } while (cursor.moveToNext());
                 }
-               // Collections.reverse(messages);
                 callback.onSuccess(messages);
 
             } catch (Exception e) {

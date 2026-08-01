@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,6 +18,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -34,6 +36,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.safelogj.lim.AppController;
@@ -47,8 +50,10 @@ import com.safelogj.lim.model.Message;
 import com.safelogj.lim.viewmodels.ChatViewModel;
 import com.safelogj.lim.viewmodels.ResultCallback;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class ChatFragment extends Fragment {
@@ -93,6 +98,15 @@ public class ChatFragment extends Fragment {
     private final ActivityResultLauncher<String> requestAskReadFilePermit =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackAskReadFilePermit);
 
+    private final ActivityResultCallback<Boolean> callbackRecordPermit = result -> {
+        if (Boolean.TRUE == result) {
+            startRecording();
+        }
+    };
+
+    private final ActivityResultLauncher<String> requestRecordPermit =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackRecordPermit);
+
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final Runnable uiRunnable = new Runnable() {
         @Override
@@ -117,6 +131,27 @@ public class ChatFragment extends Fragment {
                 }
             });
             uiHandler.postDelayed(this, 4000);
+        }
+    };
+
+    private MediaRecorder mediaRecorder;
+    private File audioFile;
+    private long startTime = 0L;
+    private AlertDialog recordingDialog;
+    private final Handler recordingHandler = new Handler(Looper.getMainLooper());
+    private final Runnable recordingTimerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (startTime > 0) {
+                long seconds = (System.currentTimeMillis() - startTime) / 1000;
+                if (recordingDialog != null) {
+                    TextView tvTimer = recordingDialog.findViewById(R.id.tvRecordingTimer);
+                    if (tvTimer != null) {
+                        tvTimer.setText(String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60));
+                    }
+                }
+                recordingHandler.postDelayed(this, 1000);
+            }
         }
     };
 
@@ -205,6 +240,9 @@ public class ChatFragment extends Fragment {
     public void onStop() {
         super.onStop();
         uiHandler.removeCallbacks(uiRunnable);
+        if (adapter != null) {
+            adapter.pausePlaying();
+        }
     }
 
     private void setSendBtnListener() {
@@ -237,6 +275,18 @@ public class ChatFragment extends Fragment {
                 }
                 requestGeneralPermitURI.launch(getIntentActionOpenDoc());
             }
+        });
+
+        mBinding.addFileButton.setOnLongClickListener(v -> {
+            if (currentChatId != Chat.INVALID_ID) {
+                if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    requestRecordPermit.launch(Manifest.permission.RECORD_AUDIO);
+                } else {
+                    startRecording();
+                }
+            }
+            return true;
         });
     }
 
@@ -334,6 +384,12 @@ public class ChatFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        if (recordingDialog != null && recordingDialog.isShowing()) {
+            recordingDialog.dismiss();
+        }
+        if (adapter != null) {
+            adapter.stopPlaying();
+        }
         super.onDestroyView();
         mBinding = null;
     }
@@ -448,10 +504,7 @@ public class ChatFragment extends Fragment {
         }
     }
 
-    /**
-     * Проверяет онлайн-статус текущего чата в глобальной карте и обновляет иконку.
-     */
-    private void updateOnlineStatusUI() {
+   private void updateOnlineStatusUI() {
         if (mBinding == null) return;
         Boolean isOnline = false;
         for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
@@ -463,6 +516,68 @@ public class ChatFragment extends Fragment {
         if (mBinding.onlineStatus.getBackground() != null) {
             mBinding.onlineStatus.getBackground().setTint(ContextCompat.getColor(
                     controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
+        }
+    }
+
+    private void startRecording() {
+        try {
+            // 1. Создаем файл для записи
+            audioFile = new File(controller.getExternalFileDir(),"voice_" + System.currentTimeMillis() + ".m4a");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                mediaRecorder = new android.media.MediaRecorder(controller);
+            } else {
+                @SuppressWarnings("deprecation")
+                MediaRecorder legacyRecorder = new MediaRecorder();
+                mediaRecorder = legacyRecorder;
+            }
+            // 2. Настраиваем MediaRecorder
+            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            mediaRecorder.setOutputFile(audioFile.getAbsolutePath());
+
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+            // 3. Показываем диалог
+            View dialogView = getLayoutInflater().inflate(R.layout.dialog_recording, null);
+            recordingDialog = new AlertDialog.Builder(requireContext())
+                    .setView(dialogView)
+                    .setOnDismissListener(dialog -> stopRecording()) // Остановка при клике мимо
+                    .create();
+
+            if (recordingDialog.getWindow() != null) {
+                recordingDialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            }
+            recordingDialog.show();
+            // 4. Запускаем таймер
+            startTime = System.currentTimeMillis();
+            recordingHandler.post(recordingTimerRunnable);
+
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Recording error: " + e.getMessage());
+            Toast.makeText(requireContext(), "Error starting record", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void stopRecording() {
+        if (startTime == 0) return; // Уже остановлено
+
+        try {
+            startTime = 0;
+            recordingHandler.removeCallbacks(recordingTimerRunnable);
+
+            if (mediaRecorder != null) {
+                mediaRecorder.stop();
+                mediaRecorder.release();
+                mediaRecorder = null;
+            }
+            // Если запись длилась больше 1 секунды — прикрепляем файл
+            if (audioFile != null && audioFile.exists() && audioFile.length() > 100) {
+                chatViewModel.selectFile(Uri.fromFile(audioFile), audioFile.getName());
+            }
+
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Stop recording error: " + e.getMessage());
         }
     }
 

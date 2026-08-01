@@ -109,13 +109,13 @@ public class NetworkService {
                 user.displayName = displayName;
                 user.publicKey = res.publicKey();
 
-                controller.setUserId(user.id);
                 controller.setUsername(username);
                 controller.setPassword(password);
                 controller.setDisplayName(displayName);
-                controller.setE2eePublicKey(user.publicKey);
+                controller.setE2eePublicKey(res.publicKey());
                 controller.unpackPrivateKey(res.privateHash(), password);
                 dbHelper.saveUser(user, callback, res.message(), null);
+                controller.setUserId(user.id);
                 controller.writeSettingsToFile();
                 Log.i(AppController.LOG_TAG, res.message());
 
@@ -440,6 +440,7 @@ public class NetworkService {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
                 for (Message msg : res.messages()) {
+                    Log.d(AppController.LOG_TAG, "ключ собеседника: " + msg.interlocutorPublicKey);
                     msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
                     if (msg.fileName != null && !msg.fileName.isEmpty()) {
                         msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
@@ -592,6 +593,13 @@ public class NetworkService {
     }
 
     private long getFileSize(Uri uri) {
+        if ("file".equals(uri.getScheme())) {
+            String path = uri.getPath();
+            if (path != null) {
+                return new File(path).length();
+            }
+        }
+
         Cursor cursor = controller.getContentResolver().query(uri, null, null, null, null);
         if (cursor != null && cursor.moveToFirst()) {
             int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);

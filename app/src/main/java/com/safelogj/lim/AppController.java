@@ -464,6 +464,7 @@ public class AppController extends Application {
             e2eePublicKey = json.optString(E2EE_PUBLIC_KEY, EMPTY_STRING);
             String cert = json.optString(SERVER_CERT, EMPTY_STRING);
             certBytes = cert.isEmpty() ? null : Base64.decode(cert, Base64.NO_WRAP);
+            Log.d(LOG_TAG, "E2EE keys read: " + e2eePrivateKey + ", " + e2eePublicKey);
         } catch (Exception e) {
             String msg = "Error reading or decrypting full JSON data: " + e.getMessage();
             Log.d(LOG_TAG, msg);
@@ -493,6 +494,7 @@ public class AppController extends Application {
             json.put(E2EE_PRIVATE_KEY, e2eePrivateKey);
             json.put(E2EE_PUBLIC_KEY, e2eePublicKey);
             json.put(SERVER_CERT, certBytes != null ? Base64.encodeToString(certBytes, Base64.NO_WRAP) : EMPTY_STRING);
+            Log.d(LOG_TAG, "E2EE keys write: " + e2eePrivateKey + ", " + e2eePublicKey);
             String rawJsonString = json.toString();
             byte[] rawJsonBytes = rawJsonString.getBytes(StandardCharsets.UTF_8);
             byte[] encryptedCombinedBytes = encrypt(rawJsonBytes);
@@ -792,7 +794,6 @@ public class AppController extends Application {
                 new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
                         .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
-
     /**
      * Создает пару ключей для E2EE.
      */
@@ -805,6 +806,7 @@ public class AppController extends Application {
         // Превращаем ключи в обычные строки (Base64)
         e2eePrivateKey = Base64.encodeToString(kp.getPrivate().getEncoded(), Base64.NO_WRAP);
         e2eePublicKey = Base64.encodeToString(kp.getPublic().getEncoded(), Base64.NO_WRAP);
+        Log.d(LOG_TAG, "E2EE keys created: " + e2eePrivateKey + ", " + e2eePublicKey);
     }
 
     public String getPrivateHash(String pass) throws IllegalArgumentException, NoSuchAlgorithmException,
@@ -836,6 +838,22 @@ public class AppController extends Application {
         e2eePrivateKey = new String(cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length)), StandardCharsets.UTF_8);
     }
 
+//    public void unpackPrivateKey(@Nullable String encryptedBlob, String password) throws IllegalArgumentException, NoSuchAlgorithmException,
+//            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
+//            InvalidKeyException, BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
+//
+//        if (encryptedBlob == null) return;
+//        byte[] combined = Base64.decode(encryptedBlob, Base64.NO_WRAP);
+//        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+//        cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromPassword(password, Arrays.copyOfRange(combined, 0, 16)),
+//                new GCMParameterSpec(128, Arrays.copyOfRange(combined, 16, 28)));
+//
+//        // ПРАВИЛЬНО: Декодируем байты и СРАЗУ в Base64 String
+//        byte[] decryptedKeyBytes = cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length));
+//        e2eePrivateKey = Base64.encodeToString(decryptedKeyBytes, Base64.NO_WRAP);
+//        sharedKeys.clear();
+//    }
+
     private SecretKey deriveKeyFromPassword(String password, byte[] salt) throws IllegalArgumentException, NoSuchAlgorithmException,
             NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException {
         return new SecretKeySpec(SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
@@ -865,13 +883,13 @@ public class AppController extends Application {
             return null; // Если не смогли зашифровать - вернем как есть (или ошибку)
         }
     }
-
     /**
      * Расшифровывает входящее сообщение.
      */
     @Nullable
     public String decryptMessage(@NonNull String encryptedBase64, @NonNull String theirPublicKeyBase64) {
         try {
+            Log.d(LOG_TAG, "сообщение " + encryptedBase64 + " ключ " + theirPublicKeyBase64);
             byte[] packet = Base64.decode(encryptedBase64, Base64.NO_WRAP);
             // 1. Извлекаем IV и зашифрованные данные
             int ivLength = packet[0] & 0xFF;
@@ -880,7 +898,9 @@ public class AppController extends Application {
             // 3. Расшифровываем
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKeyBase64), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
+            Log.d(LOG_TAG, "chipher init");
             byte[] decrypted = cipher.doFinal(encryptedText);
+            Log.d(LOG_TAG, "chipher dofinal");
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
             Log.w(LOG_TAG, "Decryption failed (maybe plain text?): " + e.getMessage());
@@ -894,6 +914,7 @@ public class AppController extends Application {
             try {
                 return calculateSharedKey(key);
             } catch (Exception e) {
+                Log.d(LOG_TAG, "исключение в : getSharedKey");
                 throw new RuntimeException(e);
             }
         });
@@ -902,9 +923,13 @@ public class AppController extends Application {
     private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
         KeyAgreement ka = ECDH.get();
+        Log.d(LOG_TAG, "взяли КА");
         ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
+        Log.d(LOG_TAG, "инитиализовали КА");
         ka.doPhase(EC_KEY_FACTORY.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
+        Log.d(LOG_TAG, "фаза КА");
         byte[] aesKeyBytes = SHA256.get().digest(ka.generateSecret());
+        Log.d(LOG_TAG, "ША256 дайджест");
         return new SecretKeySpec(aesKeyBytes, "AES");
     }
 

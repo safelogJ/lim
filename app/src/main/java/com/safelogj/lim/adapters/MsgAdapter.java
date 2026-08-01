@@ -3,14 +3,18 @@ package com.safelogj.lim.adapters;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -31,6 +35,7 @@ import com.safelogj.lim.model.Message;
 
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolder> {
@@ -40,12 +45,35 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
     private final long userId;
     private final int chatColor;
+    private MediaPlayer mediaPlayer;
+    private long playingMsgId = -1;
+    private ItemMessageBinding playingBinding;
+    private final Handler progressHandler = new Handler(android.os.Looper.getMainLooper());
+    private final Runnable progressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mediaPlayer != null && mediaPlayer.isPlaying() && playingBinding != null) {
+                int pos = mediaPlayer.getCurrentPosition();
+                playingBinding.audioPlayer.audioSeekBar.setProgress(pos);
+                playingBinding.audioPlayer.tvAudioTime.setText(formatDuration(pos));
+                progressHandler.postDelayed(this, 500);
+
+            }
+        }
+    };
 
     public MsgAdapter(long userId, int chatColor) {
         super(new DiffCallback());
         this.userId = userId;
         this.chatColor = chatColor;
     }
+
+    public boolean isAudioFile(String fileName) {
+        if (fileName == null) return false;
+        String name = fileName.toLowerCase();
+        return name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".wav") || name.endsWith(".ogg");
+    }
+
 
     @NonNull
     @Override
@@ -57,7 +85,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
-        holder.bind(getItem(position), userId, chatColor);
+        holder.bind(getItem(position), userId, chatColor, this);
     }
 
     @Override
@@ -70,7 +98,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(STATUS)) holder.updateStatus(message.sendStatus);
                     if (diff.containsKey(TIME)) holder.updateTime(message.formattedTime);
-                    if (diff.containsKey(FILE_PATH)) holder.bind(message, userId, chatColor);
+                    if (diff.containsKey(FILE_PATH)) holder.bind(message, userId, chatColor, this);
                 }
             }
             holder.setListeners(message, userId);
@@ -85,10 +113,11 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             this.binding = binding;
         }
 
-        public void bind(Message message, long currentUserId, int color) {
+        public void bind(Message message, long currentUserId, int color, MsgAdapter adapter) {
             // Сбрасываем видимость перед установкой (важно для RecyclerView)
             binding.messageImage.setVisibility(View.GONE);
             binding.fileContainer.setVisibility(View.GONE);
+            binding.audioPlayer.audioPlayerContainer.setVisibility(View.GONE);
             binding.messageText.setVisibility(View.VISIBLE);
 
             // 1. Контент: Текст
@@ -105,6 +134,10 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                         .override(Target.SIZE_ORIGINAL)
                         .into(binding.messageImage);
 
+            } else if (adapter.isAudioFile(message.fileName) && message.isLocalFile()) {
+                binding.fileContainer.setVisibility(View.GONE);
+                binding.audioPlayer.audioPlayerContainer.setVisibility(View.VISIBLE);
+                adapter.setupAudioPlayer(message, binding);
             } else if (Message.TYPE_FILE.equals(message.type) && (message.isLocalFile())) {
                 binding.fileContainer.setVisibility(View.VISIBLE);
                 binding.messageFileName.setText(message.fileName);
@@ -140,8 +173,6 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
                 default: // TYPE_INCOMING
                     constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.0f);
-                 //   binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_green);
-                 //   binding.messageBubble.setBackgroundResource(getInterlocutorBackground(color));
                     binding.messageBubble.setBackgroundResource(AppController.getInterlocutorBackground(color));
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.main_background));
@@ -166,15 +197,6 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         public void setListeners(Message message, long currentUserId) {
             binding.messageImage.setOnClickListener(v -> openFile(message, currentUserId));
             binding.fileContainer.setOnClickListener(v -> openFile(message, currentUserId));
-        }
-
-        private int getInterlocutorBackground(int color) {
-            return switch (color) {
-                case AppController.CHAT_COLOR_PINK -> R.drawable.interlocutor_background_pink;
-                case AppController.CHAT_COLOR_YELLOW -> R.drawable.interlocutor_background_yellow;
-                case AppController.CHAT_COLOR_BLUE -> R.drawable.interlocutor_background_blue;
-                default -> R.drawable.interlocutor_background_green;
-            };
         }
 
         private void openFile(Message msg, long userId) {
@@ -218,7 +240,6 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         }
 
         public void updateTime(String time) {
-            Log.d(AppController.EMPTY_STRING, "time " + time);
             binding.messageTime.setText(time);
         }
     }
@@ -255,5 +276,107 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }
+    }
+
+    // Логика управления плеером
+    private void setupAudioPlayer(Message msg, ItemMessageBinding binding) {
+        // 1. Состояние при отрисовке (восстанавливаем прогресс если это играющий бабл)
+        if (playingMsgId == msg.localId && mediaPlayer != null) {
+            playingBinding = binding;
+            binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.pause_48px);
+            binding.audioPlayer.audioSeekBar.setMax(mediaPlayer.getDuration());
+            progressHandler.post(progressRunnable);
+        } else {
+            binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.play_arrow_48px);
+            binding.audioPlayer.audioSeekBar.setProgress(0);
+            binding.audioPlayer.tvAudioTime.setText("0:00");
+        }
+
+        // 2. Клик на Play/Pause
+        binding.audioPlayer.btnPlayPause.setOnClickListener(v -> {
+            if (playingMsgId == msg.localId && mediaPlayer != null) {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.pause();
+                    binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.play_arrow_48px);
+                } else {
+                    mediaPlayer.start();
+                    binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.pause_48px);
+                    progressHandler.post(progressRunnable);
+                }
+            } else {
+                startPlaying(msg, binding);
+            }
+        });
+
+        // 3. Перемотка
+        binding.audioPlayer.audioSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && playingMsgId == msg.localId && mediaPlayer != null) {
+                    mediaPlayer.seekTo(progress);
+                    binding.audioPlayer.tvAudioTime.setText(formatDuration(progress));
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {
+               //
+            }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {
+                if (playingMsgId != msg.localId) {
+                    seekBar.setProgress(0);
+                    binding.audioPlayer.tvAudioTime.setText(R.string.zero_time);
+                }
+            }
+        });
+    }
+
+    private void startPlaying(Message msg, ItemMessageBinding binding) {
+        try {
+            stopPlaying(); // Останавливаем старый трек
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioAttributes(new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA).build());
+            mediaPlayer.setDataSource(binding.getRoot().getContext(), Uri.parse(msg.filePath));
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+
+            playingMsgId = msg.localId;
+            playingBinding = binding;
+            binding.audioPlayer.audioSeekBar.setMax(mediaPlayer.getDuration());
+            binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.pause_48px);
+            progressHandler.post(progressRunnable);
+
+            mediaPlayer.setOnCompletionListener(mp -> stopPlaying());
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Playback error", e);
+        }
+    }
+
+    public void stopPlaying() {
+        progressHandler.removeCallbacks(progressRunnable);
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+        playingMsgId = -1;
+        if (playingBinding != null) {
+            playingBinding.audioPlayer.btnPlayPause.setImageResource(R.drawable.play_arrow_48px);
+            playingBinding.audioPlayer.audioSeekBar.setProgress(0);
+            playingBinding = null;
+        }
+    }
+
+    public void pausePlaying() {
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+            progressHandler.removeCallbacks(progressRunnable);
+            if (playingBinding != null) {
+                playingBinding.audioPlayer.btnPlayPause.setImageResource(R.drawable.play_arrow_48px);
+            }
+        }
+    }
+
+    private String formatDuration(int ms) {
+        return String.format(Locale.US, "%02d:%02d", ms / (1000 * 60), (ms / 1000) % 60);
     }
 }
