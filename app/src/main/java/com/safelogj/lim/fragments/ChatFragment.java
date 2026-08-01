@@ -242,44 +242,38 @@ public class ChatFragment extends Fragment {
 
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
-            if (msgList != null && mBinding != null) {
-                if (!msgList.isEmpty()) {
-                    String freshChatName = msgList.get(msgList.size() - 1).chatName;
-                    if (freshChatName != null && !freshChatName.isEmpty()
-                            && !freshChatName.equals(currentChatName)) {
-                        currentChatName = freshChatName;
-                        mBinding.chatNameText.setText(currentChatName);
-                    }
-                }
+            if (msgList != null && !msgList.isEmpty() && mBinding != null) {
+                renewChatName(msgList.get(msgList.size() - 1).chatName);
                 messages.clear();
                 msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
-                    if (!msgList.isEmpty()) {
-                        long newMaxId = msgList.get(msgList.size() - 1).localId;
-                        Log.w(AppController.LOG_TAG, "new max id: " + newMaxId + " last max id: " + lastMaxMsgId);
-                        if (newMaxId > lastMaxMsgId) {
-                            Log.d(AppController.LOG_TAG, "new max id: " + newMaxId + " last max id: " + lastMaxMsgId);
-                            mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
-                        }
-                        lastMsgListSize = msgList.size();
-                        lastMaxMsgId = newMaxId;
+                    long newMaxId = msgList.get(msgList.size() - 1).localId;
+                    if (newMaxId > lastMaxMsgId) {
+                        mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
                     }
+                    lastMsgListSize = msgList.size();
+                    lastMaxMsgId = newMaxId;
                 });
             }
         });
     }
 
+    private void renewChatName(@Nullable String freshChatName) {
+        if (freshChatName != null && !freshChatName.isEmpty()
+                && !freshChatName.equals(currentChatName)) {
+            currentChatName = freshChatName;
+            mBinding.chatNameText.setText(currentChatName);
+        }
+    }
+
     private void setObserveSelectedFileUri() {
         chatViewModel.getSelectedFileUri().observe(getViewLifecycleOwner(), uri -> {
             if (mBinding == null) return;
-            if (uri != null) {
-                // Показываем панель с именем файла
+            if (uri != null) { // Показываем панель с именем файла
                 mBinding.attachmentPreview.setVisibility(View.VISIBLE);
-                //  mBinding.attachmentPreview.setBackground(AppCompatResources.getDrawable(controller, R.drawable.fielder_background_tr));
                 mBinding.fileNameText.setText(chatViewModel.getSelectedFileName());
-            } else {
-                // Скрываем панель, если файл удален
+            } else { // Скрываем панель, если файл удален
                 mBinding.attachmentPreview.setVisibility(View.INVISIBLE);
             }
         });

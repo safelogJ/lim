@@ -17,7 +17,6 @@ import com.safelogj.lim.model.User;
 import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
