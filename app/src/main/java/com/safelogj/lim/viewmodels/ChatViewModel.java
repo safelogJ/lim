@@ -28,6 +28,7 @@ public class ChatViewModel extends AndroidViewModel {
     private final AppController controller;
     @Nullable
     private String selectedFileName;
+    private boolean isLoadingMore = false;
 
     public ChatViewModel(@NonNull Application application) {
         super(application);
@@ -103,8 +104,8 @@ public class ChatViewModel extends AndroidViewModel {
         }
     }
 
-    public void loadDbMessages(long chatId) {
-        controller.getDbHelper().loadChatMessages(chatId, new ResultCallback<>() {
+    public void loadDbMessages(long chatId, int lastMsgListSize) {
+        controller.getDbHelper().loadChatMessages(chatId, lastMsgListSize, new ResultCallback<>() {
 
             @Override
             public void onSuccess(List<Message> list) {
@@ -116,6 +117,28 @@ public class ChatViewModel extends AndroidViewModel {
                 errorStatus.postValue(errorMsg);
             }
 
+        });
+    }
+
+    public void loadMoreMessages(long chatId) {
+        List<Message> currentList = msgList.getValue();
+        if (currentList == null || currentList.isEmpty() || isLoadingMore) return;
+        isLoadingMore = true;
+        controller.getDbHelper().loadMoreMessages(chatId, currentList.get(0).localId, new ResultCallback<>() {
+            @Override
+            public void onSuccess(List<Message> olderMessages) {
+                if (!olderMessages.isEmpty()) {
+                    olderMessages.addAll(currentList);
+                    msgList.postValue(olderMessages);
+                }
+                isLoadingMore = false;
+            }
+
+            @Override
+            public void onError(String errorMsg) {
+                isLoadingMore = false;
+                Log.e(AppController.LOG_TAG, errorMsg);
+            }
         });
     }
 

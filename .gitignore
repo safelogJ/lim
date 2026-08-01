@@ -16,10 +16,7 @@ gen/
 
 # --- Server Specific (Важно!) ---
 # Не пускаем в Git базу данных и медиа-файлы с вашего локального сервера
-
-db/
-media/
-db/server.properties
+db/lim.*
 Rules
 AGENTS.md
 

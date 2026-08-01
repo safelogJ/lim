@@ -17,6 +17,7 @@ import com.safelogj.lim.model.User;
 import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -422,13 +423,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void loadChatMessages(long chatId, ResultCallback<List<Message>> callback) {
+    public void loadChatMessages(long chatId, int lastMsgListSize, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
             try (Cursor cursor = database.rawQuery(
                     "SELECT local_id, id, chat_id, chat_name, sender_id, " +
                             "text, type, file_path, file_name, timestamp, send_status " +
-                            "FROM messages WHERE chat_id = ? ORDER BY local_id ASC", new String[]{String.valueOf(chatId)})) {
+                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + (lastMsgListSize == 0 ? 10 : lastMsgListSize),
+                    new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     do {
                         Message msg = new Message();
@@ -453,7 +455,43 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 callback.onError("error loading message history");
             }
         });
+    }
 
+    public void loadMoreMessages(long chatId, long lastLoadedLocalId, ResultCallback<List<Message>> callback) {
+        dbExecutor.execute(() -> {
+            List<Message> messages = new ArrayList<>();
+            // Ищем сообщения, чей local_id МЕНЬШЕ, чем у самого старого на экране
+            try (Cursor cursor = database.rawQuery(
+                    "SELECT local_id, id, chat_id, chat_name, sender_id, " +
+                    "text, type, file_path, file_name, timestamp, send_status " +
+                    "FROM messages WHERE chat_id = ? AND local_id < ? " +
+                    "ORDER BY local_id DESC LIMIT 10", new String[]{String.valueOf(chatId), String.valueOf(lastLoadedLocalId)})) {
+                if (cursor.moveToFirst()) {
+                    do {
+                        Message msg = new Message();
+                        msg.localId = cursor.getLong(0);
+                        msg.id = cursor.getLong(1);
+                        msg.chatId = cursor.getLong(2);
+                        msg.chatName = cursor.getString(3);
+                        msg.senderId = cursor.getLong(4);
+                        msg.text = cursor.getString(5);
+                        msg.type = cursor.getString(6);
+                        msg.filePath = cursor.getString(7);
+                        msg.fileName = cursor.getString(8);
+                        msg.timestamp = cursor.getLong(9);
+                        msg.sendStatus = cursor.getLong(10);
+                        msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
+                        messages.add(msg);
+                    } while (cursor.moveToNext());
+                }
+               // Collections.reverse(messages);
+                callback.onSuccess(messages);
+
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "error loading more messages for chat " + chatId, e);
+                callback.onError("error loading more messages");
+            }
+        });
     }
 
     public void markChatAsRead(long chatId) {
@@ -520,7 +558,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         if (msg.senderId != controller.getUserId()) {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
-                            AppController.updateOnlineStatus(msg.senderId, msg.chatId, false);
                         } else {
                             chatValues.put(NAME, msg.chatName); // Синхронизируем имя чата из сообщения
                             chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);

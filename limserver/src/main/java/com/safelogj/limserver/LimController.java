@@ -41,7 +41,6 @@ import javax.net.ssl.SSLContext;
 
 public class LimController {
     public static final Logger log = LoggerFactory.getLogger(LimController.class);
-    public static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
     public static final String EMPTY_STRING = "";
     private static final String USER_DIR = "user.dir";
     private static final String DB_PATH = System.getProperty(USER_DIR) + "/db";
@@ -50,6 +49,7 @@ public class LimController {
     public static final int DATA_ERR = 65;
     public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
+    private static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
     public static DatabaseManager dbManager;
     private static ThreadPoolExecutor EXECUTOR_POOL;
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
@@ -88,6 +88,14 @@ public class LimController {
             System.exit(ERROR);
         }
         log.info("LimServer run");
+    }
+
+    public static void setOnline(long userId) {
+        onlineUsers.put(userId, System.currentTimeMillis());
+    }
+
+    public static boolean getOnlineStatus(Long id) {
+       return onlineUsers.containsKey(id);
     }
 
     private static HttpsServer initDbAndHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,

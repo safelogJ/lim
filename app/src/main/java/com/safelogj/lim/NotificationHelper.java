@@ -22,7 +22,6 @@ public class NotificationHelper {
     public static final String EXTRA_CHAT_NAME = "extra_chat_name";
     public static final String EXTRA_CHAT_COLOR = "extra_chat_color";
     public static final String EXTRA_OPEN_CHAT_LIST = "extra_open_chat_list";
-    public static final int MULTI_CHAT_ID = -2;
 
     public static void showNotification(Context context, List<Chat> unreadChats) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);

@@ -97,22 +97,10 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
                 binding.timeText.setVisibility(View.VISIBLE);
             }
 
-//            // Цвет времени (статус отправки последнего)
-//            if (chat.lastSendStatus == Message.STATUS_SENT) {
-//                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.last_time));
-//            } else {
-//                binding.timeText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
-//            }
-//
-//            // Цвет имени (заблокирован или нет)
-//            binding.chatName.setTextColor(itemView.getContext().getColor(
-//                    chat.isBlocked ? R.color.light_gray_aaa : R.color.chat_name));
-
             binding.chatName.setText(chat.name);
             binding.lastMessage.setText(chat.lastMessage);
             binding.timeText.setText(chat.lastTimestampFormatted);
 
-            // Настраиваем фон аватара (новое сообщение)
             updateNewMsgStatus(chat.hasNewMsg);
             updateBlockStatus(chat);
             updateSendStatus(chat);

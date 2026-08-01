@@ -23,6 +23,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -96,7 +98,7 @@ public class ChatFragment extends Fragment {
         @Override
         public void run() {
             if (currentChatId != Chat.INVALID_ID) {
-                chatViewModel.loadDbMessages(currentChatId);
+                chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
                 controller.getDbHelper().markChatAsRead(currentChatId);
                 updateOnlineStatusUI();
             }
@@ -120,11 +122,12 @@ public class ChatFragment extends Fragment {
 
     private long currentChatId = Chat.INVALID_ID;
     private long currentChatLocalId = Chat.INVALID_ID;
-    private  int chatColor;
+    private int chatColor;
     private String currentChatName = AppController.EMPTY_STRING;
     private String interlocutorPublicKey = AppController.EMPTY_STRING;
     private String inputText = AppController.EMPTY_STRING;
-    private int lastMessageCount = 0;
+    private int lastMsgListSize;
+    private long lastMaxMsgId;
 
     public ChatFragment() {
         // Required empty public constructor
@@ -174,6 +177,7 @@ public class ChatFragment extends Fragment {
 
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
+        setOnScrollListener();
         setObserveChat();
         setObservePublicKey();
         setObserveDbPublicKey();
@@ -251,9 +255,15 @@ public class ChatFragment extends Fragment {
                 msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
-                    if (msgList.size() > lastMessageCount) {
-                        lastMessageCount = msgList.size();
-                        mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                    if (!msgList.isEmpty()) {
+                        long newMaxId = msgList.get(msgList.size() - 1).localId;
+                        Log.w(AppController.LOG_TAG, "new max id: " + newMaxId + " last max id: " + lastMaxMsgId);
+                        if (newMaxId > lastMaxMsgId) {
+                            Log.d(AppController.LOG_TAG, "new max id: " + newMaxId + " last max id: " + lastMaxMsgId);
+                            mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                        }
+                        lastMsgListSize = msgList.size();
+                        lastMaxMsgId = newMaxId;
                     }
                 });
             }
@@ -266,11 +276,26 @@ public class ChatFragment extends Fragment {
             if (uri != null) {
                 // Показываем панель с именем файла
                 mBinding.attachmentPreview.setVisibility(View.VISIBLE);
-              //  mBinding.attachmentPreview.setBackground(AppCompatResources.getDrawable(controller, R.drawable.fielder_background_tr));
+                //  mBinding.attachmentPreview.setBackground(AppCompatResources.getDrawable(controller, R.drawable.fielder_background_tr));
                 mBinding.fileNameText.setText(chatViewModel.getSelectedFileName());
             } else {
                 // Скрываем панель, если файл удален
                 mBinding.attachmentPreview.setVisibility(View.INVISIBLE);
+            }
+        });
+    }
+
+    private void setOnScrollListener() {
+        mBinding.messagesRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                if (dy < 0) { // dy < 0 означает, что пользователь скроллит ВВЕРХ
+                    LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+                    if (layoutManager != null && layoutManager.findFirstVisibleItemPosition() <= 5) {
+                        chatViewModel.loadMoreMessages(currentChatId);
+                    }
+                }
             }
         });
     }
@@ -329,7 +354,7 @@ public class ChatFragment extends Fragment {
         chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
         chatViewModel.clearFile();
         inputText = AppController.EMPTY_STRING;
-        chatViewModel.loadDbMessages(currentChatId);
+        chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
     }
 
     private Message buildMessage(@Nullable Uri fileUri, @Nullable String fileName) {

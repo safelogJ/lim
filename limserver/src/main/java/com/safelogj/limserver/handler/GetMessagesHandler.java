@@ -46,11 +46,11 @@ public class GetMessagesHandler extends BaseHandler {
             response.displayName = user.displayName;
             response.messages = messages;
 
-            LimController.onlineUsers.put(user.id, System.currentTimeMillis());
+            LimController.setOnline(user.id);
             if (req.interlocutorIds() != null && !req.interlocutorIds().isEmpty()) {
                 Map<Long, Boolean> statuses = new HashMap<>();
                 for (Long id : req.interlocutorIds()) {
-                    statuses.put(id, LimController.onlineUsers.containsKey(id));
+                    statuses.put(id, LimController.getOnlineStatus(id));
                 }
                 response.onlineStatuses = statuses;
             }
