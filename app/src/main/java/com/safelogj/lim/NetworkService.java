@@ -375,7 +375,7 @@ public class NetworkService {
                 public void writeTo(@NonNull BufferedSink sink) throws IOException {
                     try {
                         sink.write(iv); // Пишем IV в начало
-                        Cipher cipher = controller.getFileEncryptCipher(msg.interlocutorPublicKey, iv);
+                        Cipher cipher = controller.getFileCipherByMode(msg.interlocutorPublicKey, iv, Cipher.ENCRYPT_MODE);
                         byte[] buffer = new byte[8192];
                         int read;
                         while ((read = inputStream.read(buffer)) != -1) {
@@ -541,7 +541,7 @@ public class NetworkService {
                 byte[] iv = new byte[12];
                 if (is.read(iv) != 12) throw new IOException("Missing IV header");
                 // 2. Настраиваем CipherInputStream
-                CipherInputStream cis = new CipherInputStream(is, controller.getFileDecryptCipher(msg.interlocutorPublicKey, iv));
+                CipherInputStream cis = new CipherInputStream(is, controller.getFileCipherByMode(msg.interlocutorPublicKey, iv, Cipher.DECRYPT_MODE));
                 File localFile = getUniquePath(msg);
                 try (FileOutputStream fos = new FileOutputStream(localFile)) {
                     byte[] buffer = new byte[8192];

@@ -215,8 +215,8 @@ public class AppController extends Application {
         return ONLINE_USERS_CHATS.get(interlocutorId);
     }
 
-    public static Collection <Map<Long, Boolean>> getChatsStatuses() {
-       return ONLINE_USERS_CHATS.values();
+    public static Collection<Map<Long, Boolean>> getChatsStatuses() {
+        return ONLINE_USERS_CHATS.values();
     }
 
     public static void updateChatColor(long chatId, int color) {
@@ -794,6 +794,7 @@ public class AppController extends Application {
                 new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
                         .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
+
     /**
      * Создает пару ключей для E2EE.
      */
@@ -806,7 +807,6 @@ public class AppController extends Application {
         // Превращаем ключи в обычные строки (Base64)
         e2eePrivateKey = Base64.encodeToString(kp.getPrivate().getEncoded(), Base64.NO_WRAP);
         e2eePublicKey = Base64.encodeToString(kp.getPublic().getEncoded(), Base64.NO_WRAP);
-        Log.d(LOG_TAG, "E2EE keys created: " + e2eePrivateKey + ", " + e2eePublicKey);
     }
 
     public String getPrivateHash(String pass) throws IllegalArgumentException, NoSuchAlgorithmException,
@@ -818,7 +818,8 @@ public class AppController extends Application {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromPassword(pass, salt));
         byte[] iv = cipher.getIV();
-        byte[] encrypted = cipher.doFinal(e2eePrivateKey.getBytes(StandardCharsets.UTF_8));
+        byte[] keyBytes = Base64.decode(e2eePrivateKey, Base64.NO_WRAP);
+        byte[] encrypted = cipher.doFinal(keyBytes);
         byte[] combined = new byte[salt.length + iv.length + encrypted.length];
         System.arraycopy(salt, 0, combined, 0, salt.length);
         System.arraycopy(iv, 0, combined, salt.length, iv.length);
@@ -835,24 +836,10 @@ public class AppController extends Application {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
         cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromPassword(password, Arrays.copyOfRange(combined, 0, 16)),
                 new GCMParameterSpec(128, Arrays.copyOfRange(combined, 16, 28)));
-        e2eePrivateKey = new String(cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length)), StandardCharsets.UTF_8);
+        byte[] decryptedKeyBytes = cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length));
+        e2eePrivateKey = Base64.encodeToString(decryptedKeyBytes, Base64.NO_WRAP);
+        sharedKeys.clear();
     }
-
-//    public void unpackPrivateKey(@Nullable String encryptedBlob, String password) throws IllegalArgumentException, NoSuchAlgorithmException,
-//            NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, NoSuchPaddingException,
-//            InvalidKeyException, BadPaddingException, IllegalBlockSizeException, InvalidAlgorithmParameterException {
-//
-//        if (encryptedBlob == null) return;
-//        byte[] combined = Base64.decode(encryptedBlob, Base64.NO_WRAP);
-//        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-//        cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromPassword(password, Arrays.copyOfRange(combined, 0, 16)),
-//                new GCMParameterSpec(128, Arrays.copyOfRange(combined, 16, 28)));
-//
-//        // ПРАВИЛЬНО: Декодируем байты и СРАЗУ в Base64 String
-//        byte[] decryptedKeyBytes = cipher.doFinal(Arrays.copyOfRange(combined, 28, combined.length));
-//        e2eePrivateKey = Base64.encodeToString(decryptedKeyBytes, Base64.NO_WRAP);
-//        sharedKeys.clear();
-//    }
 
     private SecretKey deriveKeyFromPassword(String password, byte[] salt) throws IllegalArgumentException, NoSuchAlgorithmException,
             NullPointerException, UnsupportedOperationException, IllegalStateException, InvalidKeySpecException {
@@ -867,12 +854,10 @@ public class AppController extends Application {
     @Nullable
     public String encryptMessage(@NonNull String plainText, @NonNull String theirPublicKeyBase64) {
         try {
-            // 2. Шифруем через AES-GCM
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKeyBase64));
             byte[] iv = cipher.getIV();
             byte[] encryptedText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
-            // 3. Упаковываем в строку: [IV_LENGTH(1b)] + [IV] + [DATA]
             byte[] packet = new byte[1 + iv.length + encryptedText.length];
             packet[0] = (byte) iv.length;
             System.arraycopy(iv, 0, packet, 1, iv.length);
@@ -889,18 +874,13 @@ public class AppController extends Application {
     @Nullable
     public String decryptMessage(@NonNull String encryptedBase64, @NonNull String theirPublicKeyBase64) {
         try {
-            Log.d(LOG_TAG, "сообщение " + encryptedBase64 + " ключ " + theirPublicKeyBase64);
             byte[] packet = Base64.decode(encryptedBase64, Base64.NO_WRAP);
-            // 1. Извлекаем IV и зашифрованные данные
             int ivLength = packet[0] & 0xFF;
             byte[] iv = Arrays.copyOfRange(packet, 1, 1 + ivLength);
             byte[] encryptedText = Arrays.copyOfRange(packet, 1 + ivLength, packet.length);
-            // 3. Расшифровываем
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKeyBase64), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
-            Log.d(LOG_TAG, "chipher init");
             byte[] decrypted = cipher.doFinal(encryptedText);
-            Log.d(LOG_TAG, "chipher dofinal");
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
             Log.w(LOG_TAG, "Decryption failed (maybe plain text?): " + e.getMessage());
@@ -914,7 +894,6 @@ public class AppController extends Application {
             try {
                 return calculateSharedKey(key);
             } catch (Exception e) {
-                Log.d(LOG_TAG, "исключение в : getSharedKey");
                 throw new RuntimeException(e);
             }
         });
@@ -923,36 +902,19 @@ public class AppController extends Application {
     private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
         KeyAgreement ka = ECDH.get();
-        Log.d(LOG_TAG, "взяли КА");
         ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
-        Log.d(LOG_TAG, "инитиализовали КА");
         ka.doPhase(EC_KEY_FACTORY.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
-        Log.d(LOG_TAG, "фаза КА");
         byte[] aesKeyBytes = SHA256.get().digest(ka.generateSecret());
-        Log.d(LOG_TAG, "ША256 дайджест");
         return new SecretKeySpec(aesKeyBytes, "AES");
     }
-
     /**
-     * Создает Cipher для потокового шифрования файла.
-     * Мы добавим IV в начало файла вручную в NetworkService.
+     * Создает Cipher для потокового шифрования/расшифровки файла.
      */
-    public Cipher getFileEncryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
+    public Cipher getFileCipherByMode(String theirPublicKey, byte[] iv, int mode) throws IllegalArgumentException, NoSuchAlgorithmException,
             NullPointerException, UnsupportedOperationException, IllegalStateException, NoSuchPaddingException,
             InvalidKeyException, InvalidAlgorithmParameterException {
         Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.ENCRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
-        return cipher;
-    }
-
-    /**
-     * Создает Cipher для потоковой расшифровки файла.
-     */
-    public Cipher getFileDecryptCipher(String theirPublicKey, byte[] iv) throws IllegalArgumentException, NoSuchAlgorithmException,
-            NullPointerException, UnsupportedOperationException, IllegalStateException, NoSuchPaddingException,
-            InvalidKeyException, InvalidAlgorithmParameterException {
-        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
+        cipher.init(mode, getSharedKey(theirPublicKey), new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv));
         return cipher;
     }
 
@@ -963,6 +925,5 @@ public class AppController extends Application {
             case AppController.CHAT_COLOR_BLUE -> R.drawable.interlocutor_background_blue;
             default -> R.drawable.interlocutor_background_green;
         };
-
     }
 }

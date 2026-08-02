@@ -404,7 +404,7 @@ public class ChatFragment extends Fragment {
         chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
         chatViewModel.clearFile();
         inputText = AppController.EMPTY_STRING;
-        chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
+        chatViewModel.loadDbMessages(currentChatId, ++lastMsgListSize);
     }
 
     private Message buildMessage(@Nullable Uri fileUri, @Nullable String fileName) {
