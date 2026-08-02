@@ -798,7 +798,6 @@ public class AppController extends Application {
                 new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
                         .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
-
     /**
      * Создает пару ключей для E2EE.
      */
@@ -903,16 +902,6 @@ public class AppController extends Application {
         });
     }
 
-    private byte[] hkdfDerive(byte[] secret) throws NoSuchAlgorithmException, InvalidKeyException {
-        Mac mac = Mac.getInstance(HMAC_SHA256_ALGORITHM);
-        mac.init(new SecretKeySpec(HKDF_SALT, HMAC_SHA256_ALGORITHM));
-        byte[] prk = mac.doFinal(secret);
-        mac.init(new SecretKeySpec(prk, HMAC_SHA256_ALGORITHM));
-        mac.update(HKDF_INFO);
-        mac.update((byte) 0x01);
-        return mac.doFinal();
-    }
-
     private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException, NoSuchAlgorithmException {
 
@@ -924,13 +913,14 @@ public class AppController extends Application {
         return new SecretKeySpec(strongKey, "AES");
     }
 
-    private SecretKey calculateSharedKey1(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
-            UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
-        KeyAgreement ka = ECDH.get();
-        ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
-        ka.doPhase(EC_KEY_FACTORY.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
-        byte[] aesKeyBytes = SHA256.get().digest(ka.generateSecret());
-        return new SecretKeySpec(aesKeyBytes, "AES");
+    private byte[] hkdfDerive(byte[] secret) throws NoSuchAlgorithmException, InvalidKeyException {
+        Mac mac = Mac.getInstance(HMAC_SHA256_ALGORITHM);
+        mac.init(new SecretKeySpec(HKDF_SALT, HMAC_SHA256_ALGORITHM));
+        byte[] prk = mac.doFinal(secret);
+        mac.init(new SecretKeySpec(prk, HMAC_SHA256_ALGORITHM));
+        mac.update(HKDF_INFO);
+        mac.update((byte) 0x01);
+        return mac.doFinal();
     }
     /**
      * Создает Cipher для потокового шифрования/расшифровки файла.
