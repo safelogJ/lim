@@ -132,6 +132,24 @@ public class ChatFragment extends Fragment {
             });
             uiHandler.postDelayed(this, 4000);
         }
+
+        private void updateOnlineStatusUI() {
+            Log.d(AppController.LOG_TAG, "updateOnlineStatusUI");
+            if (mBinding == null) return;
+            Boolean isOnline = false;
+            for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
+                Log.d(AppController.LOG_TAG, "updateOnlineStatusUI пееребор");
+                if (userChats.containsKey(currentChatId)) {
+                    isOnline = userChats.get(currentChatId);
+                    Log.d(AppController.LOG_TAG, "updateOnlineStatusUI нашли -1 " + currentChatId + " ono " + isOnline);
+                    break;
+                }
+            }
+            if (mBinding.onlineStatus.getBackground() != null) {
+                mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
+                        controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
+            }
+        }
     };
 
     private MediaRecorder mediaRecorder;
@@ -404,7 +422,7 @@ public class ChatFragment extends Fragment {
         chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
         chatViewModel.clearFile();
         inputText = AppController.EMPTY_STRING;
-        chatViewModel.loadDbMessages(currentChatId, ++lastMsgListSize);
+        chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
     }
 
     private Message buildMessage(@Nullable Uri fileUri, @Nullable String fileName) {
@@ -501,21 +519,6 @@ public class ChatFragment extends Fragment {
 
                 manager.cancel(NotificationHelper.NOTIFICATION_ID);
             }
-        }
-    }
-
-   private void updateOnlineStatusUI() {
-        if (mBinding == null) return;
-        Boolean isOnline = false;
-        for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
-            if (userChats.containsKey(currentChatId)) {
-                isOnline = userChats.get(currentChatId);
-                break;
-            }
-        }
-        if (mBinding.onlineStatus.getBackground() != null) {
-            mBinding.onlineStatus.getBackground().setTint(ContextCompat.getColor(
-                    controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
         }
     }
 

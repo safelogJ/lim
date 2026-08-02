@@ -8,6 +8,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -48,7 +49,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     private MediaPlayer mediaPlayer;
     private long playingMsgId = -1;
     private ItemMessageBinding playingBinding;
-    private final Handler progressHandler = new Handler(android.os.Looper.getMainLooper());
+    private final Handler progressHandler = new Handler(Looper.getMainLooper());
     private final Runnable progressRunnable = new Runnable() {
         @Override
         public void run() {
@@ -67,13 +68,6 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         this.userId = userId;
         this.chatColor = chatColor;
     }
-
-    public boolean isAudioFile(String fileName) {
-        if (fileName == null) return false;
-        String name = fileName.toLowerCase();
-        return name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".wav") || name.endsWith(".ogg");
-    }
-
 
     @NonNull
     @Override
@@ -105,6 +99,12 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         }
     }
 
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        stopPlaying();
+        super.onDetachedFromRecyclerView(recyclerView);
+    }
+
     public static class MessageViewHolder extends RecyclerView.ViewHolder {
         private final ItemMessageBinding binding;
 
@@ -113,7 +113,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             this.binding = binding;
         }
 
-        public void bind(Message message, long currentUserId, int color, MsgAdapter adapter) {
+        private void bind(Message message, long currentUserId, int color, MsgAdapter adapter) {
             // Сбрасываем видимость перед установкой (важно для RecyclerView)
             binding.messageImage.setVisibility(View.GONE);
             binding.fileContainer.setVisibility(View.GONE);
@@ -134,7 +134,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                         .override(Target.SIZE_ORIGINAL)
                         .into(binding.messageImage);
 
-            } else if (adapter.isAudioFile(message.fileName) && message.isLocalFile()) {
+            } else if (isAudioFile(message.fileName) && message.isLocalFile()) {
                 binding.fileContainer.setVisibility(View.GONE);
                 binding.audioPlayer.audioPlayerContainer.setVisibility(View.VISIBLE);
                 adapter.setupAudioPlayer(message, binding);
@@ -194,7 +194,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             setListeners(message, currentUserId);
         }
 
-        public void setListeners(Message message, long currentUserId) {
+        private void setListeners(Message message, long currentUserId) {
             binding.messageImage.setOnClickListener(v -> openFile(message, currentUserId));
             binding.fileContainer.setOnClickListener(v -> openFile(message, currentUserId));
         }
@@ -231,7 +231,13 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             }
         }
 
-        public void updateStatus(long status) {
+        private boolean isAudioFile(String fileName) {
+            if (fileName == null) return false;
+            String name = fileName.toLowerCase();
+            return name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".wav") || name.endsWith(".ogg");
+        }
+
+        private void updateStatus(long status) {
             if (status == Message.STATUS_SENT) {
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.last_time));
             } else {
@@ -239,7 +245,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             }
         }
 
-        public void updateTime(String time) {
+        private void updateTime(String time) {
             binding.messageTime.setText(time);
         }
     }
@@ -270,10 +276,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         public Object getChangePayload(@NonNull Message oldItem, @NonNull Message newItem) {
             Bundle diff = new Bundle();
             if (oldItem.sendStatus != newItem.sendStatus) diff.putBoolean(STATUS, true);
-            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime))
-                diff.putBoolean(TIME, true);
-            if (!Objects.equals(oldItem.filePath, newItem.filePath))
-                diff.putBoolean(FILE_PATH, true);
+            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) diff.putBoolean(TIME, true);
+            if (!Objects.equals(oldItem.filePath, newItem.filePath)) diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }
     }
@@ -289,7 +293,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         } else {
             binding.audioPlayer.btnPlayPause.setImageResource(R.drawable.play_arrow_48px);
             binding.audioPlayer.audioSeekBar.setProgress(0);
-            binding.audioPlayer.tvAudioTime.setText("0:00");
+            binding.audioPlayer.tvAudioTime.setText(R.string.zero_time);
         }
 
         // 2. Клик на Play/Pause

@@ -14,7 +14,6 @@
         android:layout_marginStart="16dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/cloud_24px"
-        android:textColor="@color/chat_name"
         android:textSize="20sp"
         app:layout_constraintBottom_toBottomOf="@+id/chatNameTextScroll"
         app:layout_constraintStart_toStartOf="parent"

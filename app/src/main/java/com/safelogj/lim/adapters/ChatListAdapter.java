@@ -137,7 +137,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
         public void updateOnlineStatus(Chat chat) {
             if (chat.id != Chat.INVALID_ID) {
-                binding.chatIcon.getDrawable().setTint(
+                binding.chatIcon.getDrawable().mutate().setTint(
                         itemView.getContext().getColor(chat.isOnline ? R.color.last_time : R.color.light_gray_aaa));
             }
         }

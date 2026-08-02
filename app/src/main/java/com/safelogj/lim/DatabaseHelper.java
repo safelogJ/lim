@@ -428,7 +428,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try (Cursor cursor = database.rawQuery(
                     "SELECT local_id, id, chat_id, chat_name, sender_id, " +
                             "text, type, file_path, file_name, timestamp, send_status " +
-                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + (lastMsgListSize == 0 ? 50 : lastMsgListSize),
+                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + Math.max(50, lastMsgListSize),
                     new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     do {

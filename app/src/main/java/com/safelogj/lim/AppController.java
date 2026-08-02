@@ -81,6 +81,7 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyAgreement;
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -121,6 +122,9 @@ public class AppController extends Application {
     private static final int AES_KEY_SIZE = 256;
     private static final String ENCRYPTED_DATA_KEY = "encryptedData";    // Константы для E2EE
     private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final String HMAC_SHA256_ALGORITHM = "HmacSHA256";
+    private static final byte[] HKDF_SALT = "LimMessenger_v1_FixedSalt".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] HKDF_INFO = "Lim_Messenger_E2EE_V1".getBytes(StandardCharsets.UTF_8);
     public static final int CHAT_COLOR_GREEN = 0;
     public static final int CHAT_COLOR_PINK = 1;
     public static final int CHAT_COLOR_YELLOW = 2;
@@ -899,7 +903,28 @@ public class AppController extends Application {
         });
     }
 
+    private byte[] hkdfDerive(byte[] secret) throws NoSuchAlgorithmException, InvalidKeyException {
+        Mac mac = Mac.getInstance(HMAC_SHA256_ALGORITHM);
+        mac.init(new SecretKeySpec(HKDF_SALT, HMAC_SHA256_ALGORITHM));
+        byte[] prk = mac.doFinal(secret);
+        mac.init(new SecretKeySpec(prk, HMAC_SHA256_ALGORITHM));
+        mac.update(HKDF_INFO);
+        mac.update((byte) 0x01);
+        return mac.doFinal();
+    }
+
     private SecretKey calculateSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
+            UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException, NoSuchAlgorithmException {
+
+        KeyAgreement ka = ECDH.get();
+        ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
+        ka.doPhase(EC_KEY_FACTORY.generatePublic(new X509EncodedKeySpec(Base64.decode(theirPublicKeyBase64, Base64.NO_WRAP))), true);
+        byte[] rawSecret = ka.generateSecret();
+        byte[] strongKey = hkdfDerive(rawSecret);
+        return new SecretKeySpec(strongKey, "AES");
+    }
+
+    private SecretKey calculateSharedKey1(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException, InvalidKeySpecException, InvalidKeyException {
         KeyAgreement ka = ECDH.get();
         ka.init(EC_KEY_FACTORY.generatePrivate(new PKCS8EncodedKeySpec(Base64.decode(e2eePrivateKey, Base64.NO_WRAP))));
