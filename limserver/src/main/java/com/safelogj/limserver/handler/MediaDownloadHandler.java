@@ -14,12 +14,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class MediaDownloadHandler extends BaseHandler {
-    private static final Set<String> activeFileLocks = ConcurrentHashMap.newKeySet();
-
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         BaseResponse response = new BaseResponse();
@@ -27,7 +23,7 @@ public class MediaDownloadHandler extends BaseHandler {
             sendMethodError(exchange, response);
             return;
         }
-        File file;
+
         try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8)) {
             MediaDownloadRequest req = gson.fromJson(reader, MediaDownloadRequest.class);
             if (req == null || !req.isValidRequest() || !isUsernameValid(req.username())) {
@@ -41,7 +37,7 @@ public class MediaDownloadHandler extends BaseHandler {
                 return;
             }
             // 4. Проверка существования файла
-            file = new File(LimController.MEDIA_PATH, req.filePath());
+           File file = new File(LimController.MEDIA_PATH, req.filePath());
             if (!file.exists() || file.isDirectory() || System.currentTimeMillis() - file.lastModified() > LimController.MEDIA_DOWNLOAD_LIFETIME) {
                 response.status = BaseResponse.ERROR;
                 response.message = "File is no longer available";
@@ -53,21 +49,36 @@ public class MediaDownloadHandler extends BaseHandler {
                 sendUnauthorizedError(exchange, response);
                 return;
             }
+            String path = file.getAbsolutePath();
+            if (Boolean.TRUE.equals(req.isConfirmed())) {
+                if (LimController.ACTIVE_DOWNLOADS.putIfAbsent(user.id, path) == null) {
+                    try {
+                        if (Files.deleteIfExists(file.toPath())) {
+                            LimController.log.info("File confirmed and deleted: {}", file.getName());
+                        }
+                    } finally {
+                        LimController.ACTIVE_DOWNLOADS.remove(user.id);
+                    }
+                }
+                response.message = "file deletion request";
+                sendSuccess(exchange, response);
+                return;
+            }
 
+            if (LimController.ACTIVE_DOWNLOADS.putIfAbsent(user.id, path) != null) {
+                response.status = BaseResponse.ERROR;
+                response.message = "File is already being downloaded by another device";
+                sendResponse(exchange, 429, response); // Too Many Requests
+                return;
+            }
+            sendMediaFile(exchange, file, user);
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
             sendCatchError(exchange, response, e);
-            return;
         }
+    }
 
-        String path = file.getAbsolutePath();
-        if (!activeFileLocks.add(path)) {
-            response.status = BaseResponse.ERROR;
-            response.message = "File is already being downloaded by another device";
-            sendResponse(exchange, 429, response); // Too Many Requests
-            return;
-        }
-
+    private void sendMediaFile(HttpExchange exchange, File file, User user) {
         try {
             exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
             exchange.sendResponseHeaders(200, file.length());
@@ -79,15 +90,11 @@ public class MediaDownloadHandler extends BaseHandler {
                 }
                 os.flush();
             }
-            Files.deleteIfExists(file.toPath());
-            LimController.log.info("MediaDownloadHandler delete the file after successful upload {}", file.getPath());
-            return;
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
-            LimController.log.info("MediaDownloadHandler error: clear the cache from the file {}", file.getPath());
         } finally {
-            activeFileLocks.remove(path);
+            LimController.ACTIVE_DOWNLOADS.remove(user.id);
+            FileCacheUtils.dropFileFromCache(file);
         }
-        FileCacheUtils.dropFileFromCache(file);
     }
 }

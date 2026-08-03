@@ -43,15 +43,7 @@ public class DatabaseManager {
     private final HikariPoolMXBean poolProxy;
 
     DatabaseManager(String dbFolderPath, int poolSize) {
-        HikariConfig config = new HikariConfig();
-        // Путь к базе
-        config.setJdbcUrl("jdbc:sqlite:" + dbFolderPath + "/" + DB_FILE);
-        // Настройки пула
-        config.setMaximumPoolSize(poolSize);
-        config.setMinimumIdle(2); // Минимум 2 всегда открыты
-        config.setConnectionTimeout(5000); // Ждать соединение из пула не более 5 сек
-        config.setIdleTimeout(1200000);    // Закрывать лишние через 20 мин простоя
-        config.setMaxLifetime(3600000);     // Макс. время жизни соединения
+        HikariConfig config = getHikariConfig(dbFolderPath, poolSize);
         // Оптимизации SQLite прямо в URL или через свойства
         config.addDataSourceProperty("journal_mode", "WAL");
         config.addDataSourceProperty("busy_timeout", "5000");
@@ -59,6 +51,18 @@ public class DatabaseManager {
         config.addDataSourceProperty("cache_size", "-16000");
         dataSource = new HikariDataSource(config);
         poolProxy = dataSource.getHikariPoolMXBean();
+    }
+
+    @NotNull
+    private HikariConfig getHikariConfig(String dbFolderPath, int poolSize) {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:sqlite:" + dbFolderPath + "/" + DB_FILE);
+        config.setMaximumPoolSize(poolSize);
+        config.setMinimumIdle(2); // Минимум 2 всегда открыты
+        config.setConnectionTimeout(5000); // Ждать соединение из пула не более 5 сек
+        config.setIdleTimeout(1200000);    // Закрывать лишние через 20 мин простоя
+        config.setMaxLifetime(3600000);     // Макс. время жизни соединения
+        return config;
     }
 
     // Метод для получения живого соединения с базой

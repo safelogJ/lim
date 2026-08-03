@@ -92,7 +92,7 @@ public class UserFragment extends Fragment {
                     @Override
                     public void onSuccess(List<Chat> unreadChats) {
                         if (!unreadChats.isEmpty()) {
-                            Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + unreadChats.get(0).id);
+                            Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + unreadChats.getFirst().id);
                             NotificationHelper.showNotification(controller, unreadChats);
                         }
                     }

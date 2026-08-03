@@ -41,6 +41,7 @@ import javax.net.ssl.SSLContext;
 
 public class LimController {
     public static final Logger log = LoggerFactory.getLogger(LimController.class);
+    public static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
     public static final String EMPTY_STRING = "";
     private static final String USER_DIR = "user.dir";
     private static final String DB_PATH = System.getProperty(USER_DIR) + "/db";
@@ -176,7 +177,9 @@ public class LimController {
             File[] files = mediaDir.listFiles();
             if (files != null) {
                 for (File file : files) {
+                    String absolutePath = file.getAbsolutePath();
                     if (file.isFile() && (now - file.lastModified() > MEDIA_DELETE_LIFETIME) && Files.deleteIfExists(file.toPath())) {
+                        ACTIVE_DOWNLOADS.values().removeIf(path -> path.equals(absolutePath));
                         log.info("File {} older than 31 days deleted successfully", file.getName());
                     }
                 }

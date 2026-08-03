@@ -61,7 +61,6 @@ public class ChatFragment extends Fragment {
     private static final String ARG_CHAT_ID = "arg_chat_id";
     private static final String ARG_CHAT_LOCAL_ID = "arg_chat_local_id";
     private static final String ARG_CHAT_NAME = "arg_chat_name";
-    private static final String ARG_CHAT_COLOR = "arg_chat_color";
     private final List<Message> messages = new ArrayList<>();
     private AppController controller;
     private FragmentChatBinding mBinding;
@@ -186,13 +185,12 @@ public class ChatFragment extends Fragment {
         // Required empty public constructor
     }
 
-    public static ChatFragment newInstance(long chatId, long chatLocalId, String chatName, int chatColor) {
+    public static ChatFragment newInstance(long chatId, long chatLocalId, String chatName) {
         ChatFragment fragment = new ChatFragment();
         Bundle args = new Bundle();
         args.putLong(ARG_CHAT_ID, chatId);
         args.putLong(ARG_CHAT_LOCAL_ID, chatLocalId);
         args.putString(ARG_CHAT_NAME, chatName);
-        args.putInt(ARG_CHAT_COLOR, chatColor);
         fragment.setArguments(args);
         return fragment;
     }
@@ -206,13 +204,11 @@ public class ChatFragment extends Fragment {
             currentChatId = getArguments().getLong(ARG_CHAT_ID, Chat.INVALID_ID);
             currentChatLocalId = getArguments().getLong(ARG_CHAT_LOCAL_ID, Chat.INVALID_ID);
             currentChatName = getArguments().getString(ARG_CHAT_NAME, AppController.EMPTY_STRING);
-            chatColor = getArguments().getInt(ARG_CHAT_COLOR);
         }
     }
 
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         mBinding = FragmentChatBinding.inflate(inflater, container, false);
         return mBinding.getRoot();
     }
@@ -221,6 +217,7 @@ public class ChatFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        chatColor = AppController.getChatColor(currentChatId, chatColor);
         adapter = new MsgAdapter(controller.getUserId(), chatColor);
         mBinding.messagesRecyclerView.setAdapter(adapter);
 
@@ -311,12 +308,12 @@ public class ChatFragment extends Fragment {
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && !msgList.isEmpty() && mBinding != null) {
-                renewChatName(msgList.get(msgList.size() - 1).chatName);
+                renewChatName(msgList.getLast().chatName);
                 messages.clear();
                 msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
-                    long newMaxId = msgList.get(msgList.size() - 1).localId;
+                    long newMaxId = msgList.getLast().localId;
                     if (newMaxId > lastMaxMsgId) {
                         mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
                     }

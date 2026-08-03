@@ -1,6 +1,6 @@
 package com.safelogj.limserver.request;
 
-public record MediaDownloadRequest(String username, String password, Long chatId, String filePath) {
+public record MediaDownloadRequest(String username, String password, Long chatId, String filePath, Boolean isConfirmed) {
 
     public boolean isValidRequest() {
         return username != null && !username.isEmpty()

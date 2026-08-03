@@ -20,7 +20,6 @@ public class NotificationHelper {
     public static final String EXTRA_CHAT_ID = "extra_chat_id";
     public static final String EXTRA_CHAT_LOCAL_ID = "extra_chat_local_id";
     public static final String EXTRA_CHAT_NAME = "extra_chat_name";
-    public static final String EXTRA_CHAT_COLOR = "extra_chat_color";
     public static final String EXTRA_OPEN_CHAT_LIST = "extra_open_chat_list";
 
     public static void showNotification(Context context, List<Chat> unreadChats) {
@@ -38,13 +37,12 @@ public class NotificationHelper {
         String title;
         String text;
         if (unreadChats.size() == 1) {
-            Chat chat = unreadChats.get(0);
+            Chat chat = unreadChats.getFirst();
             title = context.getString(R.string.new_msg);
             text = context.getString(R.string.new_msg_from) + " " + chat.name;
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
-            intent.putExtra(EXTRA_CHAT_COLOR, chat.color);
 
             intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
@@ -55,7 +53,6 @@ public class NotificationHelper {
             intent.removeExtra(EXTRA_CHAT_ID);
             intent.removeExtra(EXTRA_CHAT_LOCAL_ID);
             intent.removeExtra(EXTRA_CHAT_NAME);
-            intent.removeExtra(EXTRA_CHAT_COLOR);
         }
 
         PendingIntent pendingIntent = PendingIntent.getActivity(

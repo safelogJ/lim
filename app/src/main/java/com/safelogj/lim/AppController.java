@@ -7,7 +7,6 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -44,7 +43,6 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
@@ -129,14 +127,6 @@ public class AppController extends Application {
     public static final int CHAT_COLOR_PINK = 1;
     public static final int CHAT_COLOR_YELLOW = 2;
     public static final int CHAT_COLOR_BLUE = 3;
-    private static final ThreadLocal<MessageDigest> SHA256 =
-            ThreadLocal.withInitial(() -> {
-                try {
-                    return MessageDigest.getInstance("SHA-256");
-                } catch (NoSuchAlgorithmException e) {
-                    throw new RuntimeException(e);
-                }
-            });
     private static final ThreadLocal<KeyAgreement> ECDH =
             ThreadLocal.withInitial(() -> {
                 try {
@@ -759,15 +749,13 @@ public class AppController extends Application {
     }
 
     private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
-            channel.enableVibration(false); // ОТКЛЮЧАЕМ вибрацию для канала
-            channel.setVibrationPattern(new long[]{0}); // На всякий случай зануляем паттерн
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
-            }
+        NotificationChannel channel = new NotificationChannel(
+                NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
+        channel.enableVibration(false); // ОТКЛЮЧАЕМ вибрацию для канала
+        channel.setVibrationPattern(new long[]{0}); // На всякий случай зануляем паттерн
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
         }
     }
 
@@ -798,6 +786,7 @@ public class AppController extends Application {
                 new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
                         .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
+
     /**
      * Создает пару ключей для E2EE.
      */
@@ -871,6 +860,7 @@ public class AppController extends Application {
             return null; // Если не смогли зашифровать - вернем как есть (или ошибку)
         }
     }
+
     /**
      * Расшифровывает входящее сообщение.
      */
@@ -922,6 +912,7 @@ public class AppController extends Application {
         mac.update((byte) 0x01);
         return mac.doFinal();
     }
+
     /**
      * Создает Cipher для потокового шифрования/расшифровки файла.
      */

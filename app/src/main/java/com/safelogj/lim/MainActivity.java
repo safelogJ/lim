@@ -103,12 +103,11 @@ public class MainActivity extends AppCompatActivity {
         }
         if (chatId != Chat.INVALID_ID) {
             showFragment(ChatFragment.newInstance(chatId, intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, Chat.INVALID_ID),
-                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME), intent.getIntExtra(NotificationHelper.EXTRA_CHAT_COLOR, 0)));
+                    intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)));
         }
         intent.removeExtra(NotificationHelper.EXTRA_CHAT_ID);
         intent.removeExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID);
         intent.removeExtra(NotificationHelper.EXTRA_CHAT_NAME);
-        intent.removeExtra(NotificationHelper.EXTRA_CHAT_COLOR);
         intent.removeExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST);
     }
 

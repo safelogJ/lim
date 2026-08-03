@@ -2,7 +2,6 @@ package com.safelogj.lim;
 
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import android.util.Log;
 
@@ -39,11 +38,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -60,8 +60,6 @@ public class NetworkService {
     private static final String NETWORK_SERVICE_ERROR = "network service error: ";
     private static final String REQUEST_BUILD_ERROR = "request build error: ";
     private static final String MEDIA_TYPE_JSON = "application/json; charset=utf-8";
-    @NonNull
-    private final ReentrantLock digestLock = new ReentrantLock();
     private final OkHttpClient client;
     private final Gson gson = new Gson();
     private final AppController controller;
@@ -336,10 +334,7 @@ public class NetworkService {
             dbHelper.notConfirmMessageSent(msg);
             return;
         }
-        // 1. Получаем публичный ключ собеседника (он должен быть подгружен в ChatFragment)
-        // Если его нет, мы не сможем зашифровать.
-        // ВАЖНО: Тебе нужно добавить interlocutorPublicKey в объект Message или передавать отдельно.
-        // Предположим, мы берем его из базы или кэша.
+
         if (msg.interlocutorPublicKey == null) {
             Log.e(AppController.LOG_TAG, "Send Media Cannot encrypt: recipient public key not found");
             dbHelper.notConfirmMessageSent(msg);
@@ -352,14 +347,12 @@ public class NetworkService {
                 return;
             }
 
-            // 2. Генерируем IV и шифруем заголовки
             byte[] iv = new byte[12];
             controller.getSecureRandom().nextBytes(iv);
 
             String encText = controller.encryptMessage(msg.text, msg.interlocutorPublicKey);
             String encFileName = controller.encryptMessage(msg.fileName, msg.interlocutorPublicKey);
 
-            // 3. Создаем RequestBody, который пишет IV, а потом шифрованные данные
             RequestBody requestBody = new RequestBody() {
                 @Override
                 public MediaType contentType() {
@@ -528,7 +521,7 @@ public class NetworkService {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()), msg.chatId, msg.filePath)), MediaType.parse(MEDIA_TYPE_JSON));
+                    hashPassword(controller.getPassword()), msg.chatId, msg.filePath, false)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
         } catch (Exception e) {
             dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
@@ -552,6 +545,7 @@ public class NetworkService {
                 }
                 dbHelper.updateFilePath(msg, Uri.fromFile(localFile).toString());
                 Log.d(AppController.LOG_TAG, "download file success: " + msg.fileName);
+                confirmMediaDownload(msg);
             } else if (response.code() == 429) {
                 dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
                 Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code() + " " + response.message());
@@ -562,6 +556,23 @@ public class NetworkService {
         } catch (Exception e) {
             dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
             Log.e(AppController.LOG_TAG, "Download error: " + e.getMessage());
+        }
+    }
+    private void confirmMediaDownload(Message msg) {
+        try {
+            RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(), hashPassword(controller.getPassword()),
+                    msg.chatId, msg.filePath, true)), MediaType.parse(MEDIA_TYPE_JSON));
+            Request request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
+            client.newCall(request).enqueue(new Callback() {
+                @Override public void onResponse(@NonNull Call call, @NonNull Response response) {
+                    Log.i(AppController.LOG_TAG, "Server file deleted successfully");
+                }
+                @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.w(AppController.LOG_TAG, "Failed to confirm file deletion", e);
+                }
+            });
+        } catch (Exception e) {
+            Log.w(AppController.LOG_TAG, "Error confirming file deletion: " + e.getMessage());
         }
     }
 
@@ -611,18 +622,6 @@ public class NetworkService {
             cursor.close();
         }
         return FILE_SIZE_LIMIT;
-    }
-
-    private boolean fileExists(Uri uri) {
-        if ("file".equals(uri.getScheme())) {
-            return new File(uri.getPath()).exists();
-        }
-
-        try (ParcelFileDescriptor pfd = controller.getContentResolver().openFileDescriptor(uri, "r")) {
-            return pfd != null;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private static String encodeToHeader(String text) {

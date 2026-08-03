@@ -124,7 +124,7 @@ public class ChatViewModel extends AndroidViewModel {
         List<Message> currentList = msgList.getValue();
         if (currentList == null || currentList.isEmpty() || isLoadingMore) return;
         isLoadingMore = true;
-        controller.getDbHelper().loadMoreMessages(chatId, currentList.get(0).localId, new ResultCallback<>() {
+        controller.getDbHelper().loadMoreMessages(chatId, currentList.getFirst().localId, new ResultCallback<>() {
             @Override
             public void onSuccess(List<Message> olderMessages) {
                 if (!olderMessages.isEmpty()) {
