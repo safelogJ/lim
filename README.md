@@ -94,6 +94,20 @@ After the recipient downloads the file successfully, it is automatically removed
 
 This keeps storage usage low.
 
+## Server Configuration
+
+The server settings are stored in `db/server.properties`. You can tune them to fit your router's hardware.
+
+| Parameter | Description | Default |
+| :--- | :--- | :--- |
+| `keystore.path` | Path to your SSL certificate (`.p12` file). | `db/limcert.p12` |
+| `keystore.password` | Password for the SSL keystore. | - |
+| `server.pool.size` | Number of worker threads. Use 4-8 for weak routers. | `8` |
+| `server.queue.size` | Task queue size before rejecting new requests. | `2` |
+| `db.connect.size` | Maximum number of simultaneous SQLite connections. | `8` |
+| `server.media.quota.mb` | Software limit for the `media` folder size in Megabytes. | `50` |
+| `server.disk.safe_margin.mb` | Minimum free disk space required to accept new files. | `20` |
+
 ---
 
 ## Server storage
@@ -142,7 +156,7 @@ Files are automatically deleted after successful delivery.
 
 ## Server
 
-The server is written in Java and packaged as a container for MikroTik CHR.
+The server is written in Java and packaged as a container for MikroTik (supports both CHR/AMD64 and hardware ARM64 devices).
 
 It uses:
 

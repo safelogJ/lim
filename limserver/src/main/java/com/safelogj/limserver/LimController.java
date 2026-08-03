@@ -35,13 +35,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 
 public class LimController {
     public static final Logger log = LoggerFactory.getLogger(LimController.class);
-    public static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
+    public static final AtomicInteger ACTIVE_UPLOADS = new AtomicInteger(0);
+    public static final AtomicLong CURRENT_MEDIA_SIZE = new AtomicLong(0);
     public static final String EMPTY_STRING = "";
     private static final String USER_DIR = "user.dir";
     private static final String DB_PATH = System.getProperty(USER_DIR) + "/db";
@@ -51,7 +54,9 @@ public class LimController {
     public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
     private static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
+    private static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
     public static DatabaseManager dbManager;
+    public static ServerConfig config;
     private static ThreadPoolExecutor EXECUTOR_POOL;
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -69,6 +74,7 @@ public class LimController {
                 log.error("folders db and media not found");
                 System.exit(DATA_ERR);
             }
+            calculateInitialMediaSize();
             HttpsServer server = initDbAndHttpsServer();
             closeAppListener(server);
             server.createContext("/register", new RegisterUserHandler());
@@ -99,20 +105,28 @@ public class LimController {
        return onlineUsers.containsKey(id);
     }
 
+    public static String putFilePath(long userId, String path) {
+       return ACTIVE_DOWNLOADS.putIfAbsent(userId, path);
+    }
+
+    public static void removeFilePath(long userId) {
+       ACTIVE_DOWNLOADS.remove(userId);
+    }
+
     private static HttpsServer initDbAndHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
             CertificateException, UnrecoverableKeyException, KeyManagementException, IllegalArgumentException {
 
-        ServerConfig prop = ServerConfig.load(DB_PATH + "/server.properties");
-        dbManager = new DatabaseManager(DB_PATH, prop.getDbPoolSize());
+        config = ServerConfig.load(DB_PATH + "/server.properties");
+        dbManager = new DatabaseManager(DB_PATH, config.getDbPoolSize());
         dbManager.initDatabase();
         // 2. Загружаем Keystore в память Java
         KeyStore ks = KeyStore.getInstance("PKCS12");
-        try (FileInputStream fis = new FileInputStream(prop.getKeystorePath())) {
-            ks.load(fis, prop.getKeystorePassword());
+        try (FileInputStream fis = new FileInputStream(config.getKeystorePath())) {
+            ks.load(fis, config.getKeystorePassword());
         }
         // 3. Инициализируем менеджер ключей
         KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-        kmf.init(ks, prop.getKeystorePassword());
+        kmf.init(ks, config.getKeystorePassword());
 
         // 4. Создаем и настраиваем SSL-контекст (протокол TLS)
         SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -130,7 +144,7 @@ public class LimController {
                 }
             }
         });
-        EXECUTOR_POOL = ServerThreadPool.createPool(prop.getServerPoolSize(), prop.getServerQueueSize());
+        EXECUTOR_POOL = ServerThreadPool.createPool(config.getServerPoolSize(), config.getServerQueueSize());
         server.setExecutor(EXECUTOR_POOL);
         return server;
     }
@@ -170,6 +184,21 @@ public class LimController {
         }));
     }
 
+    private static void calculateInitialMediaSize() {
+        File mediaDir = new File(MEDIA_PATH);
+        File[] files = mediaDir.listFiles();
+        long total = 0;
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile()) {
+                    total += f.length();
+                }
+            }
+        }
+        CURRENT_MEDIA_SIZE.set(total);
+        log.info("Initial media size: {} MB", total / (1024 * 1024));
+    }
+
     private static void removeOldMedia() {
         File mediaDir = new File(MEDIA_PATH);
         long now = System.currentTimeMillis();
@@ -180,6 +209,7 @@ public class LimController {
                     String absolutePath = file.getAbsolutePath();
                     if (file.isFile() && (now - file.lastModified() > MEDIA_DELETE_LIFETIME) && Files.deleteIfExists(file.toPath())) {
                         ACTIVE_DOWNLOADS.values().removeIf(path -> path.equals(absolutePath));
+                        CURRENT_MEDIA_SIZE.addAndGet(-file.length());
                         log.info("File {} older than 31 days deleted successfully", file.getName());
                     }
                 }

@@ -11,13 +11,18 @@ public class ServerConfig {
     private final int serverPoolSize;
     private final int serverQueueSize;
     private final int dbPoolSize;
+    private final long mediaQuota;
+    private final long diskSafeMargin;
 
-    private ServerConfig(String keystorePath, char[] keystorePassword, int serverPoolSize, int serverQueueSize, int dbPoolSize) {
+    private ServerConfig(String keystorePath, char[] keystorePassword, int serverPoolSize, int serverQueueSize,
+                         int dbPoolSize, long mediaQuota, long diskSafeMargin) {
         this.keystorePath = keystorePath;
         this.keystorePassword = keystorePassword;
         this.serverPoolSize = serverPoolSize;
         this.serverQueueSize = serverQueueSize;
         this.dbPoolSize = dbPoolSize;
+        this.mediaQuota = mediaQuota;
+        this.diskSafeMargin = diskSafeMargin;
     }
 
     public String getKeystorePath() {
@@ -39,6 +44,9 @@ public class ServerConfig {
     public int getDbPoolSize() {
         return dbPoolSize;
     }
+
+    public long getMediaQuota() { return mediaQuota; }
+    public long getDiskSafeMargin() { return diskSafeMargin; }
 
 
     public static ServerConfig load(String configPath) throws IllegalArgumentException, IOException {
@@ -71,6 +79,10 @@ public class ServerConfig {
         return new ServerConfig(path, pass.toCharArray(),
                 Integer.parseInt(props.getProperty("server.pool.size", "8")),
                 Integer.parseInt(props.getProperty("server.queue.size", "2")),
-                Integer.parseInt(props.getProperty("db.connect.size", "8")));
+                Integer.parseInt(props.getProperty("db.connect.size", "8")),
+                Long.parseLong(props.getProperty("server.media.quota.mb", "50")) * 1024 * 1024,
+                Long.parseLong(props.getProperty("server.disk.safe_margin.mb", "20")) * 1024 * 1024
+
+        );
     }
 }

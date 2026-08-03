@@ -54,6 +54,28 @@ public class MediaUploadHandler extends BaseHandler {
             sendUnauthorizedError(exchange, response);
             return;
         }
+        // В начале метода handle() после авторизации:
+        // Резервируем место под текущие загрузки + нашу новую
+        long reserved = (LimController.ACTIVE_UPLOADS.get() + 1) * (DatabaseManager.FILE_SIZE_LIMIT + 1024); // 50MB + запас
+        // 1. Проверка квоты пользователя
+        if (LimController.CURRENT_MEDIA_SIZE.get() + reserved > LimController.config.getMediaQuota()) {
+            response.status = BaseResponse.ERROR;
+            response.message = "Server media quota exceeded. Try later.";
+            sendResponse(exchange, 507, response);
+            LimController.log.warn("Server media quota exceeded. Try later.");
+            return;
+        }
+
+        // 2. Проверка физического места на разделе /media
+        File mediaDir = new File(LimController.MEDIA_PATH);
+        if (mediaDir.getUsableSpace() < LimController.config.getDiskSafeMargin() + reserved) {
+            response.status = BaseResponse.ERROR;
+            response.message = "Insufficient physical storage on router. Try later.";
+            sendResponse(exchange, 507, response);
+            LimController.log.warn("Insufficient physical storage on router. Try later.");
+            return;
+        }
+        LimController.ACTIVE_UPLOADS.incrementAndGet();
         // 2. Генерация уникального имени файла
         long timestamp = System.currentTimeMillis();
         String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8);
@@ -83,6 +105,7 @@ public class MediaUploadHandler extends BaseHandler {
                 response.message = "File uploaded successfully: " + fileName;
                 sendSuccess(exchange, response);
                 uploadSuccessful = true;
+                LimController.CURRENT_MEDIA_SIZE.addAndGet(targetFile.length());
             } else {
                 throw new IOException("Save message after file upload error " + fileName);
             }
@@ -94,6 +117,7 @@ public class MediaUploadHandler extends BaseHandler {
             if (!uploadSuccessful && targetFile.exists()) {
                 deleteFileWithRetry(targetFile);
             }
+            LimController.ACTIVE_UPLOADS.decrementAndGet();
         }
     }
 

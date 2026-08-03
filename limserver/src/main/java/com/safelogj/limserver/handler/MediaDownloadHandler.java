@@ -51,13 +51,15 @@ public class MediaDownloadHandler extends BaseHandler {
             }
             String path = file.getAbsolutePath();
             if (Boolean.TRUE.equals(req.isConfirmed())) {
-                if (LimController.ACTIVE_DOWNLOADS.putIfAbsent(user.id, path) == null) {
+                if (LimController.putFilePath(user.id, path) == null) {
                     try {
+                        long fileSize = file.length();
                         if (Files.deleteIfExists(file.toPath())) {
+                            LimController.CURRENT_MEDIA_SIZE.addAndGet(-fileSize);
                             LimController.log.info("File confirmed and deleted: {}", file.getName());
                         }
                     } finally {
-                        LimController.ACTIVE_DOWNLOADS.remove(user.id);
+                        LimController.removeFilePath(user.id);
                     }
                 }
                 response.message = "file deletion request confirmed ";
@@ -65,7 +67,7 @@ public class MediaDownloadHandler extends BaseHandler {
                 return;
             }
 
-            if (LimController.ACTIVE_DOWNLOADS.putIfAbsent(user.id, path) != null) {
+            if (LimController.putFilePath(user.id, path) != null) {
                 response.status = BaseResponse.ERROR;
                 response.message = "File is already being downloaded by another device";
                 sendResponse(exchange, 429, response); // Too Many Requests
@@ -93,7 +95,7 @@ public class MediaDownloadHandler extends BaseHandler {
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);
         } finally {
-            LimController.ACTIVE_DOWNLOADS.remove(user.id);
+            LimController.removeFilePath(user.id);
             FileCacheUtils.dropFileFromCache(file);
         }
     }
