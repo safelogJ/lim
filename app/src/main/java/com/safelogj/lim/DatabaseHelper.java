@@ -158,6 +158,27 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
+    public void resetStuckStatuses() {
+        dbExecutor.execute(() -> {
+            try {
+                database.beginTransaction();
+                ContentValues mediaValues = new ContentValues();
+                mediaValues.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
+                database.update(MESSAGES, mediaValues, "media_status = 4",null); // MEDIA_STATUS_LOADING
+                ContentValues sendValues = new ContentValues();
+                sendValues.put(SEND_STATUS, Message.STATUS_WAITING);
+                database.update(MESSAGES, sendValues, "send_status = 1 AND sender_id = ?", // STATUS_SENDING_OR_RECEIVE
+                        new String[]{String.valueOf(controller.getUserId())});
+                database.setTransactionSuccessful();
+                Log.d(AppController.LOG_TAG, "Зависшие статусы успешно сброшены в базе.");
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Ошибка при сбросе зависших статусов: ", e);
+            } finally {
+                database.endTransaction();
+            }
+        });
+    }
+
     public <T> void saveUser(User user, ResultCallback<T> callback, T result, @Nullable Long chatId) {
         dbExecutor.execute(() -> {
             database.beginTransaction();

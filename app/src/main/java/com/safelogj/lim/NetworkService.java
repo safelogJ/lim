@@ -42,8 +42,6 @@ import java.util.concurrent.TimeUnit;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -555,25 +553,30 @@ public class NetworkService {
             }
         } catch (Exception e) {
             dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
-            Log.e(AppController.LOG_TAG, "Download error: " + e.getMessage());
+            Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
+
     private void confirmMediaDownload(Message msg) {
+        Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(), hashPassword(controller.getPassword()),
                     msg.chatId, msg.filePath, true)), MediaType.parse(MEDIA_TYPE_JSON));
-            Request request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
-            client.newCall(request).enqueue(new Callback() {
-                @Override public void onResponse(@NonNull Call call, @NonNull Response response) {
-                    Log.i(AppController.LOG_TAG, "Server file deleted successfully");
-                }
-                @Override public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    Log.w(AppController.LOG_TAG, "Failed to confirm file deletion", e);
-                }
-            });
+            request = new Request.Builder().url(controller.getServerUrl() + "/media/get").post(body).build();
         } catch (Exception e) {
-            Log.w(AppController.LOG_TAG, "Error confirming file deletion: " + e.getMessage());
+            Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
+            return;
         }
+        try (Response response = client.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                Log.i(AppController.LOG_TAG, response.message() + msg.fileName);
+            } else {
+                Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code());
+            }
+        } catch (Exception e) {
+            Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
+        }
+
     }
 
     private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {
@@ -635,7 +638,7 @@ public class NetworkService {
 
     private File getUniquePath(Message msg) {
         String originalName = msg.fileName;
-        String serverName = new File(msg.filePath).getName(); // 1749466201123_7fa9b3c1
+        String serverName = new File(msg.filePath).getName();
         int underscore = serverName.lastIndexOf('_');
         String suffix = underscore >= 0 ? serverName.substring(underscore + 1) : "";
 

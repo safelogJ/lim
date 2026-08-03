@@ -369,6 +369,7 @@ public class AppController extends Application {
         dbHelper.initDatabase();
         if (userId > 0) {
             dbHelper.initOnlineStatuses();
+            dbHelper.resetStuckStatuses();
         }
         createNotificationChannel();
         setupWorkManager();

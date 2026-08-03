@@ -60,7 +60,7 @@ public class MediaDownloadHandler extends BaseHandler {
                         LimController.ACTIVE_DOWNLOADS.remove(user.id);
                     }
                 }
-                response.message = "file deletion request";
+                response.message = "file deletion request confirmed ";
                 sendSuccess(exchange, response);
                 return;
             }
