@@ -22,8 +22,12 @@ import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class DatabaseManager {
 
@@ -32,19 +36,52 @@ public class DatabaseManager {
     private static final ThreadLocal<MessageDigest> DIGEST =
             ThreadLocal.withInitial(() -> {
                 try {
-                    return MessageDigest.getInstance("SHA-256"); // или MD5
+                    return MessageDigest.getInstance("SHA-256");
                 } catch (NoSuchAlgorithmException e) {
                     throw new IllegalStateException(e);
                 }
             });
     @NotNull
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
+    // --- SQL CONSTANTS ---
+    // Auth & User
+    private static final String CHECK_USER_EXISTS_SQL = "SELECT 1 FROM users WHERE username = ? LIMIT 1";
+    private static final String INSERT_USER_SQL = "INSERT INTO users (username, password_hash, public_key, private_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)";
+    private static final String AUTH_USER_SQL = "SELECT id, display_name, password_hash, public_key, private_hash FROM users WHERE username = ? AND is_deleted = 0";
+    private static final String SOFT_DELETE_USER_SQL = "UPDATE users SET is_deleted = 1, password_hash = '', public_key = '', private_hash = '', display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0";
+    private static final String CHECK_IS_DELETED_SQL = "SELECT 1 FROM users WHERE username = ? AND is_deleted = 1 LIMIT 1";
+    private static final String SEARCH_USER_BY_NAME_SQL = "SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0";
+    // Chat
+    private static final String FIND_PERSONAL_CHAT_SQL = "SELECT cm1.chat_id FROM chat_members cm1 JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id JOIN chats c ON cm1.chat_id = c.id WHERE c.is_group = 0 AND cm1.user_id = ? AND cm2.user_id = ? LIMIT 1";
+    private static final String UNHIDE_CHAT_MEMBERS_SQL = "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?";
+    private static final String UNBLOCK_CHAT_MEMBER_SQL = "UPDATE chat_members SET is_blocked = 0 WHERE chat_id = ? AND user_id = ?";
+    private static final String INSERT_CHAT_SQL = "INSERT INTO chats (name, is_group, created_at) VALUES (NULL, 0, ?)";
+    private static final String INSERT_CHAT_MEMBER_SQL = "INSERT INTO chat_members (chat_id, user_id, joined_at, is_hidden) VALUES (?, ?, ?, 0)";
+    private static final String HIDE_CHAT_SQL = "UPDATE chat_members SET is_hidden = 1 WHERE chat_id = ? AND user_id = ?";
+    private static final String BLOCK_CHAT_SQL = "UPDATE chat_members SET is_blocked = 1 WHERE chat_id = ? AND user_id = ?";
+    private static final String SEARCH_USER_IN_CHAT_SQL = "SELECT u.id, u.username, u.display_name, u.public_key FROM users u JOIN chat_members cm ON u.id = cm.user_id WHERE cm.chat_id = ? AND cm.user_id != ? LIMIT 1";
+    // Messages
+    private static final String INSERT_MESSAGE_SQL = "INSERT INTO messages (chat_id, sender_id, text, type, chat_name, file_path, file_name, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    private static final String GET_NEW_MESSAGES_SQL = "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, m.timestamp, u_interlocutor.public_key FROM messages m JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id JOIN users u_sender ON m.sender_id = u_sender.id WHERE m.id > ? AND cm_me.is_blocked = 0 ORDER BY m.id ASC";
+    // Security & File
+    private static final String CHECK_FILE_ACCESSIBILITY_SQL = "SELECT 1 FROM messages m JOIN chat_members cm ON m.chat_id = cm.chat_id WHERE m.chat_id = ? AND m.file_path = ? AND cm.user_id = ? LIMIT 1";
+    private static final String CHECK_MEMBER_OF_CHAT_SQL = "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1";
+    private static final String GET_MAX_MSG_ID_SQL = "SELECT MAX(id) FROM messages";
+
+    // --- OPTIMIZATION ---
+    private final AtomicLong globalMaxMsgId = new AtomicLong(0);
+    private final Map<String, UserCacheEntry> authCache = new ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 21_600_000; // 6 hour
+
+    private record UserCacheEntry(User user, String passwordHash, long timestamp) {
+        boolean isExpired() { return System.currentTimeMillis() - timestamp > CACHE_TTL_MS; }
+    }
+
     private final HikariDataSource dataSource;
     private final HikariPoolMXBean poolProxy;
 
     DatabaseManager(String dbFolderPath, int poolSize) {
         HikariConfig config = getHikariConfig(dbFolderPath, poolSize);
-        // Оптимизации SQLite прямо в URL или через свойства
         config.addDataSourceProperty("journal_mode", "WAL");
         config.addDataSourceProperty("busy_timeout", "5000");
         config.addDataSourceProperty("synchronous", "NORMAL");
@@ -65,7 +102,6 @@ public class DatabaseManager {
         return config;
     }
 
-    // Метод для получения живого соединения с базой
     private Connection getConnection() throws SQLException {
         if (poolProxy != null && poolProxy.getThreadsAwaitingConnection() > 0) {
             LimController.log.warn("ATTENTION: There is a queue for the database! Waiting: {}", poolProxy.getThreadsAwaitingConnection());
@@ -126,7 +162,11 @@ public class DatabaseManager {
             stmt.execute(createChatsTable);
             stmt.execute(createChatMembersTable);
             stmt.execute(createMessagesTable);
-            LimController.log.info("The SQLite database has been successfully initialized. Tables have been verified..");
+            
+            try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL)) {
+                if (rs.next()) globalMaxMsgId.set(rs.getLong(1));
+            }
+            LimController.log.info("Database initialized. Max message ID: {}", globalMaxMsgId.get());
         } catch (Exception e) {
             LimController.log.error("critical error while initializing database: ", e);
             System.exit(LimController.ERROR);
@@ -143,11 +183,10 @@ public class DatabaseManager {
 
         try (Connection conn = getConnection()) {
             int oldIsolation = conn.getTransactionIsolation();
-
             try {
                 conn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
                 conn.setAutoCommit(false);
-                try (PreparedStatement checkStmt = conn.prepareStatement("SELECT 1 FROM users WHERE username = ? LIMIT 1")) {
+                try (PreparedStatement checkStmt = conn.prepareStatement(CHECK_USER_EXISTS_SQL)) {
                     checkStmt.setString(1, username);
                     try (ResultSet rs = checkStmt.executeQuery()) {
                         if (rs.next()) {
@@ -157,8 +196,7 @@ public class DatabaseManager {
                     }
                 }
                 long userId = -1;
-                try (PreparedStatement insertStmt = conn.prepareStatement(
-                        "INSERT INTO users (username, password_hash, public_key, private_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+                try (PreparedStatement insertStmt = conn.prepareStatement(INSERT_USER_SQL, Statement.RETURN_GENERATED_KEYS)) {
                     insertStmt.setString(1, username);
                     insertStmt.setString(2, serverPasswordHash);
                     insertStmt.setString(3, publicKey);
@@ -168,9 +206,7 @@ public class DatabaseManager {
                     insertStmt.executeUpdate();
 
                     try (ResultSet rs = insertStmt.getGeneratedKeys()) {
-                        if (rs.next()) {
-                            userId = rs.getLong(1);
-                        }
+                        if (rs.next()) userId = rs.getLong(1);
                     }
                 }
 
@@ -200,62 +236,61 @@ public class DatabaseManager {
                     LimController.log.error("error restoring connection settings: ", ex);
                 }
             }
-
         } catch (SQLException e) {
-            LimController.log.error("critical database error during registration: ", e);
+            LimController.log.error("database error during registration: ", e);
             return null;
         }
     }
 
     @Nullable
-    public User authenticateUser(@NotNull String username, @NotNull String password) {
-        String serverPasswordHash = hashPassword(password);
-        if (!serverPasswordHash.isEmpty()) {
-            try (Connection conn = getConnection();
-                 PreparedStatement stmt = conn.prepareStatement(
-                         "SELECT id, display_name, password_hash, public_key, private_hash FROM users WHERE username = ? AND is_deleted = 0")) {
-                stmt.setString(1, username);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
-                        User user = new User();
-                        user.id = rs.getLong(1);
-                        user.displayName = rs.getString(2);
-                        user.publicKey = rs.getString(4);
-                        user.privateHash = rs.getString(5);
-                        return user;
-                    } else {
-                        LimController.log.warn("incorrect password for user '{}'", username);
-                    }
+    public User authenticateUser(@NotNull String username, @NotNull String clientHash) {
+        UserCacheEntry entry = authCache.get(username);
+        if (entry != null && !entry.isExpired() && entry.passwordHash().equals(clientHash)) {
+            return entry.user();
+        }
+        String serverPasswordHash = hashPassword(clientHash);
+        if (serverPasswordHash.isEmpty()) return null;
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(AUTH_USER_SQL)) {
+            stmt.setString(1, username);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
+                    User user = new User();
+                    user.id = rs.getLong(1);
+                    user.displayName = rs.getString(2);
+                    user.publicKey = rs.getString(4);
+                    user.privateHash = rs.getString(5);
+                    authCache.put(username, new UserCacheEntry(user, clientHash, System.currentTimeMillis()));
+                    return user;
+                } else {
+                    LimController.log.warn("incorrect password for user '{}'", username);
                 }
-            } catch (Exception e) {
-                LimController.log.error("an error occurred while authenticating the user during the request.: ", e);
             }
-        } else {
-            LimController.log.error("error while authenticating user, password hash not retrieved ");
+        } catch (Exception e) {
+            LimController.log.error("auth error: ", e);
         }
         return null;
     }
 
-    public boolean deleteUser(long userId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE users SET is_deleted = 1, password_hash = '', public_key = '', private_hash = '', "
-                        + "display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0")) {
-            stmt.setLong(1, userId);
+    public boolean deleteUser(User user) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(SOFT_DELETE_USER_SQL)) {
+            stmt.setLong(1, user.id);
             if (stmt.executeUpdate() > 0) {
-                LimController.log.info("User id={} has been successfully moved to 'Deleted' status. Login blocked.", userId);
+                LimController.log.info("User id={} deleted. Login blocked.", user.id);
+                authCache.remove(user.username);
                 return true;
             } else {
-                LimController.log.warn("failed to delete user id={}. It may have already been deleted or may not have existed.", userId);
+                LimController.log.warn("failed to delete user id={}. It may have already been deleted or may not have existed.", user.id);
             }
         } catch (Exception e) {
-            LimController.log.error("error while soft deleting user id={}", userId, e);
+            LimController.log.error("soft delete error id={}", user.id, e);
         }
         return false;
     }
 
     public boolean isUserDeleted(@NotNull String username) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT 1 FROM users WHERE username = ? AND is_deleted = 1 LIMIT 1")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_IS_DELETED_SQL)) {
             stmt.setString(1, username);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
@@ -279,25 +314,17 @@ public class DatabaseManager {
 
             try {
                 long chatId = -1;
-                try (PreparedStatement findStmt = conn.prepareStatement(
-                        "SELECT cm1.chat_id FROM chat_members cm1 " +
-                                "JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id " +
-                                "JOIN chats c ON cm1.chat_id = c.id " +
-                                "WHERE c.is_group = 0 AND cm1.user_id = ? AND cm2.user_id = ? LIMIT 1")) {
+                try (PreparedStatement findStmt = conn.prepareStatement(FIND_PERSONAL_CHAT_SQL)) {
                     findStmt.setLong(1, senderId);
                     findStmt.setLong(2, receiverId);
                     try (ResultSet rs = findStmt.executeQuery()) {
-                        if (rs.next()) {
-                            chatId = rs.getLong(1);
-                        }
+                        if (rs.next()) chatId = rs.getLong(1);
                     }
                 }
 
-                if (chatId != -1) { // --- СЦЕНАРИЙ А: ЧАТ НАЙДЕН ---
-                    try (PreparedStatement unhideStmt = conn.prepareStatement(
-                            "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?");
-                         PreparedStatement unblockStmt = conn.prepareStatement(
-                                 "UPDATE chat_members SET is_blocked = 0 WHERE chat_id = ? AND user_id = ?")) {
+                if (chatId != -1) {
+                    try (PreparedStatement unhideStmt = conn.prepareStatement(UNHIDE_CHAT_MEMBERS_SQL);
+                         PreparedStatement unblockStmt = conn.prepareStatement(UNBLOCK_CHAT_MEMBER_SQL)) {
                         unhideStmt.setLong(1, chatId);
                         unhideStmt.executeUpdate();
                         unblockStmt.setLong(1, chatId);
@@ -306,9 +333,7 @@ public class DatabaseManager {
                     }
                 } else { // --- СЦЕНАРИЙ Б: СОЗДАЕМ НОВЫЙ ЧАТ ---
                     long now = System.currentTimeMillis();
-                    // Вставляем запись в таблицу chats
-                    try (PreparedStatement createChatStmt = conn.prepareStatement(
-                            "INSERT INTO chats (name, is_group, created_at) VALUES (NULL, 0, ?)", Statement.RETURN_GENERATED_KEYS)) {
+                    try (PreparedStatement createChatStmt = conn.prepareStatement(INSERT_CHAT_SQL, Statement.RETURN_GENERATED_KEYS)) {
                         createChatStmt.setLong(1, now);
                         createChatStmt.executeUpdate();
                         try (ResultSet keys = createChatStmt.getGeneratedKeys()) {
@@ -319,10 +344,7 @@ public class DatabaseManager {
                             }
                         }
                     }
-                    // Добавляем участников (используем Batch для эффективности)
-                    try (PreparedStatement memberStmt = conn.prepareStatement(
-                            "INSERT INTO chat_members (chat_id, user_id, joined_at, is_hidden) VALUES (?, ?, ?, 0)")) {
-                        // Участник 1
+                    try (PreparedStatement memberStmt = conn.prepareStatement(INSERT_CHAT_MEMBER_SQL)) {
                         memberStmt.setLong(1, chatId);
                         memberStmt.setLong(2, senderId);
                         memberStmt.setLong(3, now);
@@ -343,7 +365,7 @@ public class DatabaseManager {
             } catch (SQLException e) {
                 try {
                     conn.rollback();
-                } catch (SQLException ex) { /* игнорим */ }
+                } catch (SQLException ex) { /* ignored */ }
                 throw e;
             } finally {
                 conn.setAutoCommit(true);
@@ -356,8 +378,7 @@ public class DatabaseManager {
     }
 
     public boolean hideChat(long chatId, long userId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE chat_members SET is_hidden = 1 WHERE chat_id = ? AND user_id = ?")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(HIDE_CHAT_SQL)) {
             stmt.setLong(1, chatId);
             stmt.setLong(2, userId);
             return stmt.executeUpdate() > 0;
@@ -368,66 +389,55 @@ public class DatabaseManager {
     }
 
     public boolean blockChat(long chatId, long userId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE chat_members SET is_blocked = 1 WHERE chat_id = ? AND user_id = ?")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(BLOCK_CHAT_SQL)) {
             stmt.setLong(1, chatId);
             stmt.setLong(2, userId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            LimController.log.error("error hiding chat {} for user {}: ", chatId, userId, e);
+            LimController.log.error("error blocking chat {} for user {}: ", chatId, userId, e);
             return false;
         }
     }
 
     @Nullable
-    public User updateUser(long userId, @NotNull EditUserRequest req, boolean isNewDisplayName, boolean isNewPassword) {
+    public User updateUser(User user, @NotNull EditUserRequest req, boolean isNewDisplayName, boolean isNewPassword) {
         String newDisplayName = req.newDisplayName();
         String newClientPasswordHash = req.newPassword();
         String newServerPasswordHash = null;
-        // 2. Хэшируем пароль заранее
         if (isNewPassword) {
             newServerPasswordHash = hashPassword(newClientPasswordHash);
             if (newServerPasswordHash.isEmpty()) {
-                LimController.log.error("error generating hash for update id={}", userId);
+                LimController.log.error("error generating hash for update id={}", user.id);
                 return null;
             }
         }
-
         // 3. Динамически собираем SQL
         StringBuilder sql = new StringBuilder("UPDATE users SET ");
-        if (isNewDisplayName) {
-            sql.append("display_name = ?");
-        }
+        if (isNewDisplayName) sql.append("display_name = ?");
         if (isNewDisplayName && isNewPassword) sql.append(", ");
         if (isNewPassword) sql.append("password_hash = ?");
         sql.append(" WHERE id = ? AND is_deleted = 0");
 
-        // 4. Работаем с БД через пул
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
             int paramIndex = 1;
-            if (isNewDisplayName) {
-                stmt.setString(paramIndex++, newDisplayName);
-            }
-            if (isNewPassword) {
-                stmt.setString(paramIndex++, newServerPasswordHash);
-            }
-            stmt.setLong(paramIndex, userId);
+            if (isNewDisplayName) stmt.setString(paramIndex++, newDisplayName);
+            if (isNewPassword) stmt.setString(paramIndex++, newServerPasswordHash);
+            stmt.setLong(paramIndex, user.id);
             if (stmt.executeUpdate() > 0) {
-                LimController.log.info("user data id={} has been updated successfully.", userId);
+                authCache.remove(user.username);
                 return new User();
             } else {
-                LimController.log.warn("update failed: user id={} not found or deleted.", userId);
+                LimController.log.warn("update failed: user id={} not found or deleted.", user.id);
             }
         } catch (SQLException e) {
-            LimController.log.error("database error while updating user id={}: ", userId, e);
+            LimController.log.error("update user error id={}: ", user.id, e);
         }
         return null;
     }
 
     @Nullable
     public User searchUserByUsername(@NotNull String targetUsername) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(SEARCH_USER_BY_NAME_SQL)) {
             stmt.setString(1, targetUsername);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -447,10 +457,7 @@ public class DatabaseManager {
 
     @Nullable
     public User searchUserByChatId(@NotNull Long userId, @NotNull Long chatId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                     "SELECT u.id, u.username, u.display_name, u.public_key FROM users u " +
-                     "JOIN chat_members cm ON u.id = cm.user_id " +
-                     "WHERE cm.chat_id = ? AND cm.user_id != ? LIMIT 1")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(SEARCH_USER_IN_CHAT_SQL)) {
             stmt.setLong(1, chatId);
             stmt.setLong(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -473,13 +480,9 @@ public class DatabaseManager {
                             String filePath, String fileName, long timestamp) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
-
-            try (PreparedStatement insertStmt = conn.prepareStatement(
-                    "INSERT INTO messages (chat_id, sender_id, text, type, chat_name, file_path, file_name, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
-                 PreparedStatement updateStmt = conn.prepareStatement(
-                         "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?");
-                 PreparedStatement updateBlock = conn.prepareStatement(
-                         "UPDATE chat_members SET is_blocked = 0 WHERE chat_id = ? AND user_id = ?")) {
+            try (PreparedStatement insertStmt = conn.prepareStatement(INSERT_MESSAGE_SQL, Statement.RETURN_GENERATED_KEYS);
+                 PreparedStatement updateStmt = conn.prepareStatement(UNHIDE_CHAT_MEMBERS_SQL);
+                 PreparedStatement updateBlock = conn.prepareStatement(UNBLOCK_CHAT_MEMBER_SQL)) {
 
                 insertStmt.setLong(1, chatId);
                 insertStmt.setLong(2, senderId);
@@ -505,6 +508,10 @@ public class DatabaseManager {
                 updateBlock.setLong(2, senderId);
                 updateBlock.executeUpdate();
                 conn.commit();
+                
+                if (serverId != Message.INVALID_MSG_ID) {
+                    globalMaxMsgId.accumulateAndGet(serverId, Math::max);
+                }
                 return serverId;
             } catch (SQLException e) {
                 conn.rollback();
@@ -520,22 +527,11 @@ public class DatabaseManager {
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastMessageId) {
-        // Мы добавляем JOIN с пользователями, чтобы достать их Display Name
-        // И используем CASE для выбора имени:
-        // если я отправитель - оставляем мое название чата (для синхронизации),
-        // если нет - берем имя отправителя (для идентификации).
+        if (lastMessageId >= globalMaxMsgId.get()) {
+            return Collections.emptyList();
+        }
 
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, " +
-                        "CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, " +
-                        "m.timestamp, u_interlocutor.public_key " + // <--- КЛЮЧ СОБЕСЕДНИКА
-                        "FROM messages m " +
-                        "JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? " +
-                        "JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? " +
-                        "JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id " +
-                        "JOIN users u_sender ON m.sender_id = u_sender.id " +
-                        "WHERE m.id > ? AND cm_me.is_blocked = 0 " +
-                        "ORDER BY m.id ASC")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(GET_NEW_MESSAGES_SQL)) {
             stmt.setLong(1, userId);
             stmt.setLong(2, userId);
             stmt.setLong(3, userId);
@@ -560,16 +556,13 @@ public class DatabaseManager {
                 return messages;
             }
         } catch (SQLException e) {
-            LimController.log.error("error receiving messages: ", e);
+            LimController.log.error("receiving messages error: ", e);
         }
         return null;
     }
 
     public boolean isFileAccessible(long userId, long chatId, String serverFileName) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT 1 FROM messages m " +
-                "JOIN chat_members cm ON m.chat_id = cm.chat_id " +
-                "WHERE m.chat_id = ? AND m.file_path = ? AND cm.user_id = ? LIMIT 1")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_FILE_ACCESSIBILITY_SQL)) {
             stmt.setLong(1, chatId);
             stmt.setString(2, serverFileName);
             stmt.setLong(3, userId);
@@ -577,22 +570,21 @@ public class DatabaseManager {
                 return rs.next();
             }
         } catch (SQLException e) {
-            LimController.log.error("Error checking file accessibility: ", e);
+            LimController.log.error("file accessibility check error: ", e);
             return false;
         }
     }
 
 
     public boolean isMemberOfChat(long userId, long chatId) {
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(
-                "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1")) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_MEMBER_OF_CHAT_SQL)) {
             stmt.setLong(1, chatId);
             stmt.setLong(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
         } catch (SQLException e) {
-            LimController.log.error("Security check error: ", e);
+            LimController.log.error("Security member check error: ", e);
             return false;
         }
     }
@@ -612,5 +604,4 @@ public class DatabaseManager {
         }
         return new String(hexChars);
     }
-
 }

@@ -52,6 +52,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String ID_ANCHOR = "id = ?";
     private static final String LOCAL_ID_ANCHOR = "local_id = ?";
     private static final int DB_VERSION = 1;
+
+    // --- SQL CONSTANTS ---
+    private static final String RESET_MEDIA_LOADING_SQL = "UPDATE messages SET media_status = 1 WHERE media_status = 4";
+    private static final String RESET_SENDING_STATUS_SQL = "UPDATE messages SET send_status = 3 WHERE send_status = 1 AND sender_id = ?";
+    private static final String GET_CHATS_FOR_ONLINE_INIT_SQL = "SELECT interlocutor_id, id, color FROM chats WHERE is_hidden = 0";
+    private static final String GET_INTERLOCUTOR_KEY_SQL = "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1";
+    private static final String GET_CHAT_BY_USERNAME_SQL = "SELECT c.local_id, c.id, c.name, c.is_group, c.interlocutor_id, c.last_message, c.last_send_status, c.is_hidden, c.is_blocked, c.has_new_msg, c.last_timestamp FROM chats c JOIN users u ON c.interlocutor_id = u.id WHERE u.username = ? LIMIT 1";
+    private static final String GET_CHAT_LIST_SQL = "SELECT local_id, id, name, is_group, interlocutor_id, last_message, last_send_status, is_blocked, color, has_new_msg, last_timestamp FROM chats WHERE is_hidden = 0 ORDER BY has_new_msg DESC, last_timestamp DESC";
+    private static final String GET_UNREAD_CHATS_SQL = "SELECT local_id, id, name FROM chats WHERE has_new_msg = 1";
+    private static final String BASE_SELECT_MESSAGES = "SELECT local_id, id, chat_id, chat_name, sender_id, text, type, file_path, file_name, timestamp, send_status FROM messages";
+    private static final String LOAD_CHAT_MESSAGES_SQL = BASE_SELECT_MESSAGES + " WHERE chat_id = ? ORDER BY local_id DESC LIMIT ";
+    private static final String LOAD_MORE_MESSAGES_SQL = BASE_SELECT_MESSAGES + " WHERE chat_id = ? AND local_id < ? ORDER BY local_id DESC LIMIT 50";
+    private static final String CHECK_MESSAGE_EXISTS_SQL = "SELECT 1 FROM messages WHERE id = ? LIMIT 1";
+    private static final String GET_LAST_MSG_ID_SQL = "SELECT MAX(id) FROM messages";
+    private static final String GET_PENDING_MESSAGES_SQL = "SELECT m.local_id, m.chat_id, m.chat_name, m.sender_id, m.text, m.type, m.file_path, m.file_name, m.timestamp, c.local_id, u.public_key FROM messages m JOIN chats c ON m.chat_id = c.id JOIN users u ON u.id = c.interlocutor_id WHERE m.send_status = 3 ORDER BY m.timestamp ASC LIMIT ";
+    private static final String GET_MEDIA_DOWNLOAD_LIST_SQL = "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key FROM messages m JOIN chats c ON c.id = m.chat_id JOIN users u ON u.id = c.interlocutor_id WHERE m.media_status = 1";
+
     private SQLiteDatabase database;
     private final AppController controller;
     private final ExecutorService dbExecutor;
@@ -121,7 +138,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public void initOnlineStatuses() {
         dbExecutor.execute(() -> {
-            try (Cursor cursor = database.rawQuery("SELECT interlocutor_id, id, color FROM chats WHERE is_hidden = 0", null)) {
+            try (Cursor cursor = database.rawQuery(GET_CHATS_FOR_ONLINE_INIT_SQL, null)) {
                 while (cursor.moveToNext()) {
                     long interlocutorId = cursor.getLong(0);
                     long chatId = cursor.getLong(1);
@@ -162,13 +179,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         dbExecutor.execute(() -> {
             try {
                 database.beginTransaction();
-                ContentValues mediaValues = new ContentValues();
-                mediaValues.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
-                database.update(MESSAGES, mediaValues, "media_status = 4",null); // MEDIA_STATUS_LOADING
-                ContentValues sendValues = new ContentValues();
-                sendValues.put(SEND_STATUS, Message.STATUS_WAITING);
-                database.update(MESSAGES, sendValues, "send_status = 1 AND sender_id = ?", // STATUS_SENDING_OR_RECEIVE
-                        new String[]{String.valueOf(controller.getUserId())});
+                database.execSQL(RESET_MEDIA_LOADING_SQL);
+                database.execSQL(RESET_SENDING_STATUS_SQL, new String[]{String.valueOf(controller.getUserId())});
                 database.setTransactionSuccessful();
                 Log.d(AppController.LOG_TAG, "Зависшие статусы успешно сброшены в базе.");
             } catch (Exception e) {
@@ -229,9 +241,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     public void getInterlocutorPublicKey(long chatId, ResultCallback<String> callback) {
         dbExecutor.execute(() -> {
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT u.public_key FROM users u JOIN chats c ON u.id = c.interlocutor_id WHERE c.id = ? LIMIT 1",
-                    new String[]{String.valueOf(chatId)})) {
+            try (Cursor cursor = database.rawQuery(GET_INTERLOCUTOR_KEY_SQL, new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     callback.onSuccess(cursor.getString(0));
                 } else {
@@ -249,12 +259,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             database.beginTransaction();
             try {
                 Chat foundChat = null;
-                // 1. В SELECT добавляем через запятую нужные поля: c.id и c.name
-                try (Cursor cursor = database.rawQuery(
-                        "SELECT c.local_id, c.id, c.name, c.is_group, c.interlocutor_id, " +
-                                "c.last_message, c.last_send_status, c.is_hidden, c.is_blocked, c.has_new_msg, c.last_timestamp " +
-                                "FROM chats c JOIN users u ON c.interlocutor_id = u.id WHERE u.username = ? LIMIT 1",
-                        new String[]{interlocutorUsername})) {
+                try (Cursor cursor = database.rawQuery(GET_CHAT_BY_USERNAME_SQL, new String[]{interlocutorUsername})) {
                     if (cursor.moveToFirst()) {
                         foundChat = new Chat();
                         foundChat.localId = cursor.getLong(0);
@@ -391,10 +396,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void getChatList(ResultCallback<List<Chat>> callback) {
         dbExecutor.execute(() -> {
             List<Chat> chats = new ArrayList<>();
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT local_id, id, name, is_group, interlocutor_id, " +
-                            "last_message, last_send_status, is_blocked, color, has_new_msg, last_timestamp " +
-                            "FROM chats WHERE is_hidden = 0 ORDER BY has_new_msg DESC, last_timestamp DESC", null)) {
+            try (Cursor cursor = database.rawQuery(GET_CHAT_LIST_SQL, null)) {
                 if (cursor.moveToFirst()) {
                     do {
                         Chat chat = new Chat();
@@ -407,7 +409,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         chat.lastSendStatus = cursor.getLong(6);
                         chat.isBlocked = cursor.getInt(7) == 1;
                         chat.color = cursor.getInt(8);
-                        Log.d(AppController.LOG_TAG, "цвет чата " + chat.color);
                         chat.hasNewMsg = cursor.getInt(9) == 1;
                         chat.lastTimestamp = cursor.getLong(10);
                         chat.lastTimestampFormatted = AppController.formatSmartTime(controller, chat.lastTimestamp);
@@ -425,7 +426,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void getUnreadChats(ResultCallback<List<Chat>> callback) {
         dbExecutor.execute(() -> {
             List<Chat> unreadChats = new ArrayList<>();
-            try (Cursor cursor = database.rawQuery("SELECT * FROM chats WHERE has_new_msg = 1", null)) {
+            try (Cursor cursor = database.rawQuery(GET_UNREAD_CHATS_SQL, null)) {
                 if (cursor.moveToFirst()) {
                     do {
                         Chat chat = new Chat();
@@ -446,11 +447,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void loadChatMessages(long chatId, int lastMsgListSize, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT local_id, id, chat_id, chat_name, sender_id, " +
-                            "text, type, file_path, file_name, timestamp, send_status " +
-                            "FROM messages WHERE chat_id = ? ORDER BY local_id DESC LIMIT " + Math.max(50, lastMsgListSize),
-                    new String[]{String.valueOf(chatId)})) {
+            String sql = LOAD_CHAT_MESSAGES_SQL + Math.max(50, lastMsgListSize);
+            try (Cursor cursor = database.rawQuery(sql, new String[]{String.valueOf(chatId)})) {
                 if (cursor.moveToFirst()) {
                     do {
                         Message msg = new Message();
@@ -480,11 +478,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void loadMoreMessages(long chatId, long lastLoadedLocalId, ResultCallback<List<Message>> callback) {
         dbExecutor.execute(() -> {
             List<Message> messages = new ArrayList<>();
-            try (Cursor cursor = database.rawQuery(
-                    "SELECT local_id, id, chat_id, chat_name, sender_id, " +
-                    "text, type, file_path, file_name, timestamp, send_status " +
-                    "FROM messages WHERE chat_id = ? AND local_id < ? " +
-                    "ORDER BY local_id DESC LIMIT 50", new String[]{String.valueOf(chatId), String.valueOf(lastLoadedLocalId)})) {
+            try (Cursor cursor = database.rawQuery(LOAD_MORE_MESSAGES_SQL, new String[]{String.valueOf(chatId), String.valueOf(lastLoadedLocalId)})) {
                 if (cursor.moveToFirst()) {
                     do {
                         Message msg = new Message();
@@ -504,7 +498,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     } while (cursor.moveToNext());
                 }
                 callback.onSuccess(messages);
-
             } catch (Exception e) {
                 Log.e(AppController.LOG_TAG, "error loading more messages for chat " + chatId, e);
                 callback.onError("error loading more messages");
@@ -564,7 +557,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 database.beginTransaction();
                 try {
                     for (Message msg : messages) {
-                        try (Cursor c = database.rawQuery("SELECT 1 FROM messages WHERE id = ? LIMIT 1", new String[]{String.valueOf(msg.id)})) {
+                        try (Cursor c = database.rawQuery(CHECK_MESSAGE_EXISTS_SQL, new String[]{String.valueOf(msg.id)})) {
                             if (c.moveToFirst()) continue;
                         }
                         msg.localId = database.insertWithOnConflict(MESSAGES, null, getMsgValues(msg), SQLiteDatabase.CONFLICT_REPLACE);
@@ -572,7 +565,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         chatValues.put(LAST_MESSAGE, msg.text);
                         chatValues.put(LAST_TIMESTAMP, msg.timestamp);
                         chatValues.put(IS_HIDDEN, 0);
-
                         if (msg.senderId != controller.getUserId()) {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
@@ -666,7 +658,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 v.put(ID, msg.id); // Теперь у сообщения есть серверный ID
                 v.put(TIMESTAMP, msg.timestamp); // Используем время сервера
                 v.put(SEND_STATUS, Message.STATUS_SENT);
-
                 ContentValues chatValues = new ContentValues();
                 chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENT);
                 chatValues.put(IS_BLOCKED, 0);
@@ -701,7 +692,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void getLastDbMessageId(ResultCallback<Long> callback) {
         dbExecutor.execute(() -> {
             long lastServerId = 0;
-            try (Cursor cursor = database.rawQuery("SELECT MAX(id) FROM messages", null)) {
+            try (Cursor cursor = database.rawQuery(GET_LAST_MSG_ID_SQL, null)) {
                 if (cursor.moveToFirst()) {
                     lastServerId = cursor.getLong(0);
                     //   Log.w(AppController.LOG_TAG, "последнее полученное имеет id: " + lastServerId);
@@ -722,15 +713,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             List<Long> idsToUpdate = new ArrayList<>();
             database.beginTransaction();
             try {
-                try (Cursor cursor = database.rawQuery(
-                        "SELECT m.local_id, m.chat_id, m.chat_name, m.sender_id, " +
-                                "m.text, m.type, m.file_path, m.file_name, " +
-                                "m.timestamp, c.local_id, u.public_key " +
-                                "FROM messages m " +
-                                "JOIN chats c ON m.chat_id = c.id " +
-                                "JOIN users u ON u.id = c.interlocutor_id " +
-                                "WHERE m.send_status = 3 " +
-                                "ORDER BY m.timestamp ASC LIMIT " + AppController.QUEUE_SIZE, null)) {
+                String sql = GET_PENDING_MESSAGES_SQL + AppController.QUEUE_SIZE;
+                try (Cursor cursor = database.rawQuery(sql, null)) {
                     if (cursor.moveToFirst()) {
                         do {
                             Message msg = new Message();
@@ -753,7 +737,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (!idsToUpdate.isEmpty()) {
                     ContentValues v = new ContentValues();
                     v.put(SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
-
                     for (Long lid : idsToUpdate) {
                         Log.w(AppController.LOG_TAG, "сообщение c статус 3 отправлено на до отправку localid " + lid);
                         database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(lid)});
@@ -775,12 +758,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             List<Message> medialist = new ArrayList<>();
             database.beginTransaction();
             try {
-                try (Cursor cursor = database.rawQuery(
-                        "SELECT m.local_id, m.chat_id, m.file_path, m.file_name, u.public_key " +
-                                "FROM messages m " +
-                                "JOIN chats c ON c.id = m.chat_id " +
-                                "JOIN users u ON u.id = c.interlocutor_id " +
-                                "WHERE m.media_status = 1", null)) {
+                try (Cursor cursor = database.rawQuery(GET_MEDIA_DOWNLOAD_LIST_SQL, null)) {
                     if (cursor.moveToFirst()) {
                         do {
                             Message msg = new Message();
@@ -794,7 +772,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         } while (cursor.moveToNext());
                     }
                 }
-
                 if (!idsToUpdate.isEmpty()) {
                     ContentValues v = new ContentValues();
                     v.put(MEDIA_STATUS, Message.MEDIA_STATUS_LOADING);
@@ -827,5 +804,4 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             }
                         }));
     }
-
 }

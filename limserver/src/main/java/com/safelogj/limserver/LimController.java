@@ -196,7 +196,6 @@ public class LimController {
             }
         }
         CURRENT_MEDIA_SIZE.set(total);
-        log.info("Initial media size: {} MB", total / (1024 * 1024));
     }
 
     private static void removeOldMedia() {

@@ -1,11 +1,11 @@
 # Не трогаем точку входа нашего бота
--keep class com.safelogj.limserver.** {
-    public static void main(java.lang.String[]);
-}
+-keep class com.safelogj.limserver.** { *; }
 
 # Отключаем обфускацию (сжатие имен), чтобы логи оставались читаемыми в Winbox
 -dontobfuscate
--dontoptimize
+#-dontoptimize
+-optimizationpasses 5
+-allowaccessmodification
 
 # Игнорируем предупреждения от сторонних библиотек (иначе сборка упадет из-за чужих варнингов)
 -dontwarn **
@@ -14,12 +14,30 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # Logback + SLF4J
--keep class ch.qos.logback.** { *; }
--keep class org.slf4j.** { *; }
--keep class * implements org.slf4j** { *; }
+# Используем allowoptimization, чтобы ProGuard мог анализировать вызовы внутри библиотек и вырезать их.
+-keep,allowoptimization class ch.qos.logback.**
+-keep,allowoptimization class org.slf4j.**
+-keep,allowoptimization class com.zaxxer.hikari.**
+-dontwarn com.zaxxer.hikari.**
 -keepclassmembers enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
+}
+
+-assumenosideeffects class * {
+    public void trace(...);
+    public void debug(...);
+    public boolean isTraceEnabled();
+    public boolean isDebugEnabled();
+}
+
+# 4. Вырезаем новый Fluent API (тоже для любого класса)
+-assumenosideeffects class * {
+    public org.slf4j.spi.LoggingEventBuilder atTrace();
+    public org.slf4j.spi.LoggingEventBuilder atDebug();
+}
+-assumenosideeffects class * implements org.slf4j.spi.LoggingEventBuilder {
+    public void log(...);
 }
 
 # Gson
@@ -37,6 +55,10 @@
 # Sqlite
 -keep class org.sqlite.** { *; }
 
-# HikariCP
--keep class com.zaxxer.hikari.** { *; }
--dontwarn com.zaxxer.hikari.**
+# JNA (Java Native Access)
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keepclassmembers class * {
+    native <methods>;
+}
+-dontwarn com.sun.jna.**

@@ -44,7 +44,7 @@ public class EditUserHandler extends BaseHandler {
             if (DELETE.equalsIgnoreCase(method)) {
                 deleteUser(exchange, user, response);
             } else {
-                updateUser(exchange, req, user.id, response);
+                updateUser(exchange, req, user, response);
             }
 
         } catch (Exception e) {
@@ -54,7 +54,7 @@ public class EditUserHandler extends BaseHandler {
     }
 
     private void deleteUser(HttpExchange exchange, User user, BaseResponse response) throws IOException {
-        if (LimController.dbManager.deleteUser(user.id)) {
+        if (LimController.dbManager.deleteUser(user)) {
             response.message = "the user has been deleted: " + user.displayName;
             sendSuccess(exchange, response);
         } else {
@@ -62,12 +62,12 @@ public class EditUserHandler extends BaseHandler {
         }
     }
 
-    private void updateUser(HttpExchange exchange, @NotNull EditUserRequest req, Long userId, BaseResponse response) throws IOException {
+    private void updateUser(HttpExchange exchange, @NotNull EditUserRequest req, User user, BaseResponse response) throws IOException {
         boolean isNewDisplayName = req.newDisplayName() != null && !req.newDisplayName().isEmpty();
         boolean isNewPassword = req.newPassword() != null && !req.newPassword().isEmpty();
 
         if ((isNewDisplayName || isNewPassword)
-                && (LimController.dbManager.updateUser(userId, req, isNewDisplayName, isNewPassword)) != null) {
+                && (LimController.dbManager.updateUser(user, req, isNewDisplayName, isNewPassword)) != null) {
             response.message = "edit success: " + (isNewDisplayName ? req.newDisplayName() : LimController.EMPTY_STRING);
             sendSuccess(exchange, response);
             return;

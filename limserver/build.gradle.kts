@@ -45,7 +45,7 @@ tasks.register<JavaExec>("minifyJar") {
 
     // ... все остальные твои args ...
     args("-injars", "build/libs/limserver-chr-full.jar")
-    args("-outjars", "build/libs/limserver-chr.jar")
+    args("-outjars", "build/libs/limserver-chr-small.jar")
 
     val javaHome = System.getProperty("java.home")
     args("-libraryjars", "$javaHome/jmods")
