@@ -42,7 +42,6 @@ public class SendMessageHandler extends BaseHandler {
                 response.timestamp = timestamp;
                 response.message = "message saved on server";
                 sendSuccess(exchange, response);
-                LimController.log.info("sendSuccess ");
             } else {
                 sendInternalServerError(exchange, response);
                 LimController.log.error("sendInternalServerError ");

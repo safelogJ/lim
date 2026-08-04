@@ -56,7 +56,7 @@ public class MediaDownloadHandler extends BaseHandler {
                         long fileSize = file.length();
                         if (Files.deleteIfExists(file.toPath())) {
                             LimController.CURRENT_MEDIA_SIZE.addAndGet(-fileSize);
-                            LimController.log.info("File confirmed and deleted: {}", file.getName());
+                            LimController.log.info("File receipt confirmed, deleted file: {}", file.getName());
                         }
                     } finally {
                         LimController.removeFilePath(user.id);

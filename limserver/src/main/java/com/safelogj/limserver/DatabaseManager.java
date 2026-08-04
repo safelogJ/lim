@@ -498,7 +498,7 @@ public class DatabaseManager {
                 try (ResultSet rs = insertStmt.getGeneratedKeys()) {
                     if (rs.next()) serverId = rs.getLong(1);
                 }
-                LimController.log.info("+++ save: msg_id={}, in chat={}, from id={} +++", serverId, chatId, senderId);
+                LimController.log.info("save: msg_id={}, in chat={}, from id={}", serverId, chatId, senderId);
                 updateStmt.setLong(1, chatId);
                 updateStmt.executeUpdate();
                 updateBlock.setLong(1, chatId);
@@ -534,7 +534,7 @@ public class DatabaseManager {
                         "JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? " +
                         "JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id " +
                         "JOIN users u_sender ON m.sender_id = u_sender.id " +
-                        "WHERE m.id > ? " +
+                        "WHERE m.id > ? AND cm_me.is_blocked = 0 " +
                         "ORDER BY m.id ASC")) {
             stmt.setLong(1, userId);
             stmt.setLong(2, userId);

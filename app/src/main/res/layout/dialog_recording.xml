@@ -19,7 +19,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="00:00"
+        android:text="@string/zero_time"
         android:textColor="@color/white"
         android:textSize="32sp"
         android:textStyle="bold" />
@@ -28,17 +28,17 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Recording..."
+        android:text="@string/recording"
         android:textColor="@color/light_gray_aaa"
-        android:textSize="14sp" />
+        android:textSize="16sp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Tap outside to save"
+        android:text="@string/stop_recording"
         android:textColor="@color/gray400"
-        android:textSize="12sp"
+        android:textSize="14sp"
         android:textStyle="italic" />
 
 </LinearLayout>

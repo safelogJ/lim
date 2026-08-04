@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
+import android.text.format.DateFormat;
 import android.util.Base64;
 import android.util.Log;
 
@@ -151,9 +152,6 @@ public class AppController extends Application {
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
     private final AtomicBoolean isNetworkActive = new AtomicBoolean(false);
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
-    private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault());
-    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault());
-    private final DateTimeFormatter dayMonthFormatter = DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault());
     private final SecureRandom secureRandom = new SecureRandom();
     private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
 
@@ -164,6 +162,9 @@ public class AppController extends Application {
     private DatabaseHelper dbHelper;
     private boolean initAppError;
     private String initAppErrStr = EMPTY_STRING;
+    private DateTimeFormatter timeFormatter;
+    private DateTimeFormatter dateFormatter;
+    private DateTimeFormatter dayMonthFormatter;
 
     @NonNull
     private volatile String e2eePrivateKey = EMPTY_STRING;
@@ -373,6 +374,7 @@ public class AppController extends Application {
         }
         createNotificationChannel();
         setupWorkManager();
+        setupDayFormatters();
     }
 
     public void writeSettingsToFile() {
@@ -749,6 +751,13 @@ public class AppController extends Application {
         return controller.dateFormatter.format(msgTime);
     }
 
+    private void setupDayFormatters() {
+        Locale locale = Locale.getDefault();
+        timeFormatter = DateTimeFormatter.ofPattern("HH:mm", locale);
+        dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", locale);
+        dayMonthFormatter = DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "dMMM"), locale);
+    }
+
     private void createNotificationChannel() {
         NotificationChannel channel = new NotificationChannel(
                 NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
@@ -784,8 +793,8 @@ public class AppController extends Application {
 
     private void setupWorkManager() {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(LIM_SYNC, ExistingPeriodicWorkPolicy.KEEP,
-                new PeriodicWorkRequest.Builder(MessageWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints)
-                        .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
+                new PeriodicWorkRequest.Builder(MessageWorker.class, PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
+                        .setConstraints(constraints).setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS).build());
     }
 
     /**
@@ -884,6 +893,8 @@ public class AppController extends Application {
 
     private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException {
+
+        Log.d(LOG_TAG, "getSharedKey: " + theirPublicKeyBase64);
         return sharedKeys.computeIfAbsent(theirPublicKeyBase64, key -> {
             try {
                 return calculateSharedKey(key);
@@ -913,7 +924,6 @@ public class AppController extends Application {
         mac.update((byte) 0x01);
         return mac.doFinal();
     }
-
     /**
      * Создает Cipher для потокового шифрования/расшифровки файла.
      */

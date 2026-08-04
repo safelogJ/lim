@@ -37,7 +37,7 @@ public class NotificationHelper {
         String title;
         String text;
         if (unreadChats.size() == 1) {
-            Chat chat = unreadChats.getFirst();
+            Chat chat = unreadChats.get(0);
             title = context.getString(R.string.new_msg);
             text = context.getString(R.string.new_msg_from) + " " + chat.name;
             intent.putExtra(EXTRA_CHAT_ID, chat.id);

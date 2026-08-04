@@ -1,7 +1,7 @@
 [![Google Play](https://img.shields.io/badge/Google_Play-000000?style=for-the-badge&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.safelogj.lim)
 [![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Rf0qV1bF3Vc&list=PLDrcG0N5RKyo)
 
-# Lim: MikroTik CHR Messenger
+# Lim: Messenger for MikroTik
 ![winbox](./lim4l.jpg)
 
 A lightweight messenger for local networks based on MikroTik CHR.
@@ -18,12 +18,12 @@ The server stores messages, transfers media files and manages user accounts. Com
 ## Features
 
 - Personal messaging
-- File transfer
+- File transfer & Voice messages
 - End-to-end encryption of messages and media
 - Automatic chat creation
 - User authentication
-- Android client
-- Java server for MikroTik CHR
+- Android client (API 29+)
+- Java server for MikroTik (AMD64 & ARM64)
 - HTTPS communication
 - Local network operation only
 
@@ -120,7 +120,7 @@ The server container uses two mounted directories.
           HTTPS │
                 ▼
      +-----------------------+
-     |     MikroTik CHR      |
+     |    MikroTik Router    |
      |-----------------------|
      |     Java Server       |
      |     SQLite (HikariCP) |

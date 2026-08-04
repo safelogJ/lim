@@ -137,10 +137,8 @@ public class ChatFragment extends Fragment {
             if (mBinding == null) return;
             Boolean isOnline = false;
             for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
-                Log.d(AppController.LOG_TAG, "updateOnlineStatusUI пееребор");
                 if (userChats.containsKey(currentChatId)) {
                     isOnline = userChats.get(currentChatId);
-                    Log.d(AppController.LOG_TAG, "updateOnlineStatusUI нашли -1 " + currentChatId + " ono " + isOnline);
                     break;
                 }
             }
@@ -308,12 +306,12 @@ public class ChatFragment extends Fragment {
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && !msgList.isEmpty() && mBinding != null) {
-                renewChatName(msgList.getLast().chatName);
+                renewChatName(msgList.get(msgList.size() - 1).chatName);
                 messages.clear();
                 msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
                 adapter.submitList(new ArrayList<>(msgList), () -> {
-                    long newMaxId = msgList.getLast().localId;
+                    long newMaxId = msgList.get(msgList.size() - 1).localId;
                     if (newMaxId > lastMaxMsgId) {
                         mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
                     }
@@ -555,7 +553,7 @@ public class ChatFragment extends Fragment {
 
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, "Recording error: " + e.getMessage());
-            Toast.makeText(requireContext(), "Error starting record", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), R.string.error_starting_record, Toast.LENGTH_SHORT).show();
         }
     }
 
