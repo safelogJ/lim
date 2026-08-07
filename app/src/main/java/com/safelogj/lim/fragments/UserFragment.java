@@ -21,8 +21,6 @@ import androidx.documentfile.provider.DocumentFile;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -35,14 +33,11 @@ import com.safelogj.lim.AppController;
 import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentUserBinding;
-import com.safelogj.lim.model.Chat;
-import com.safelogj.lim.viewmodels.ResultCallback;
 import com.safelogj.lim.viewmodels.UserViewModel;
 
 import java.io.InputStream;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -83,29 +78,6 @@ public class UserFragment extends Fragment {
     private final ActivityResultLauncher<String> requestAskReadFilePermit =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackAskReadFilePermit);
 
-    private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final Runnable uiRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (controller.getUserId() > 0) {
-                controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
-                    @Override
-                    public void onSuccess(List<Chat> unreadChats) {
-                        if (!unreadChats.isEmpty()) {
-                            Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + unreadChats.get(0).id);
-                            NotificationHelper.showNotification(controller, unreadChats);
-                        }
-                    }
-                    @Override
-                    public void onError(String msg) {
-                        Log.e(AppController.LOG_TAG, msg);
-                    }
-                });
-            }
-            uiHandler.postDelayed(this, 4000);
-        }
-    };
-
     private FragmentUserBinding mBinding;
     private UserViewModel userViewModel;
     private String username;
@@ -134,6 +106,12 @@ public class UserFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), chatList -> {
+            if (!chatList.isEmpty()) {
+                Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + chatList.get(0).id);
+                NotificationHelper.showNotification(controller, chatList);
+            }
+        });
         userViewModel = new ViewModelProvider(this).get(UserViewModel.class);
         userViewModel.getResultMessage().observe(getViewLifecycleOwner(), msg -> {
             if (msg != null) {
@@ -150,18 +128,6 @@ public class UserFragment extends Fragment {
         addCertBtnListener();
         setTouchFieldListeners();
         setKeyboardPadding();
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        uiHandler.post(uiRunnable);
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-        uiHandler.removeCallbacks(uiRunnable);
     }
 
     @Override

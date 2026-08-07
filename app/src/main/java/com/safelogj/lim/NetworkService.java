@@ -32,12 +32,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -456,55 +453,23 @@ public class NetworkService {
     private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {
         if (onlineStatuses == null) return;
         for (Map.Entry<Long, Boolean> userStatus : onlineStatuses.entrySet()) {
-            Map<Long, Boolean> chat = AppController.getChatStatuses(userStatus.getKey());
+            Map<Long, Boolean> chat = controller.getChatStatuses(userStatus.getKey());
             if (chat == null) continue;
             chat.replaceAll((id, oldStatus) -> userStatus.getValue());
+            controller.notifyOnlineStatusChanged(chat.keySet().iterator().next());
         }
     }
 
     private void checkMediaThread() {
         if (controller.startedActivities.get() > 0) {
-            dbHelper.getMediaList(new ResultCallback<>() {
-                @Override
-                public void onSuccess(List<Message> mediaList) {
-                    for (Message msg : mediaList) {
-                        Log.d(AppController.LOG_TAG, "пнули загрузку в нити " + controller.getNetStreams()[AppController.POOL_SIZE - 2].toString());
-                        controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
-                    }
-                }
-
-                @Override
-                public void onError(String errorMsg) {
-                    Log.d(AppController.LOG_TAG, errorMsg);
-                }
-            });
+            for (Message msg : dbHelper.getMediaList()) {
+                Log.d(AppController.LOG_TAG, "пнули загрузку в нити " + controller.getNetStreams()[AppController.POOL_SIZE - 2].toString());
+                controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
+            }
         } else {
-            List<Message> list = new ArrayList<>();
-            CountDownLatch latch = new CountDownLatch(1);
-            dbHelper.getMediaList(new ResultCallback<>() {
-                @Override
-                public void onSuccess(List<Message> mediaList) {
-                    list.addAll(mediaList);
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String errorMsg) {
-                    latch.countDown();
-                    Log.d(AppController.LOG_TAG, errorMsg);
-                }
-            });
-
-            try {
-                if (latch.await(10, TimeUnit.SECONDS)) {
-                    for (Message msg : list) {
-                        Log.d(AppController.LOG_TAG, "пнули загрузку для в воркере " + Thread.currentThread().getName());
-                        downloadMedia(msg);
-
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            for (Message msg : dbHelper.getMediaList()) {
+                Log.d(AppController.LOG_TAG, "пнули загрузку для в воркере " + Thread.currentThread().getName());
+                downloadMedia(msg);
             }
         }
     }

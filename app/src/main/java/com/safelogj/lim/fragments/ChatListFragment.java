@@ -9,9 +9,8 @@ import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.text.Editable;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,22 +25,13 @@ import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.viewmodels.ChatListViewModel;
 
+import java.util.Collections;
 import java.util.Map;
 
 public class ChatListFragment extends Fragment {
 
     private AppController controller;
     private FragmentChatListBinding mBinding;
-    private ChatListAdapter adapter;
-    private ChatListViewModel viewModel;
-    private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final Runnable uiRunnable = new Runnable() {
-        @Override
-        public void run() {
-            viewModel.loadDbChatList();
-            uiHandler.postDelayed(this, 4000);
-        }
-    };
 
     public ChatListFragment() {
         // Required empty public constructor
@@ -64,10 +54,8 @@ public class ChatListFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
-        setChatListObserve();
-        setObservers();
-        adapter = new ChatListAdapter(new ChatListAdapter.OnChatClickListener() {
+        ChatListViewModel viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
+        ChatListAdapter adapter = new ChatListAdapter(new ChatListAdapter.OnChatClickListener() {
             @Override
             public void onChatClick(Chat chat) {
                 MainActivity activity = (MainActivity) requireActivity();
@@ -95,20 +83,56 @@ public class ChatListFragment extends Fragment {
             @Override
             public void onChatLongClick(Chat chat) {
                 if (chat.id != Chat.INVALID_ID) {
-                    showChatOptionsDialog(chat);
+                    showChatOptionsDialog(chat, viewModel);
                 }
             }
         });
         mBinding.chatsRecyclerView.setAdapter(adapter);
+        setObserverUnreadChats();
+        setObserverChatList(adapter);
+        setObserveOnlineStatus(adapter);
     }
 
-    private void setChatListObserve() {
-        viewModel.getChatList().observe(getViewLifecycleOwner(), chatList -> {
+    private void setObserveOnlineStatus(ChatListAdapter adapter) {
+        controller.getOnlineStatusTrigger().observe(getViewLifecycleOwner(), chatId -> {
+            // Ищем чат в текущем списке адаптера
+            for (int i = 0; i < adapter.getCurrentList().size(); i++) {
+                Chat chat = adapter.getCurrentList().get(i);
+                if (chat.id == chatId) {
+                    // Берем актуальный статус из AppController
+                    Map<Long, Boolean> statuses = controller.getChatStatuses(chat.interlocutorId);
+                    if (statuses != null && statuses.containsKey(chatId)) {
+                        boolean newStatus = Boolean.TRUE.equals(statuses.get(chatId));
+                        // Обновляем статус только если он реально изменился
+                        if (chat.isOnline != newStatus) {
+                            chat.isOnline = newStatus;
+                            Bundle payload = new Bundle();
+                            payload.putBoolean("online", true); // "online" - константа в ChatListAdapter
+                            adapter.notifyItemChanged(i, payload); // Точечное обновление без мерцания
+                        }
+                    }
+                    break;
+                }
+            }
+        });
+    }
+
+    private void setObserverUnreadChats() {
+        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> {
+            if(!unreadChatList.isEmpty()) {
+                controller.notifyUnreadChatChanged(Collections.emptyList());
+            }
+        });
+    }
+
+    private void setObserverChatList(ChatListAdapter adapter) {
+        controller.getChatListTrigger().observe(getViewLifecycleOwner(), chatList -> {
             for (Chat chat : chatList) {
                 if (chat.id != Chat.INVALID_ID) {
-                    Map<Long, Boolean> userChats = AppController.getChatStatuses(chat.interlocutorId);
+                    Map<Long, Boolean> userChats = controller.getChatStatuses(chat.interlocutorId);
                     if (userChats != null && userChats.containsKey(chat.id)) {
                         Boolean status = userChats.get(chat.id);
+                        Log.d(AppController.LOG_TAG, "статус чата онлайн  " + status);
                         chat.isOnline = status != null && status;
                     }
                     chat.color = AppController.getChatColor(chat.id, chat.color);
@@ -118,27 +142,7 @@ public class ChatListFragment extends Fragment {
         });
     }
 
-    private void setObservers() {
-        viewModel.isChatHidden().observe(getViewLifecycleOwner(), isHidden -> {
-            if (isHidden != null && isHidden) {
-                viewModel.loadDbChatList();
-            }
-        });
-
-        viewModel.isChatBlocked().observe(getViewLifecycleOwner(), isBlocked -> {
-            if (isBlocked != null && isBlocked) {
-                viewModel.loadDbChatList();
-            }
-        });
-
-        viewModel.getChatName().observe(getViewLifecycleOwner(), name -> {
-            if (name != null) {
-                viewModel.loadDbChatList();
-            }
-        });
-    }
-
-    private void showChatOptionsDialog(Chat chat) {
+    private void showChatOptionsDialog(Chat chat, ChatListViewModel viewModel) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_chat_options, null);
         AlertDialog dialog = new AlertDialog.Builder(requireContext()).setView(dialogView).create();
 
@@ -194,14 +198,7 @@ public class ChatListFragment extends Fragment {
     @Override
     public void onStart() {
         super.onStart();
-        uiHandler.post(uiRunnable);
         NotificationHelper.clearNotification(controller);
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-        uiHandler.removeCallbacks(uiRunnable);
     }
 
     @Override

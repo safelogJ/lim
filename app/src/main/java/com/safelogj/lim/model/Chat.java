@@ -30,6 +30,25 @@ public class Chat {
         action.lastTimestamp = 0;
         return action;
     }
+
+    public Chat copy() {
+        Chat copy = new Chat();
+        copy.localId = this.localId;
+        copy.id = this.id;
+        copy.name = this.name;
+        copy.isGroup = this.isGroup;
+        copy.interlocutorId = this.interlocutorId;
+        copy.lastMessage = this.lastMessage;
+        copy.lastSendStatus = this.lastSendStatus;
+        copy.isHidden = this.isHidden;
+        copy.color = this.color;
+        copy.isBlocked = this.isBlocked;
+        copy.isOnline = this.isOnline;
+        copy.hasNewMsg = this.hasNewMsg;
+        copy.lastTimestamp = this.lastTimestamp;
+        copy.lastTimestampFormatted = this.lastTimestampFormatted;
+        return copy;
+    }
 }
 
 

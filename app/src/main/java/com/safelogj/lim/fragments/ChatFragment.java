@@ -48,10 +48,10 @@ import com.safelogj.lim.databinding.FragmentChatBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.viewmodels.ChatViewModel;
-import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,7 +61,7 @@ public class ChatFragment extends Fragment {
     private static final String ARG_CHAT_ID = "arg_chat_id";
     private static final String ARG_CHAT_LOCAL_ID = "arg_chat_local_id";
     private static final String ARG_CHAT_NAME = "arg_chat_name";
-    private final List<Message> messages = new ArrayList<>();
+    private final List<Message> messages = new LinkedList<>();
     private AppController controller;
     private FragmentChatBinding mBinding;
     private MsgAdapter adapter;
@@ -106,49 +106,6 @@ public class ChatFragment extends Fragment {
     private final ActivityResultLauncher<String> requestRecordPermit =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), callbackRecordPermit);
 
-    private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final Runnable uiRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (currentChatId != Chat.INVALID_ID) {
-                chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
-                controller.getDbHelper().markChatAsRead(currentChatId);
-                updateOnlineStatusUI();
-            }
-            controller.getDbHelper().getUnreadChats(new ResultCallback<>() {
-                @Override
-                public void onSuccess(List<Chat> unreadChats) {
-                    unreadChats.removeIf(chat -> chat.id == currentChatId);
-                    if (!unreadChats.isEmpty()) {
-                        NotificationHelper.showNotification(controller, unreadChats);
-                    }
-                }
-
-                @Override
-                public void onError(String msg) {
-                    Log.w(AppController.LOG_TAG, msg);
-                }
-            });
-            uiHandler.postDelayed(this, 4000);
-        }
-
-        private void updateOnlineStatusUI() {
-            Log.d(AppController.LOG_TAG, "updateOnlineStatusUI");
-            if (mBinding == null) return;
-            Boolean isOnline = false;
-            for (Map<Long, Boolean> userChats : AppController.getChatsStatuses()) {
-                if (userChats.containsKey(currentChatId)) {
-                    isOnline = userChats.get(currentChatId);
-                    break;
-                }
-            }
-            if (mBinding.onlineStatus.getBackground() != null) {
-                mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
-                        controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
-            }
-        }
-    };
-
     private MediaRecorder mediaRecorder;
     private File audioFile;
     private long startTime = 0L;
@@ -178,6 +135,7 @@ public class ChatFragment extends Fragment {
     private String inputText = AppController.EMPTY_STRING;
     private int lastMsgListSize;
     private long lastMaxMsgId;
+    private Boolean lastOnlineState = null;
 
     public ChatFragment() {
         // Required empty public constructor
@@ -218,6 +176,7 @@ public class ChatFragment extends Fragment {
         chatColor = AppController.getChatColor(currentChatId, chatColor);
         adapter = new MsgAdapter(controller.getUserId(), chatColor);
         mBinding.messagesRecyclerView.setAdapter(adapter);
+        // mBinding.messagesRecyclerView.setItemAnimator(null); // Отключаем анимацию
 
         setSendBtnListener();
         setAddFileBtnListener();
@@ -225,6 +184,9 @@ public class ChatFragment extends Fragment {
 
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
 
+        setObserveUnreadChats();
+        setObserveOnlineStatus();
+        setObserveChatChanges();
         setOnScrollListener();
         setObserveChat();
         setObservePublicKey();
@@ -245,14 +207,13 @@ public class ChatFragment extends Fragment {
     @Override
     public void onStart() {
         super.onStart();
-        uiHandler.post(uiRunnable);
+        chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
         clearNotificationIfMatch();
     }
 
     @Override
     public void onStop() {
         super.onStop();
-        uiHandler.removeCallbacks(uiRunnable);
         if (adapter != null) {
             adapter.pausePlaying();
         }
@@ -303,17 +264,25 @@ public class ChatFragment extends Fragment {
         });
     }
 
+    private void setObserveChatChanges() {
+        controller.getMessagesTrigger().observe(getViewLifecycleOwner(), chatId -> {
+            if (chatId != Chat.INVALID_ID && chatId == currentChatId) {
+                chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
+            }
+        });
+    }
+
     private void setObserveMsgList() {
         chatViewModel.getMsgList().observe(getViewLifecycleOwner(), msgList -> {
             if (msgList != null && !msgList.isEmpty() && mBinding != null) {
-                renewChatName(msgList.get(msgList.size() - 1).chatName);
+                renewChatName(msgList.get(0).chatName);
                 messages.clear();
-                msgList.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
                 messages.addAll(msgList);
-                adapter.submitList(new ArrayList<>(msgList), () -> {
-                    long newMaxId = msgList.get(msgList.size() - 1).localId;
+                adapter.submitList(msgList, () -> {
+                    long newMaxId = msgList.get(0).localId;
                     if (newMaxId > lastMaxMsgId) {
-                        mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1);
+                        mBinding.messagesRecyclerView.scrollToPosition(0);
+                        controller.getDbHelper().markChatAsRead(currentChatId);
                     }
                     lastMsgListSize = msgList.size();
                     lastMaxMsgId = newMaxId;
@@ -342,6 +311,36 @@ public class ChatFragment extends Fragment {
         });
     }
 
+    private void setObserveUnreadChats() {
+        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> {
+            unreadChatList.removeIf(chat -> chat.id == currentChatId);
+            if (!unreadChatList.isEmpty()) {
+                NotificationHelper.showNotification(controller, unreadChatList);
+            }
+        });
+    }
+
+    private void setObserveOnlineStatus() {
+        controller.getOnlineStatusTrigger().observe(getViewLifecycleOwner(), chatId -> {
+            if (chatId == currentChatId && chatId != Chat.INVALID_ID && mBinding != null) {
+                Boolean isOnline = false;
+                for (Map<Long, Boolean> userChats : controller.getChatsStatuses()) {
+                    if (userChats.containsKey(chatId)) {
+                        isOnline = userChats.get(chatId);
+                        break;
+                    }
+                }
+                if (lastOnlineState != null && lastOnlineState.equals(isOnline)) return;
+                lastOnlineState = isOnline;
+             //   Log.d(AppController.LOG_TAG, "updateOnlineStatusUI: " + isOnline);
+                if (mBinding.onlineStatus.getBackground() != null) {
+                    mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
+                            controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
+                }
+            }
+        });
+    }
+
     private void setOnScrollListener() {
         mBinding.messagesRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -349,7 +348,7 @@ public class ChatFragment extends Fragment {
                 super.onScrolled(recyclerView, dx, dy);
                 if (dy < 0) { // dy < 0 означает, что пользователь скроллит ВВЕРХ
                     LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-                    if (layoutManager != null && layoutManager.findFirstVisibleItemPosition() <= 5) {
+                    if (layoutManager != null && layoutManager.findLastVisibleItemPosition() >= layoutManager.getItemCount() - 5) {
                         chatViewModel.loadMoreMessages(currentChatId);
                     }
                 }
@@ -361,8 +360,10 @@ public class ChatFragment extends Fragment {
         chatViewModel.getFoundChat().observe(getViewLifecycleOwner(), chat -> {
             if (chat != null && mBinding != null) {
                 currentChatId = chat.id;
+                currentChatLocalId = chat.localId;
                 currentChatName = chat.name;
                 chatViewModel.getDbPublicKey(currentChatId);
+                chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
                 updateBottomPanel();
             }
         });
@@ -417,7 +418,6 @@ public class ChatFragment extends Fragment {
         chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
         chatViewModel.clearFile();
         inputText = AppController.EMPTY_STRING;
-        chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
     }
 
     private Message buildMessage(@Nullable Uri fileUri, @Nullable String fileName) {
@@ -431,7 +431,6 @@ public class ChatFragment extends Fragment {
         msg.filePath = fileUri == null ? null : fileUri.toString();
         msg.fileName = fileName;
         msg.timestamp = System.currentTimeMillis();
-        msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
         Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId + " публичный ключ " + interlocutorPublicKey);
         return msg;
     }
@@ -441,9 +440,11 @@ public class ChatFragment extends Fragment {
         msg.text = text;
         Log.d(AppController.LOG_TAG, "Добавляем системное сообщение: " + text);
         msg.senderId = Message.SYSTEM_SENDER_ID;
-        messages.add(msg);
-        messages.sort((o1, o2) -> Long.compare(o1.localId, o2.localId));
-        adapter.submitList(new ArrayList<>(messages), () -> mBinding.messagesRecyclerView.scrollToPosition(adapter.getItemCount() - 1));
+        if (currentChatId == Chat.INVALID_ID) {
+            messages.clear();
+        }
+        messages.add(0, msg);
+        adapter.submitList(new ArrayList<>(messages), () -> mBinding.messagesRecyclerView.scrollToPosition(0));
     }
 
     private void updateBottomPanel() {
@@ -520,7 +521,7 @@ public class ChatFragment extends Fragment {
     private void startRecording() {
         try {
             // 1. Создаем файл для записи
-            audioFile = new File(controller.getExternalFileDir(),"voice_" + System.currentTimeMillis() + ".m4a");
+            audioFile = new File(controller.getExternalFileDir(), "voice_" + System.currentTimeMillis() + ".m4a");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 mediaRecorder = new android.media.MediaRecorder(controller);
             } else {

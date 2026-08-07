@@ -28,6 +28,7 @@ import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.request.target.Target;
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
@@ -131,7 +132,10 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 binding.messageImage.setVisibility(View.VISIBLE);
                 Glide.with(itemView.getContext())
                         .load(Uri.parse(message.filePath))
-                        .override(Target.SIZE_ORIGINAL)
+                        .override(800, 800) // Ограничиваем размер превью, это ОЧЕНЬ ускорит прокрутку
+                        .centerInside()
+                        .placeholder(R.drawable.fielder_background_tr) // Занимаем место до загрузки
+                        .diskCacheStrategy(DiskCacheStrategy.ALL) // Кешируем все версии
                         .into(binding.messageImage);
 
             } else if (isAudioFile(message.fileName) && message.isLocalFile()) {

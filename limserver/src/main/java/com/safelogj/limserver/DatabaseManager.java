@@ -17,6 +17,7 @@ import java.sql.SQLException;
 import java.sql.Connection;
 import java.sql.Statement;
 
+import com.safelogj.limserver.request.SendMessageRequest;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
@@ -27,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class DatabaseManager {
 
@@ -43,7 +43,6 @@ public class DatabaseManager {
             });
     @NotNull
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
-    // --- SQL CONSTANTS ---
     // Auth & User
     private static final String CHECK_USER_EXISTS_SQL = "SELECT 1 FROM users WHERE username = ? LIMIT 1";
     private static final String INSERT_USER_SQL = "INSERT INTO users (username, password_hash, public_key, private_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)";
@@ -62,19 +61,22 @@ public class DatabaseManager {
     private static final String SEARCH_USER_IN_CHAT_SQL = "SELECT u.id, u.username, u.display_name, u.public_key FROM users u JOIN chat_members cm ON u.id = cm.user_id WHERE cm.chat_id = ? AND cm.user_id != ? LIMIT 1";
     // Messages
     private static final String INSERT_MESSAGE_SQL = "INSERT INTO messages (chat_id, sender_id, text, type, chat_name, file_path, file_name, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    private static final String GET_NEW_MESSAGES_SQL = "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, m.timestamp, u_interlocutor.public_key FROM messages m JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id JOIN users u_sender ON m.sender_id = u_sender.id WHERE m.id > ? AND cm_me.is_blocked = 0 ORDER BY m.id ASC";
+    private static final String GET_NEW_MESSAGES_SQL = "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, m.timestamp, u_interlocutor.public_key, u_interlocutor.id FROM messages m JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id JOIN users u_sender ON m.sender_id = u_sender.id WHERE m.id > ? AND cm_me.is_blocked = 0 ORDER BY m.id ASC";
     // Security & File
     private static final String CHECK_FILE_ACCESSIBILITY_SQL = "SELECT 1 FROM messages m JOIN chat_members cm ON m.chat_id = cm.chat_id WHERE m.chat_id = ? AND m.file_path = ? AND cm.user_id = ? LIMIT 1";
     private static final String CHECK_MEMBER_OF_CHAT_SQL = "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1";
-    private static final String GET_MAX_MSG_ID_SQL = "SELECT MAX(id) FROM messages";
+    private static final String GET_CHAT_MEMBERS_FOR_CACHE_SQL = "SELECT chat_id, user_id FROM chat_members";
+    private static final String GET_MAX_MSG_ID_SQL_PER_USER = "SELECT cm.user_id, MAX(m.id) FROM chat_members cm JOIN messages m ON cm.chat_id = m.chat_id GROUP BY cm.user_id";
 
-    // --- OPTIMIZATION ---
-    private final AtomicLong globalMaxMsgId = new AtomicLong(0);
+    private final Map<Long, Long> usersMaxIdCache = new ConcurrentHashMap<>();
+    private final Map<Long, List<Long>> chatMembersCache = new ConcurrentHashMap<>();
     private final Map<String, UserCacheEntry> authCache = new ConcurrentHashMap<>();
-    private static final long CACHE_TTL_MS = 21_600_000; // 6 hour
+    private static final long AUTH_CACHE_TTL_MS = 21_600_000; // 6 hour
 
-    private record UserCacheEntry(User user, String passwordHash, long timestamp) {
-        boolean isExpired() { return System.currentTimeMillis() - timestamp > CACHE_TTL_MS; }
+    private record UserCacheEntry(User user, String clientHash, long timestamp) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > AUTH_CACHE_TTL_MS;
+        }
     }
 
     private final HikariDataSource dataSource;
@@ -162,11 +164,19 @@ public class DatabaseManager {
             stmt.execute(createChatsTable);
             stmt.execute(createChatMembersTable);
             stmt.execute(createMessagesTable);
-            
-            try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL)) {
-                if (rs.next()) globalMaxMsgId.set(rs.getLong(1));
+
+            // 1. Загружаем участников всех чатов
+            try (ResultSet rs = stmt.executeQuery(GET_CHAT_MEMBERS_FOR_CACHE_SQL)) {
+                while (rs.next()) {
+                    chatMembersCache.computeIfAbsent(rs.getLong(1), k -> new ArrayList<>()).add(rs.getLong(2));
+                }
             }
-            LimController.log.info("Database initialized. Max message ID: {}", globalMaxMsgId.get());
+            // 2. Инициализируем персональные кэши (самый большой ID, который юзер может видеть)
+            try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL_PER_USER)) {
+                while (rs.next()) {
+                    usersMaxIdCache.put(rs.getLong(1), rs.getLong(2));
+                }
+            }
         } catch (Exception e) {
             LimController.log.error("critical error while initializing database: ", e);
             System.exit(LimController.ERROR);
@@ -245,7 +255,7 @@ public class DatabaseManager {
     @Nullable
     public User authenticateUser(@NotNull String username, @NotNull String clientHash) {
         UserCacheEntry entry = authCache.get(username);
-        if (entry != null && !entry.isExpired() && entry.passwordHash().equals(clientHash)) {
+        if (entry != null && !entry.isExpired() && entry.clientHash().equals(clientHash)) {
             return entry.user();
         }
         String serverPasswordHash = hashPassword(clientHash);
@@ -349,13 +359,14 @@ public class DatabaseManager {
                         memberStmt.setLong(2, senderId);
                         memberStmt.setLong(3, now);
                         memberStmt.addBatch();
-
                         // Участник 2
                         memberStmt.setLong(1, chatId);
                         memberStmt.setLong(2, receiverId);
                         memberStmt.setLong(3, now);
                         memberStmt.addBatch();
                         memberStmt.executeBatch();
+                        // В блоке, где создаются участники (insert chat_members):
+                        chatMembersCache.put(chatId, new ArrayList<>(List.of(senderId, receiverId)));
                     }
                 }
                 conn.commit();
@@ -476,21 +487,20 @@ public class DatabaseManager {
         return null;
     }
 
-    public long saveMessage(long chatId, long senderId, String text, String type, String chatName,
-                            String filePath, String fileName, long timestamp) {
+    public long saveMessage(SendMessageRequest req, long senderId, long timestamp) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement insertStmt = conn.prepareStatement(INSERT_MESSAGE_SQL, Statement.RETURN_GENERATED_KEYS);
                  PreparedStatement updateStmt = conn.prepareStatement(UNHIDE_CHAT_MEMBERS_SQL);
                  PreparedStatement updateBlock = conn.prepareStatement(UNBLOCK_CHAT_MEMBER_SQL)) {
 
-                insertStmt.setLong(1, chatId);
+                insertStmt.setLong(1, req.chatId());
                 insertStmt.setLong(2, senderId);
-                insertStmt.setString(3, text);
-                insertStmt.setString(4, type);
-                insertStmt.setString(5, chatName);
-                insertStmt.setString(6, filePath);
-                insertStmt.setString(7, fileName);
+                insertStmt.setString(3, req.text());
+                insertStmt.setString(4, req.type());
+                insertStmt.setString(5, req.chatName());
+                insertStmt.setString(6, req.filePath());
+                insertStmt.setString(7, req.fileName());
                 insertStmt.setLong(8, timestamp);
 
                 if (insertStmt.executeUpdate() == 0) {
@@ -501,16 +511,21 @@ public class DatabaseManager {
                 try (ResultSet rs = insertStmt.getGeneratedKeys()) {
                     if (rs.next()) serverId = rs.getLong(1);
                 }
-                LimController.log.info("save: msg_id={}, in chat={}, from id={}", serverId, chatId, senderId);
-                updateStmt.setLong(1, chatId);
+                LimController.log.info("save: msg_id={}, in chat={}, from id={}", serverId, req.chatId(), senderId);
+                updateStmt.setLong(1, req.chatId());
                 updateStmt.executeUpdate();
-                updateBlock.setLong(1, chatId);
+                updateBlock.setLong(1, req.chatId());
                 updateBlock.setLong(2, senderId);
                 updateBlock.executeUpdate();
                 conn.commit();
-                
+
                 if (serverId != Message.INVALID_MSG_ID) {
-                    globalMaxMsgId.accumulateAndGet(serverId, Math::max);
+                    List<Long> members = chatMembersCache.get(req.chatId());
+                    if (members != null) {
+                        for (Long mId : members) {
+                            usersMaxIdCache.put(mId, serverId);
+                        }
+                    }
                 }
                 return serverId;
             } catch (SQLException e) {
@@ -527,7 +542,8 @@ public class DatabaseManager {
 
     @Nullable
     public List<Message> getNewMessages(long userId, long lastMessageId) {
-        if (lastMessageId >= globalMaxMsgId.get()) {
+        Long uMax = usersMaxIdCache.get(userId);
+        if (uMax != null && lastMessageId >= uMax) {
             return Collections.emptyList();
         }
 
@@ -551,7 +567,11 @@ public class DatabaseManager {
                     msg.chatName = rs.getString(8);
                     msg.timestamp = rs.getLong(9);
                     msg.interlocutorPublicKey = rs.getString(10);
+                    msg.receiverId = rs.getLong(11);
                     messages.add(msg);
+                }
+                if (!messages.isEmpty()) {
+                    usersMaxIdCache.put(userId, messages.get(messages.size() - 1).id);
                 }
                 return messages;
             }

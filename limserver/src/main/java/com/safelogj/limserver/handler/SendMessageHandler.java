@@ -35,8 +35,7 @@ public class SendMessageHandler extends BaseHandler {
                 return;
             }
             long timestamp = System.currentTimeMillis();
-            long messageId = LimController.dbManager.saveMessage(
-                    req.chatId(), user.id, req.text(), req.type(), req.chatName(), req.filePath(), req.fileName(), timestamp);
+            long messageId = LimController.dbManager.saveMessage(req, user.id, timestamp);
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;

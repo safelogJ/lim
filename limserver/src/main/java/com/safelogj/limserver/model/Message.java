@@ -10,6 +10,7 @@ public class Message {
     public String chatName;
     public String interlocutorPublicKey;
     public long senderId;
+    public long receiverId;
     public String text;
     public String type;      // "TEXT", "FILE", "IMAGE", "SYSTEM"
     public long timestamp;

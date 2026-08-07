@@ -18,6 +18,8 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -26,8 +28,8 @@ import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.WorkRequest;
 
+import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
-import com.safelogj.lim.viewmodels.ResultCallback;
 
 import org.json.JSONObject;
 
@@ -137,14 +139,15 @@ public class AppController extends Application {
                 }
             });
     private static final KeyFactory EC_KEY_FACTORY;
-    private static final Map<Long, Map<Long, Boolean>> ONLINE_USERS_CHATS = new ConcurrentHashMap<>();
     private static final Map<Long, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
+    private final Map<Long, Map<Long, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
     public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     public final Handler offlineHandler = new Handler(Looper.getMainLooper());
     public final Runnable resetStatusesRunnable = () -> {
-        for (Map<Long, Boolean> chatMap : ONLINE_USERS_CHATS.values()) {
+        for (Map<Long, Boolean> chatMap : onlineUsersChats.values()) {
             chatMap.replaceAll((id, status) -> false);
+            notifyOnlineStatusChanged(chatMap.keySet().iterator().next());
         }
     };
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
@@ -154,6 +157,10 @@ public class AppController extends Application {
     private final ExecutorService[] netStreams = new ExecutorService[POOL_SIZE];
     private final SecureRandom secureRandom = new SecureRandom();
     private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
+    private final MutableLiveData<List<Chat>> chatListTrigger = new MutableLiveData<>();
+    private final MutableLiveData<List<Chat>> unreadChatTrigger = new MutableLiveData<>();
+    private final MutableLiveData<Long> onlineStatusTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
 
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
@@ -194,24 +201,47 @@ public class AppController extends Application {
         }
     }
 
-    public static void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
-        ONLINE_USERS_CHATS.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
+    public void notifyChatListChanged(List<Chat> chatList) { chatListTrigger.postValue(chatList); }
+    public void notifyUnreadChatChanged(List<Chat> chatList) { unreadChatTrigger.postValue(chatList); }
+    public void notifyOnlineStatusChanged(long chatId) { onlineStatusTrigger.postValue(chatId); }
+    public void notifyMessagesChanged(long chatId) { messagesTrigger.postValue(chatId); }
+
+    public LiveData<List<Chat> > getChatListTrigger() {
+        return chatListTrigger;
     }
 
-    public static void clearOnlineStatuses() {
-        ONLINE_USERS_CHATS.clear();
+    public LiveData<List<Chat> > getUnreadChatTrigger() {
+        return unreadChatTrigger;
     }
 
-    public static void clearOnlineStatus(long interlocutorId) {
-        ONLINE_USERS_CHATS.remove(interlocutorId);
+    public LiveData<Long> getOnlineStatusTrigger() {
+        return onlineStatusTrigger;
     }
 
-    public static Map<Long, Boolean> getChatStatuses(long interlocutorId) {
-        return ONLINE_USERS_CHATS.get(interlocutorId);
+    public LiveData<Long> getMessagesTrigger() {
+        return messagesTrigger;
     }
 
-    public static Collection<Map<Long, Boolean>> getChatsStatuses() {
-        return ONLINE_USERS_CHATS.values();
+    public void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
+        onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
+        notifyOnlineStatusChanged(chatId);
+    }
+
+    public void clearOnlineStatuses() {
+        onlineUsersChats.clear();
+        notifyOnlineStatusChanged(Chat.INVALID_ID);
+    }
+
+    public void clearInterlocutorOnlineStatus(long interlocutorId) {
+       onlineUsersChats.remove(interlocutorId);
+    }
+
+    public Map<Long, Boolean> getChatStatuses(long interlocutorId) {
+        return onlineUsersChats.get(interlocutorId);
+    }
+
+    public Collection<Map<Long, Boolean>> getChatsStatuses() {
+        return onlineUsersChats.values();
     }
 
     public static void updateChatColor(long chatId, int color) {
@@ -360,6 +390,7 @@ public class AppController extends Application {
     public void onCreate() {
         super.onCreate();
         mExternalFileDir = getExternalFilesDir(null);
+        setupDayFormatters();
         regActivityListener();
         registerNetworkCallback();
         readRoutersListAndSettingsEncrypted();
@@ -370,11 +401,9 @@ public class AppController extends Application {
         dbHelper.initDatabase();
         if (userId > 0) {
             dbHelper.initOnlineStatuses();
-            dbHelper.resetStuckStatuses();
         }
         createNotificationChannel();
         setupWorkManager();
-        setupDayFormatters();
     }
 
     public void writeSettingsToFile() {
@@ -382,39 +411,19 @@ public class AppController extends Application {
     }
 
     public void startDownloadNewMsg() {
-        dbHelper.getLastDbMessageId(new ResultCallback<>() {
-            @Override
-            public void onSuccess(Long lastServerId) {
-                activeDownloadsCount.incrementAndGet();
-                netStreams[POOL_SIZE - 1].execute(() -> networkService.getNewMessages(lastServerId, new ArrayList<>(ONLINE_USERS_CHATS.keySet())));
-            }
-
-            @Override
-            public void onError(String msg) {
-                Log.d(LOG_TAG, msg);
-            }
-        });
+        activeDownloadsCount.incrementAndGet();
+        netStreams[POOL_SIZE - 1].execute(() ->
+                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet())));
     }
 
     public void startSendingMsgList() {
-        dbHelper.getPendingMessages(new ResultCallback<>() {
-            @Override
-            public void onSuccess(List<Message> messages) {
-                for (Message msg : messages) {
-                    if (msg.type.equals(Message.TYPE_TEXT)) {
-                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg));
-                    } else {
-                        netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg));
-                    }
-                }
+        for (Message msg : dbHelper.getPendingMessages()) {
+            if (msg.type.equals(Message.TYPE_TEXT)) {
+                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg));
+            } else {
+                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg));
             }
-
-            @Override
-            public void onError(String msg) {
-                //
-            }
-
-        });
+        }
     }
 
     private void readRoutersListAndSettingsEncrypted() {

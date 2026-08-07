@@ -15,6 +15,7 @@ import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.model.User;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class ChatViewModel extends AndroidViewModel {
@@ -124,13 +125,10 @@ public class ChatViewModel extends AndroidViewModel {
         List<Message> currentList = msgList.getValue();
         if (currentList == null || currentList.isEmpty() || isLoadingMore) return;
         isLoadingMore = true;
-        controller.getDbHelper().loadMoreMessages(chatId, currentList.get(0).localId, new ResultCallback<>() {
+        controller.getDbHelper().loadMoreMessages(chatId, currentList.get(currentList.size() - 1).localId, new ResultCallback<>() {
             @Override
-            public void onSuccess(List<Message> olderMessages) {
-                if (!olderMessages.isEmpty()) {
-                    olderMessages.addAll(currentList);
-                    msgList.postValue(olderMessages);
-                }
+            public void onSuccess(List<Message> fullList) {
+                msgList.postValue(fullList);
                 isLoadingMore = false;
             }
 

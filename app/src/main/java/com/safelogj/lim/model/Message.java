@@ -42,6 +42,8 @@ public class Message {
     public String fileName;
     public String formattedTime;
     public long sendStatus = STATUS_SENDING_OR_RECEIVE;
+    public int mediaStatus = MEDIA_STATUS_NO_MEDIA;
+
 
 
     public int getMessageTypeByUserId(long userId) {
@@ -62,6 +64,27 @@ public class Message {
             text = text.replace(e.getKey(), e.getValue());
         }
         return text;
+    }
+
+    public Message copy() {
+        Message copy = new Message();
+        copy.id = this.id;
+        copy.localId = this.localId;
+        copy.chatId = this.chatId;
+        copy.chatName = this.chatName;
+        copy.interlocutorPublicKey = this.interlocutorPublicKey;
+        copy.localChatId = this.localChatId;
+        copy.senderId = this.senderId;
+        copy.receiverId = this.receiverId;
+        copy.text = this.text;
+        copy.type = this.type;
+        copy.timestamp = this.timestamp;
+        copy.filePath = this.filePath;
+        copy.fileName = this.fileName;
+        copy.formattedTime = this.formattedTime;
+        copy.sendStatus = this.sendStatus;
+        copy.mediaStatus = this.mediaStatus;
+        return copy;
     }
 
     static {

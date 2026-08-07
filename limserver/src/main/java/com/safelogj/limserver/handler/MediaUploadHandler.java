@@ -54,7 +54,6 @@ public class MediaUploadHandler extends BaseHandler {
             sendUnauthorizedError(exchange, response);
             return;
         }
-        // В начале метода handle() после авторизации:
         // Резервируем место под текущие загрузки + нашу новую
         long reserved = (LimController.ACTIVE_UPLOADS.get() + 1) * (DatabaseManager.FILE_SIZE_LIMIT + 1024); // 50MB + запас
         // 1. Проверка квоты пользователя
@@ -65,7 +64,6 @@ public class MediaUploadHandler extends BaseHandler {
             LimController.log.warn("Server media quota exceeded. Try later.");
             return;
         }
-
         // 2. Проверка физического места на разделе /media
         File mediaDir = new File(LimController.MEDIA_PATH);
         if (mediaDir.getUsableSpace() < LimController.config.getDiskSafeMargin() + reserved) {
@@ -76,9 +74,8 @@ public class MediaUploadHandler extends BaseHandler {
             return;
         }
         LimController.ACTIVE_UPLOADS.incrementAndGet();
-        // 2. Генерация уникального имени файла
         long timestamp = System.currentTimeMillis();
-        String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8);
+        String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8); // Генерация уникального имени файла
         File targetFile = new File(LimController.MEDIA_PATH, serverFileName);
         // 3. Стриминг файла из сети на диск
         boolean uploadSuccessful = false;
@@ -97,8 +94,8 @@ public class MediaUploadHandler extends BaseHandler {
                 fos.flush();
             }
             FileCacheUtils.dropFileFromCache(targetFile);
-            // 4. Возвращаем клиенту имя файла на сервере
-            long messageId = LimController.dbManager.saveMessage(chatId, user.id, text, type, chatName, serverFileName, fileName, timestamp);
+            long messageId = LimController.dbManager.saveMessage(new SendMessageRequest(
+                    null, null, null, chatId, text, type, serverFileName, fileName, chatName), user.id, timestamp);
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;
@@ -138,7 +135,7 @@ public class MediaUploadHandler extends BaseHandler {
             } catch (InterruptedException ignored) {
             }
         }
-        LimController.log.error("CRITICAL: Failed to delete incomplete file after retries: {}", file.getAbsolutePath());
+        LimController.log.error("Failed to delete incomplete file after retries: {}", file.getAbsolutePath());
     }
 
     private String decodeFromHeader(String text) {
@@ -163,5 +160,4 @@ public class MediaUploadHandler extends BaseHandler {
             return 0;
         }
     }
-
 }
