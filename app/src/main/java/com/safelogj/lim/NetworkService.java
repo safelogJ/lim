@@ -252,25 +252,25 @@ public class NetworkService {
         }
     }
 
-    public void blockChat(long chatId, ResultCallback<Boolean> callback) {
+    public void blockChat(long chatId) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new BlockChatRequest(
                     controller.getUsername(), hashPassword(controller.getPassword()), chatId)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/chat/block").post(body).build();
         } catch (Exception e) {
-            sendError(callback, REQUEST_BUILD_ERROR + e.getMessage());
+            Log.e(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             return;
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
-                dbHelper.setChatBlockedState(chatId, callback);
+                dbHelper.setChatBlockedState(chatId);
             } else {
-                sendError(callback, SERVER_RETURNED_ERROR + res.message());
+                Log.e(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
             }
         } catch (Exception e) {
-            sendError(callback, NETWORK_SERVICE_ERROR + e.getMessage());
+            Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
     }
 

@@ -339,7 +339,11 @@ public class AppController extends Application {
     }
 
     public void setServerUrl(@NonNull String serverIp) {
-        serverUrl = "https://" + serverIp + ":443";
+        if (serverIp.contains(":")) { // Простейшая проверка на IPv6
+            serverUrl = "https://[" + serverIp + "]:443";
+        } else {
+            serverUrl = "https://" + serverIp + ":443";
+        }
     }
 
     @NonNull

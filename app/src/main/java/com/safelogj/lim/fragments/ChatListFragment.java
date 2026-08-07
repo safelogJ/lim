@@ -7,7 +7,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
 
 import android.text.Editable;
 import android.util.Log;
@@ -23,7 +22,6 @@ import com.safelogj.lim.R;
 import com.safelogj.lim.adapters.ChatListAdapter;
 import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
-import com.safelogj.lim.viewmodels.ChatListViewModel;
 
 import java.util.Collections;
 import java.util.Map;
@@ -54,7 +52,6 @@ public class ChatListFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        ChatListViewModel viewModel = new ViewModelProvider(this).get(ChatListViewModel.class);
         ChatListAdapter adapter = new ChatListAdapter(new ChatListAdapter.OnChatClickListener() {
             @Override
             public void onChatClick(Chat chat) {
@@ -83,7 +80,7 @@ public class ChatListFragment extends Fragment {
             @Override
             public void onChatLongClick(Chat chat) {
                 if (chat.id != Chat.INVALID_ID) {
-                    showChatOptionsDialog(chat, viewModel);
+                    showChatOptionsDialog(chat);
                 }
             }
         });
@@ -142,7 +139,7 @@ public class ChatListFragment extends Fragment {
         });
     }
 
-    private void showChatOptionsDialog(Chat chat, ChatListViewModel viewModel) {
+    private void showChatOptionsDialog(Chat chat) {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_chat_options, null);
         AlertDialog dialog = new AlertDialog.Builder(requireContext()).setView(dialogView).create();
 
@@ -171,18 +168,21 @@ public class ChatListFragment extends Fragment {
             Editable newName = editText.getText();
             String newNameStr = newName == null ? AppController.EMPTY_STRING : newName.toString().trim();
             if (!newNameStr.isEmpty()) {
-                viewModel.renameChat(chat, newNameStr);
+                controller.getDbHelper().renameChat(chat.id, newNameStr);
                 dialog.dismiss();
             }
         });
 
         dialogView.findViewById(R.id.btnHide).setOnClickListener(v -> {
-            viewModel.hideChat(chat);
+            controller.getDbHelper().hideChatLocally(chat);
+            controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))]
+                    .execute(() -> controller.getNetworkService().hideChat(chat.id));
             dialog.dismiss();
         });
 
         dialogView.findViewById(R.id.btnBlock).setOnClickListener(v -> {
-            viewModel.setChatBlocked(chat);
+            controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))]
+                    .execute(() -> controller.getNetworkService().blockChat(chat.id));
             dialog.dismiss();
         });
 

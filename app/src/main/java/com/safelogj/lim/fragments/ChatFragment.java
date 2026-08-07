@@ -176,14 +176,10 @@ public class ChatFragment extends Fragment {
         chatColor = AppController.getChatColor(currentChatId, chatColor);
         adapter = new MsgAdapter(controller.getUserId(), chatColor);
         mBinding.messagesRecyclerView.setAdapter(adapter);
-        // mBinding.messagesRecyclerView.setItemAnimator(null); // Отключаем анимацию
-
         setSendBtnListener();
         setAddFileBtnListener();
         mBinding.clearFileButton.setOnClickListener(v -> chatViewModel.clearFile());
-
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
-
         setObserveUnreadChats();
         setObserveOnlineStatus();
         setObserveChatChanges();
@@ -225,9 +221,7 @@ public class ChatFragment extends Fragment {
             if (currentChatId == Chat.INVALID_ID && !inputText.isEmpty() && !inputText.equals(controller.getUsername())) { // РЕЖИМ ПОИСКА
                 mBinding.messageEditText.setText(AppController.EMPTY_STRING);
                 chatViewModel.checkChatInDb(inputText);
-                Log.d(AppController.LOG_TAG, "поиск");
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
-                Log.d(AppController.LOG_TAG, "отправка");
                 if (interlocutorPublicKey.isEmpty()) {
                     Log.d(AppController.LOG_TAG, "отправка нет ключа для чата " + currentChatId);
                     chatViewModel.searchInterlocutorOnServer(null, currentChatId);
@@ -332,7 +326,6 @@ public class ChatFragment extends Fragment {
                 }
                 if (lastOnlineState != null && lastOnlineState.equals(isOnline)) return;
                 lastOnlineState = isOnline;
-             //   Log.d(AppController.LOG_TAG, "updateOnlineStatusUI: " + isOnline);
                 if (mBinding.onlineStatus.getBackground() != null) {
                     mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
                             controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));

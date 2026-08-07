@@ -175,6 +175,18 @@ public class UserFragment extends Fragment {
     private boolean isLanAddress(@Nullable String address) {
         if (address == null) return false;
 
+        // --- ПРОВЕРКА IPv6 ---
+        if (address.contains(":")) {
+            String lowerIp = address.toLowerCase();
+            // 1. Unique Local Address (fc00::/7) - аналог серых IPv4
+            if (lowerIp.startsWith("fc") || lowerIp.startsWith("fd")) return true;
+            // 2. Link-Local Address (fe80::/10)
+            if (lowerIp.startsWith("fe8")) return true;
+            if (lowerIp.startsWith("fe9")) return true;
+            if (lowerIp.startsWith("fea")) return true;
+            return lowerIp.startsWith("feb");// Остальные IPv6 считаем внешними
+        }
+
         try {
             String[] ip = address.split("\\.");
             if (ip.length != 4) return false;

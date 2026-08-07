@@ -15,7 +15,6 @@ import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.model.User;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class ChatViewModel extends AndroidViewModel {

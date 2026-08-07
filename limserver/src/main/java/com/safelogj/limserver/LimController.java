@@ -132,7 +132,7 @@ public class LimController {
         SSLContext sslContext = SSLContext.getInstance("TLS");
         sslContext.init(kmf.getKeyManagers(), null, null);
 
-        HttpsServer server = HttpsServer.create(new InetSocketAddress(443), 0);
+        HttpsServer server = HttpsServer.create(new InetSocketAddress("::", 443), 0);
         server.setHttpsConfigurator(new HttpsConfigurator(sslContext) {
             @Override
             public void configure(HttpsParameters params) {

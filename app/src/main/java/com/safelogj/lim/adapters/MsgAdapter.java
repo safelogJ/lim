@@ -29,7 +29,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.bumptech.glide.request.target.Target;
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemMessageBinding;
@@ -92,7 +91,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             for (Object payload : payloads) {
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(STATUS)) holder.updateStatus(message.sendStatus);
-                    if (diff.containsKey(TIME)) holder.updateTime(message.formattedTime);
+                    if (diff.containsKey(TIME)) holder.updateTime(message.timestamp);
                     if (diff.containsKey(FILE_PATH)) holder.bind(message, userId, chatColor, this);
                 }
             }
@@ -193,7 +192,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.last_time));
             }
 
-            binding.messageTime.setText(message.formattedTime);
+            binding.messageTime.setText(com.safelogj.lim.AppController.formatSmartTime(itemView.getContext(), message.timestamp));
             constraintSet.applyTo((ConstraintLayout) itemView);
             setListeners(message, currentUserId);
         }
@@ -249,11 +248,10 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             }
         }
 
-        private void updateTime(String time) {
-            binding.messageTime.setText(time);
+        private void updateTime(long timestamp) {
+            binding.messageTime.setText(AppController.formatSmartTime(itemView.getContext(), timestamp));
         }
     }
-
     /**
      * Класс для сравнения старого и нового списков
      */
@@ -261,17 +259,13 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         @Override
         public boolean areItemsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
             // Проверяем, что это физически то же самое сообщение (по локальному ID)
-            return oldItem.localId == newItem.localId
-                    //  && Objects.equals(oldItem.filePath, newItem.filePath)
-                    ;
+            return oldItem.localId == newItem.localId;
         }
 
         @Override
         public boolean areContentsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
-            // ВАЖНО: Мы включаем сюда статус и время.
-            // Если они изменятся, метод вернет false, и запустится механизм Payloads.
             return oldItem.sendStatus == newItem.sendStatus &&
-                    Objects.equals(oldItem.formattedTime, newItem.formattedTime) &&
+                    oldItem.timestamp == newItem.timestamp &&
                     Objects.equals(oldItem.filePath, newItem.filePath);
         }
 
@@ -280,7 +274,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         public Object getChangePayload(@NonNull Message oldItem, @NonNull Message newItem) {
             Bundle diff = new Bundle();
             if (oldItem.sendStatus != newItem.sendStatus) diff.putBoolean(STATUS, true);
-            if (!Objects.equals(oldItem.formattedTime, newItem.formattedTime)) diff.putBoolean(TIME, true);
+            if (oldItem.timestamp != newItem.timestamp) diff.putBoolean(TIME, true);
             if (!Objects.equals(oldItem.filePath, newItem.filePath)) diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }

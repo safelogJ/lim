@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.safelogj.lim.AppController;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.ItemChatBinding;
 import com.safelogj.lim.model.Chat;
@@ -65,8 +66,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             for (Object payload : payloads) {
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(HAS_NEW)) holder.updateNewMsgStatus(chat.hasNewMsg);
-                    if (diff.containsKey(TIME))
-                        holder.binding.timeText.setText(chat.lastTimestampFormatted);
+                    if (diff.containsKey(TIME)) holder.binding.timeText.setText(AppController.formatSmartTime(holder.itemView.getContext(), chat.lastTimestamp));
                     if (diff.containsKey(BLOCK)) holder.updateBlockStatus(chat);
                     if (diff.containsKey(SEND)) holder.updateSendStatus(chat);
                     if (diff.containsKey(COLOR)) chat.color = diff.getInt(COLOR);
@@ -99,7 +99,7 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
 
             binding.chatName.setText(chat.name);
             binding.lastMessage.setText(chat.lastMessage);
-            binding.timeText.setText(chat.lastTimestampFormatted);
+            binding.timeText.setText(AppController.formatSmartTime(itemView.getContext(), chat.lastTimestamp));
 
             updateNewMsgStatus(chat.hasNewMsg);
             updateBlockStatus(chat);

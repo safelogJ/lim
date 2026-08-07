@@ -244,12 +244,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 values.put(DISPLAY_NAME, newName);
                 if (database.update(USERS, values, ID_ANCHOR, new String[]{String.valueOf(controller.getUserId())}) > 0) {
                     Log.d(AppController.LOG_TAG, "change name " + newName + " success");
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "error change name");
                 }
             } catch (Exception e) {
                 Log.e(AppController.LOG_TAG, "error change name: ", e);
             }
-            Log.e(AppController.LOG_TAG, "error change name");
         });
     }
 
@@ -287,7 +287,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         foundChat.isBlocked = cursor.getInt(8) == 1;
                         foundChat.hasNewMsg = cursor.getInt(9) == 1;
                         foundChat.lastTimestamp = cursor.getLong(10);
-                        //   foundChat.lastTimestampFormatted = AppController.formatSmartTime(controller, foundChat.lastTimestamp);
                     }
                 }
                 if (foundChat != null) {
@@ -352,7 +351,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void renameChat(long chatId, String newName, ResultCallback<String> callback) {
+    public void renameChat(long chatId, String newName) {
         dbExecutor.execute(() -> {
             database.beginTransaction();
             try {
@@ -390,21 +389,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         }
                     }
                     database.setTransactionSuccessful();
-                    callback.onSuccess(newName);
-                    Log.d(AppController.LOG_TAG, "Чат " + chatId + " переименован в: " + newName);
+                    Log.d(AppController.LOG_TAG, "success renaming chat " + chatId + " to " + newName);
                 } else {
-                    callback.onError("error renaming chat: not found");
+                    Log.d(AppController.LOG_TAG, "error renaming chat: not found");
                 }
             } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "Ошибка при транзакции переименования", e);
-                callback.onError("database error during rename");
+                Log.e(AppController.LOG_TAG, "database error during rename", e);
             } finally {
                 database.endTransaction();
             }
         });
     }
 
-    public void hideChatLocally(Chat chat, ResultCallback<Boolean> callback) {
+    public void hideChatLocally(Chat chat) {
         dbExecutor.execute(() -> {
             try {
                 ContentValues values = new ContentValues();
@@ -415,17 +412,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     unreadChatsCache.remove(chat.id);
                     chatMessagesCache.remove(chat.id);
                     controller.clearInterlocutorOnlineStatus(chat.interlocutorId);
-                    callback.onSuccess(true);
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "chat hiding error");
                 }
             } catch (Exception e) {
-                callback.onError("chat hiding error " + e);
+                Log.d(AppController.LOG_TAG, "chat hiding error " + e);
             }
-            callback.onError("chat hiding error");
         });
     }
 
-    public void setChatBlockedState(long chatId, ResultCallback<Boolean> callback) {
+    public void setChatBlockedState(long chatId) {
         dbExecutor.execute(() -> {
             try {
                 ContentValues v = new ContentValues();
@@ -443,13 +439,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         }
                     }
                     broadcastChatList();
-                    callback.onSuccess(true);
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "chat blocking error");
                 }
             } catch (Exception e) {
-                callback.onError("chat blocking error " + e);
+                Log.d(AppController.LOG_TAG, "chat blocking error " + e);
             }
-            callback.onError("chat blocking error");
         });
     }
 
@@ -472,20 +467,17 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     }
                     broadcastChatList();
                     Log.d(AppController.LOG_TAG, "set color success " + color);
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "error set color " + color);
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "error set color " + color, e);
             }
-            Log.d(AppController.LOG_TAG, "error set color " + color);
         });
     }
 
     private void broadcastChatList() {
         synchronized (cachedChatList) {
-            for (Chat chat : cachedChatList) {
-                chat.lastTimestampFormatted = AppController.formatSmartTime(controller, chat.lastTimestamp);
-            }
             List<Chat> uiList = new ArrayList<>();
             uiList.add(Chat.createNewChatAction(controller.getString(R.string.new_chat), controller.getString(R.string.find_user)));
             uiList.addAll(cachedChatList);
@@ -507,31 +499,31 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     }
                 }
                 callback.onSuccess(new ArrayList<>(cachedList));
-                return;
-            }
-            List<Message> messages = new ArrayList<>();
-            try (Cursor cursor = database.rawQuery(LOAD_CHAT_MESSAGES_SQL + Math.max(50, lastMsgListSize), new String[]{String.valueOf(chatId)})) {
-                while (cursor.moveToNext()) {
-                    Message msg = new Message();
-                    msg.localId = cursor.getLong(0);
-                    msg.id = cursor.getLong(1);
-                    msg.chatId = cursor.getLong(2);
-                    msg.chatName = cursor.getString(3);
-                    msg.senderId = cursor.getLong(4);
-                    msg.text = cursor.getString(5);
-                    msg.type = cursor.getString(6);
-                    msg.filePath = cursor.getString(7);
-                    msg.fileName = cursor.getString(8);
-                    msg.timestamp = cursor.getLong(9);
-                    msg.sendStatus = cursor.getLong(10);
-                    msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
-                    messages.add(msg);
+            } else {
+                List<Message> messages = new ArrayList<>();
+                try (Cursor cursor = database.rawQuery(LOAD_CHAT_MESSAGES_SQL + Math.max(50, lastMsgListSize), new String[]{String.valueOf(chatId)})) {
+                    while (cursor.moveToNext()) {
+                        Message msg = new Message();
+                        msg.localId = cursor.getLong(0);
+                        msg.id = cursor.getLong(1);
+                        msg.chatId = cursor.getLong(2);
+                        msg.chatName = cursor.getString(3);
+                        msg.senderId = cursor.getLong(4);
+                        msg.text = cursor.getString(5);
+                        msg.type = cursor.getString(6);
+                        msg.filePath = cursor.getString(7);
+                        msg.fileName = cursor.getString(8);
+                        msg.timestamp = cursor.getLong(9);
+                        msg.sendStatus = cursor.getLong(10);
+                        msg.formattedTime = AppController.formatSmartTime(controller, msg.timestamp);
+                        messages.add(msg);
+                    }
+                    chatMessagesCache.put(chatId, Collections.synchronizedList(new LinkedList<>(messages)));
+                    callback.onSuccess(messages);
+                } catch (Exception e) {
+                    Log.d(AppController.LOG_TAG, "error loading message history " + chatId + ": ", e);
+                    callback.onError("error loading message history");
                 }
-                chatMessagesCache.put(chatId, Collections.synchronizedList(new LinkedList<>(messages)));
-                callback.onSuccess(messages);
-            } catch (Exception e) {
-                Log.d(AppController.LOG_TAG, "error loading message history " + chatId + ": ", e);
-                callback.onError("error loading message history");
             }
         });
     }
@@ -592,12 +584,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         }
                         sortCachedChatList();
                         broadcastChatList();
-                        return;
+                    } else {
+                        Log.d(AppController.LOG_TAG, "error mark chat as read " + chatId);
                     }
                 } catch (Exception e) {
                     Log.d(AppController.LOG_TAG, "error mark chat as read " + chatId + ": ", e);
                 }
-                Log.d(AppController.LOG_TAG, "error mark chat as read " + chatId);
             });
         }
     }
@@ -814,14 +806,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             }
                         }
                     }
-
                     Log.d(AppController.LOG_TAG, "update file path success: " + filePath);
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "error update file path " + filePath);
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "error update file path " + filePath, e);
             }
-            Log.d(AppController.LOG_TAG, "error update file path " + filePath);
         });
     }
 
@@ -867,12 +858,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     updateMessageInCache(msg);
                     updateChatInCache(msg);
                     broadcastChatList();
-                    return;
+                } else {
+                    Log.d(AppController.LOG_TAG, "error confirm msg send" + msg.id);
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "error confirm msg send ", e);
             }
-            Log.d(AppController.LOG_TAG, "error confirm msg send" + msg.id);
         });
     }
 
@@ -1050,7 +1041,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private Chat getFullChatFromDb(long chatId) {
-       try (Cursor cursor = database.rawQuery(GET_CHAT_BY_ID_SQL, new String[]{String.valueOf(chatId)})) {
+        try (Cursor cursor = database.rawQuery(GET_CHAT_BY_ID_SQL, new String[]{String.valueOf(chatId)})) {
             if (cursor.moveToFirst()) {
                 Chat chat = new Chat();
                 chat.localId = cursor.getLong(0);
