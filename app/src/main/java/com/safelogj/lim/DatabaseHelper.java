@@ -641,7 +641,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         });
     }
 
-    public void saveIncomingMsgList(List<Message> messages) {
+    public void saveIncomingMsgList(List<Message> messages, @Nullable Runnable workerLatch) {
         if (messages != null && !messages.isEmpty()) {
             dbExecutor.execute(() -> {
                 database.beginTransaction();
@@ -706,6 +706,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             c.localId = localChatId;
                             c.id = msg.chatId;
                             c.name = msg.chatName;
+                            c.lastTimestamp = msg.timestamp;
                             unreadChatsCache.put(c.id, c);
                             Log.d(AppController.LOG_TAG, "в кэш непрочитанных чатов добавлено сообщение" + msg.chatName);
                         }
@@ -718,8 +719,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
                 } finally {
                     database.endTransaction();
+                    if (workerLatch != null) {workerLatch.run();}
                 }
             });
+        } else {
+            if (workerLatch != null) {workerLatch.run();}
         }
     }
 

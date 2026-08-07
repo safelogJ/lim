@@ -413,7 +413,7 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg);
     }
 
-    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds) {
+    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds, @Nullable Runnable workerLatch) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
@@ -422,6 +422,7 @@ public class NetworkService {
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             controller.activeDownloadsCount.decrementAndGet();
+            if (workerLatch != null) {workerLatch.run();}
             return;
         }
         try (Response response = client.newCall(request).execute()) {
@@ -434,16 +435,18 @@ public class NetworkService {
                         msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
                     }
                 }
-                dbHelper.saveIncomingMsgList(res.messages());
+                dbHelper.saveIncomingMsgList(res.messages(), workerLatch);
                 fillChatStatus(res.onlineStatuses());
                 controller.offlineHandler.removeCallbacks(controller.resetStatusesRunnable);
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
+                if (workerLatch != null) {workerLatch.run();}
             }
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
             controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
+            if (workerLatch != null) {workerLatch.run();}
         } finally {
             controller.activeDownloadsCount.decrementAndGet();
         }

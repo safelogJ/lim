@@ -59,6 +59,11 @@ public class NotificationHelper {
                 context, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        long maxTimestamp = 0;
+        for (Chat c : unreadChats) {
+            if (c.lastTimestamp > maxTimestamp) maxTimestamp = c.lastTimestamp;
+        }
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, AppController.NOTIFICATION_CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_name)
                 .setContentTitle(title)
@@ -69,6 +74,8 @@ public class NotificationHelper {
                 .setVibrate(new long[]{0L})
                 .setSilent(false)
                 .setAutoCancel(true)
+                .setWhen(maxTimestamp)
+                .setShowWhen(maxTimestamp > 0)
                 .addExtras(new Bundle());
         manager.notify(NOTIFICATION_ID, builder.build());
     }

@@ -162,6 +162,7 @@ public class AppController extends Application {
     private final MutableLiveData<Long> onlineStatusTrigger = new MutableLiveData<>(Chat.INVALID_ID);
     private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
 
+    public long lastWorkerRunTime = 0;
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
@@ -417,7 +418,7 @@ public class AppController extends Application {
     public void startDownloadNewMsg() {
         activeDownloadsCount.incrementAndGet();
         netStreams[POOL_SIZE - 1].execute(() ->
-                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet())));
+                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), null));
     }
 
     public void startSendingMsgList() {
@@ -477,7 +478,7 @@ public class AppController extends Application {
             Log.d(LOG_TAG, "E2EE keys read: " + e2eePrivateKey + ", " + e2eePublicKey);
         } catch (Exception e) {
             String msg = "Error reading or decrypting full JSON data: " + e.getMessage();
-            Log.d(LOG_TAG, msg);
+            Log.e(LOG_TAG, msg);
             initAppError = true;
             initAppErrStr = msg;
         }

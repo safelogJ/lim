@@ -11,6 +11,8 @@ import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class MessageWorker extends Worker {
 
@@ -30,14 +32,16 @@ public class MessageWorker extends Worker {
 
     private Result startDownloadNewMsg(AppController controller) {
         Log.d(AppController.LOG_TAG, "MessageWorker.startDownloadNewMsg()");
+        CountDownLatch workerLatch = null;
         if (controller.startedActivities.get() == 0 && controller.activeDownloadsCount.get() == 0) {
             controller.activeDownloadsCount.incrementAndGet();
-            controller.getNetworkService().getNewMessages(controller.getDbHelper().getLastDbMessageId(), null);
+            workerLatch = new CountDownLatch(1);
+            controller.getNetworkService().getNewMessages(controller.getDbHelper().getLastDbMessageId(), null, workerLatch::countDown);
         }
-        return startSendingMsgList(controller);
+        return startSendingMsgList(controller, workerLatch);
     }
 
-    private Result startSendingMsgList(AppController controller) {
+    private Result startSendingMsgList(AppController controller, CountDownLatch latch) {
         Log.d(AppController.LOG_TAG, "MessageWorker.startSendingMsgList()");
         for (Message msg : controller.getDbHelper().getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
@@ -46,15 +50,29 @@ public class MessageWorker extends Worker {
                 controller.getNetworkService().sendMediaMessage(msg);
             }
         }
-        return checkNotification(controller);
+        return checkNotification(controller, latch);
     }
 
-    private Result checkNotification(AppController controller) {
+    private Result checkNotification(AppController controller, CountDownLatch latch) {
         Log.d(AppController.LOG_TAG, "MessageWorker.checkNotification()");
-        List<Chat> list = controller.getDbHelper().getUnreadChats();
-        if (!list.isEmpty() && controller.startedActivities.get() == 0) {
-            NotificationHelper.showNotification(controller, list);
+        waitNotification(latch);
+        List<Chat> allUnread = controller.getDbHelper().getUnreadChats();
+        if (!allUnread.isEmpty()
+                && allUnread.stream().anyMatch(chat -> chat.lastTimestamp > controller.lastWorkerRunTime)
+                && controller.startedActivities.get() == 0) {
+            NotificationHelper.showNotification(controller, allUnread);
+            controller.lastWorkerRunTime = System.currentTimeMillis();
         }
         return Result.success();
+    }
+
+    private void waitNotification(CountDownLatch latch) {
+        try {
+            if (latch != null && !latch.await(30, TimeUnit.SECONDS)) {
+                Log.w(AppController.LOG_TAG, "MessageWorker timed out waiting for DB save");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
