@@ -523,7 +523,7 @@ public class DatabaseManager {
                     List<Long> members = chatMembersCache.get(req.chatId());
                     if (members != null) {
                         for (Long mId : members) {
-                            usersMaxIdCache.put(mId, serverId);
+                            usersMaxIdCache.merge(mId, serverId, Math::max);
                         }
                     }
                 }
@@ -569,9 +569,6 @@ public class DatabaseManager {
                     msg.interlocutorPublicKey = rs.getString(10);
                     msg.receiverId = rs.getLong(11);
                     messages.add(msg);
-                }
-                if (!messages.isEmpty()) {
-                    usersMaxIdCache.put(userId, messages.get(messages.size() - 1).id);
                 }
                 return messages;
             }

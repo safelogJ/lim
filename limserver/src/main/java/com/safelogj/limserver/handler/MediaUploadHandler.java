@@ -81,17 +81,23 @@ public class MediaUploadHandler extends BaseHandler {
         boolean uploadSuccessful = false;
         try {
             try (InputStream is = exchange.getRequestBody(); FileOutputStream fos = new FileOutputStream(targetFile)) {
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[65536];
                 int bytesRead;
                 long totalRead = 0L;
+                long lastFlushPos = 0L;
                 while ((bytesRead = is.read(buffer)) != -1) {
                     totalRead += bytesRead;
                     if (totalRead > DatabaseManager.FILE_SIZE_LIMIT + 28) {
                         throw new IOException("File size limit exceeded during upload");
                     }
                     fos.write(buffer, 0, bytesRead);
+
+                    if (totalRead - lastFlushPos > 2_097_152L) {
+                        fos.flush();
+                        lastFlushPos = totalRead;
+                    }
                 }
-                fos.flush();
+                   fos.flush();
             }
             FileCacheUtils.dropFileFromCache(targetFile);
             long messageId = LimController.dbManager.saveMessage(new SendMessageRequest(

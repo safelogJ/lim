@@ -73,7 +73,6 @@ public class ChatFragment extends Fragment {
                 final int takeFlags = (Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 try {
                     controller.getContentResolver().takePersistableUriPermission(uri, takeFlags);
-                    Log.d(AppController.LOG_TAG, "Разрешение на URI сохранено: " + uri);
                 } catch (SecurityException e) {
                     Log.d(AppController.LOG_TAG, "Ошибка получения разрешений на URI: " + e.getMessage(), e);
                 }
@@ -181,7 +180,7 @@ public class ChatFragment extends Fragment {
         mBinding.clearFileButton.setOnClickListener(v -> chatViewModel.clearFile());
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
         setObserveUnreadChats();
-        setObserveOnlineStatus();
+        setObserveOnlineMap();
         setObserveChatChanges();
         setOnScrollListener();
         setObserveChat();
@@ -223,10 +222,8 @@ public class ChatFragment extends Fragment {
                 chatViewModel.checkChatInDb(inputText);
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
                 if (interlocutorPublicKey.isEmpty()) {
-                    Log.d(AppController.LOG_TAG, "отправка нет ключа для чата " + currentChatId);
                     chatViewModel.searchInterlocutorOnServer(null, currentChatId);
                 } else {
-                    Log.d(AppController.LOG_TAG, "отправка есть ключ");
                     sendMessage();
                 }
             }
@@ -309,27 +306,38 @@ public class ChatFragment extends Fragment {
         controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> {
             unreadChatList.removeIf(chat -> chat.id == currentChatId);
             if (!unreadChatList.isEmpty()) {
-                NotificationHelper.showNotification(controller, unreadChatList);
+                long maxTimestamp = 0;
+                for (Chat chat : unreadChatList) {
+                    if (chat.lastTimestamp > maxTimestamp) {
+                        maxTimestamp = chat.lastTimestamp;
+                    }
+                }
+                if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+                    controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+                    NotificationHelper.showNotification(controller, unreadChatList);
+                }
             }
         });
     }
 
-    private void setObserveOnlineStatus() {
-        controller.getOnlineStatusTrigger().observe(getViewLifecycleOwner(), chatId -> {
-            if (chatId == currentChatId && chatId != Chat.INVALID_ID && mBinding != null) {
-                Boolean isOnline = false;
-                for (Map<Long, Boolean> userChats : controller.getChatsStatuses()) {
-                    if (userChats.containsKey(chatId)) {
-                        isOnline = userChats.get(chatId);
-                        break;
-                    }
+    // В ChatFragment.java
+    private void setObserveOnlineMap() {
+        controller.getOnlineMapTrigger().observe(getViewLifecycleOwner(), onlineMap -> {
+            if (currentChatId == Chat.INVALID_ID || mBinding == null) return;
+            Boolean isOnline = false;
+            // Ищем статус нашего текущего чата в глобальной карте
+            for (Map<Long, Boolean> chatMap : onlineMap.values()) {
+                if (chatMap.containsKey(currentChatId)) {
+                    isOnline = chatMap.get(currentChatId);
+                    break;
                 }
-                if (lastOnlineState != null && lastOnlineState.equals(isOnline)) return;
-                lastOnlineState = isOnline;
-                if (mBinding.onlineStatus.getBackground() != null) {
-                    mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
-                            controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
-                }
+            }
+
+            if (lastOnlineState != null && lastOnlineState.equals(isOnline)) return;
+            lastOnlineState = isOnline;
+            if (mBinding.onlineStatus.getBackground() != null) {
+                mBinding.onlineStatus.getBackground().mutate().setTint(ContextCompat.getColor(
+                        controller, (isOnline == null || !isOnline) ? R.color.light_gray_aaa : R.color.last_time));
             }
         });
     }
@@ -365,7 +373,6 @@ public class ChatFragment extends Fragment {
     private void setObservePublicKey() {
         chatViewModel.getInterlocutorPublicKey().observe(getViewLifecycleOwner(), publicKey -> {
             if (publicKey != null) {
-                Log.d(AppController.LOG_TAG, "взяли ключ от сервера: перед отправкой ответа начавшему чат ");
                 interlocutorPublicKey = publicKey;
                 sendMessage();
             }
@@ -375,7 +382,6 @@ public class ChatFragment extends Fragment {
     private void setObserveDbPublicKey() {
         chatViewModel.getDbPublicKey().observe(getViewLifecycleOwner(), chatKey -> {
             if (chatKey != null) {
-                Log.d(AppController.LOG_TAG, "взяли ключ из БД: при входе в чат " + chatKey);
                 interlocutorPublicKey = chatKey;
             }
         });
@@ -408,7 +414,7 @@ public class ChatFragment extends Fragment {
         }
 
         mBinding.messageEditText.setText(AppController.EMPTY_STRING);
-        chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()), currentChatLocalId);
+        chatViewModel.sendMessage(buildMessage(fileUri, chatViewModel.getSelectedFileName()));
         chatViewModel.clearFile();
         inputText = AppController.EMPTY_STRING;
     }
@@ -418,13 +424,14 @@ public class ChatFragment extends Fragment {
         msg.chatId = currentChatId;
         msg.chatName = currentChatName;
         msg.senderId = controller.getUserId();
+        msg.localChatId = currentChatLocalId;
         msg.interlocutorPublicKey = interlocutorPublicKey;
         msg.text = inputText.isEmpty() ? fileName : inputText; // для синхронизации с другими устройствами
         msg.type = fileUri == null ? Message.TYPE_TEXT : getMessageType(fileUri);
         msg.filePath = fileUri == null ? null : fileUri.toString();
         msg.fileName = fileName;
         msg.timestamp = System.currentTimeMillis();
-        Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId + " публичный ключ " + interlocutorPublicKey);
+        Log.d(AppController.LOG_TAG, "Отправляем сообщение в чат: " + msg.chatId);
         return msg;
     }
 
@@ -501,11 +508,11 @@ public class ChatFragment extends Fragment {
     }
 
     private void clearNotificationIfMatch() {
+        if (currentChatId == Chat.INVALID_ID) return;
         NotificationManager manager = (NotificationManager) controller.getSystemService(Context.NOTIFICATION_SERVICE);
         for (StatusBarNotification sbn : manager.getActiveNotifications()) {
             if (sbn.getId() == NotificationHelper.NOTIFICATION_ID
                     && sbn.getNotification().extras.getLong(NotificationHelper.EXTRA_CHAT_ID, -1) == currentChatId) {
-
                 manager.cancel(NotificationHelper.NOTIFICATION_ID);
             }
         }

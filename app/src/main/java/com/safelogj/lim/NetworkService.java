@@ -10,6 +10,7 @@ import androidx.annotation.Nullable;
 
 import com.google.gson.Gson;
 import com.safelogj.lim.model.Chat;
+import com.safelogj.lim.model.MediaLatch;
 import com.safelogj.lim.model.Message;
 import com.safelogj.lim.model.User;
 import com.safelogj.lim.request.BlockChatRequest;
@@ -35,9 +36,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Cipher;
-import javax.crypto.CipherInputStream;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -165,7 +167,8 @@ public class NetworkService {
                 if (newPass != null) {
                     controller.setPassword(newPass);
                 }
-                sendSuccess(callback, res.message(), res.message());
+                Log.i(AppController.LOG_TAG, res.message());
+                callback.onSuccess(res.message());
                 controller.writeSettingsToFile();
 
             } else {
@@ -364,10 +367,13 @@ public class NetworkService {
                     try {
                         sink.write(iv); // Пишем IV в начало
                         Cipher cipher = controller.getFileCipherByMode(msg.interlocutorPublicKey, iv, Cipher.ENCRYPT_MODE);
-                        byte[] buffer = new byte[8192];
+                        byte[] inBuffer = new byte[65536];
+                        byte[] outBuffer = new byte[cipher.getOutputSize(inBuffer.length)];
                         int read;
-                        while ((read = inputStream.read(buffer)) != -1) {
-                            sink.write(cipher.update(buffer, 0, read));
+                        while ((read = inputStream.read(inBuffer)) != -1) {
+                            int outWritten = cipher.update(inBuffer, 0, read, outBuffer, 0);
+                            sink.write(outBuffer, 0, outWritten);
+                            sink.emit();
                         }
                         sink.write(cipher.doFinal());
                     } catch (Exception e) {
@@ -413,7 +419,7 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg);
     }
 
-    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds, @Nullable Runnable workerLatch) {
+    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds, @NonNull MediaLatch mediaLatch) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
@@ -422,35 +428,34 @@ public class NetworkService {
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
             controller.activeDownloadsCount.decrementAndGet();
-            if (workerLatch != null) {workerLatch.run();}
+            mediaLatch.countDown();
             return;
         }
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
                 for (Message msg : res.messages()) {
-                    Log.d(AppController.LOG_TAG, "ключ собеседника: " + msg.interlocutorPublicKey);
                     msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
                     if (msg.fileName != null && !msg.fileName.isEmpty()) {
                         msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
                     }
                 }
-                dbHelper.saveIncomingMsgList(res.messages(), workerLatch);
+                dbHelper.saveIncomingMsgList(res.messages(), mediaLatch);
                 fillChatStatus(res.onlineStatuses());
                 controller.offlineHandler.removeCallbacks(controller.resetStatusesRunnable);
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + res.message());
                 controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
-                if (workerLatch != null) {workerLatch.run();}
+                mediaLatch.countDown();
             }
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
             controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
-            if (workerLatch != null) {workerLatch.run();}
+            mediaLatch.countDown();
         } finally {
             controller.activeDownloadsCount.decrementAndGet();
         }
-        checkMediaThread();
+        checkMediaThread(mediaLatch);
     }
 
     private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {
@@ -459,20 +464,22 @@ public class NetworkService {
             Map<Long, Boolean> chat = controller.getChatStatuses(userStatus.getKey());
             if (chat == null) continue;
             chat.replaceAll((id, oldStatus) -> userStatus.getValue());
-            controller.notifyOnlineStatusChanged(chat.keySet().iterator().next());
         }
+        controller.notifyOnlineMapChanged();
     }
 
-    private void checkMediaThread() {
-        if (controller.startedActivities.get() > 0) {
+    private void checkMediaThread(@NonNull MediaLatch mediaLatch) {
+        waitMediaAndNotification(mediaLatch);
+        if (mediaLatch.isWorker()) {
+            workerShowNotification();
             for (Message msg : dbHelper.getMediaList()) {
-                Log.d(AppController.LOG_TAG, "пнули загрузку в нити " + controller.getNetStreams()[AppController.POOL_SIZE - 2].toString());
-                controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
+                Log.d(AppController.LOG_TAG, "пнули загрузку в воркере ");
+                downloadMedia(msg);
             }
         } else {
             for (Message msg : dbHelper.getMediaList()) {
-                Log.d(AppController.LOG_TAG, "пнули загрузку для в воркере " + Thread.currentThread().getName());
-                downloadMedia(msg);
+                Log.d(AppController.LOG_TAG, "пнули загрузку в нити 4 сообщение " + msg.id);
+                controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
             }
         }
     }
@@ -483,7 +490,7 @@ public class NetworkService {
             dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
             return;
         }
-        Log.d(AppController.LOG_TAG, "download media : " + msg.fileName);
+        Log.d(AppController.LOG_TAG, "download media : id " + msg.id);
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new MediaDownloadRequest(controller.getUsername(),
@@ -496,27 +503,28 @@ public class NetworkService {
         try (Response response = client.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 InputStream is = response.body().byteStream();
-                // 1. Читаем IV из начала потока
                 byte[] iv = new byte[12];
                 if (is.read(iv) != 12) throw new IOException("Missing IV header");
-                // 2. Настраиваем CipherInputStream
-                CipherInputStream cis = new CipherInputStream(is, controller.getFileCipherByMode(msg.interlocutorPublicKey, iv, Cipher.DECRYPT_MODE));
+                Cipher cipher = controller.getFileCipherByMode(msg.interlocutorPublicKey, iv, Cipher.DECRYPT_MODE);
                 File localFile = getUniquePath(msg);
                 try (FileOutputStream fos = new FileOutputStream(localFile)) {
-                    byte[] buffer = new byte[8192];
+                    byte[] inBuffer = new byte[65536];
+                    byte[] outBuffer = new byte[cipher.getOutputSize(inBuffer.length)];
                     int read;
-                    while ((read = cis.read(buffer)) != -1) {
-                        fos.write(buffer, 0, read);
+                    while ((read = is.read(inBuffer)) != -1) {
+                        int outWritten = cipher.update(inBuffer, 0, read, outBuffer, 0);
+                        if (outWritten > 0) {
+                            fos.write(outBuffer, 0, outWritten);
+                        }
                     }
+                    fos.write(cipher.doFinal());
+                    fos.flush();
                 }
                 dbHelper.updateFilePath(msg, Uri.fromFile(localFile).toString());
                 Log.d(AppController.LOG_TAG, "download file success: " + msg.fileName);
                 confirmMediaDownload(msg);
-            } else if (response.code() == 429) {
-                dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_PENDING);
-                Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code() + " " + response.message());
             } else {
-                dbHelper.setMediaStatus(msg, Message.MEDIA_STATUS_ERROR);
+                dbHelper.setMediaStatus(msg, response.code() == 429 ? Message.MEDIA_STATUS_PENDING : Message.MEDIA_STATUS_ERROR);
                 Log.d(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code() + " " + response.message());
             }
         } catch (Exception e) {
@@ -545,11 +553,6 @@ public class NetworkService {
             Log.w(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
 
-    }
-
-    private <T> void sendSuccess(ResultCallback<T> callback, String log, T result) {
-        Log.i(AppController.LOG_TAG, log);
-        callback.onSuccess(result);
     }
 
     private <T> void sendError(ResultCallback<T> callback, String errorMsg) {
@@ -618,5 +621,32 @@ public class NetworkService {
             localName = originalName + "_" + suffix;
         }
         return new File(controller.getExternalFileDir(), localName);
+    }
+
+    private void waitMediaAndNotification(@NonNull CountDownLatch latch) {
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                Log.w(AppController.LOG_TAG, "MessageWorker timed out waiting for DB save");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void workerShowNotification() {
+        Log.d(AppController.LOG_TAG, "workerShowNotification");
+        List<Chat> allUnread = controller.getDbHelper().getUnreadChats();
+        if (!allUnread.isEmpty()) {
+            long maxTimestamp = 0;
+            for (Chat chat : allUnread) {
+                if (chat.lastTimestamp > maxTimestamp) {
+                    maxTimestamp = chat.lastTimestamp;
+                }
+            }
+            if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+                controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+                NotificationHelper.showNotification(controller, allUnread);
+            }
+        }
     }
 }

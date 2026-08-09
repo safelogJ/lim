@@ -40,7 +40,6 @@ public class Message {
     public long timestamp;
     public String filePath;  // Для файлов
     public String fileName;
-    public String formattedTime;
     public long sendStatus = STATUS_SENDING_OR_RECEIVE;
     public int mediaStatus = MEDIA_STATUS_NO_MEDIA;
 
@@ -81,7 +80,6 @@ public class Message {
         copy.timestamp = this.timestamp;
         copy.filePath = this.filePath;
         copy.fileName = this.fileName;
-        copy.formattedTime = this.formattedTime;
         copy.sendStatus = this.sendStatus;
         copy.mediaStatus = this.mediaStatus;
         return copy;

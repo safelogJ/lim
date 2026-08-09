@@ -36,6 +36,7 @@ public class NotificationHelper {
 
         String title;
         String text;
+        Bundle extras = new Bundle();
         if (unreadChats.size() == 1) {
             Chat chat = unreadChats.get(0);
             title = context.getString(R.string.new_msg);
@@ -43,6 +44,7 @@ public class NotificationHelper {
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
+            extras.putLong(EXTRA_CHAT_ID, chat.id);
 
             intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
@@ -70,13 +72,12 @@ public class NotificationHelper {
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(pendingIntent)
-                .setOnlyAlertOnce(true)
                 .setVibrate(new long[]{0L})
                 .setSilent(false)
                 .setAutoCancel(true)
                 .setWhen(maxTimestamp)
                 .setShowWhen(maxTimestamp > 0)
-                .addExtras(new Bundle());
+                .setExtras(extras);
         manager.notify(NOTIFICATION_ID, builder.build());
     }
 

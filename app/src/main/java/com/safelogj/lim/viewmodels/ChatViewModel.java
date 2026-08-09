@@ -91,15 +91,15 @@ public class ChatViewModel extends AndroidViewModel {
         });
     }
 
-    public void sendMessage(Message msg, long localChatId) {
+    public void sendMessage(Message msg) {
         controller.getDbHelper().saveMsgBeforeSending(msg);
-        Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + localChatId + " (отправлено в нити "
-                + Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2))) + ")");
+        Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + msg.localChatId + " (отправлено в нити "
+                + Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2))) + ")");
         if (Message.TYPE_TEXT.equals(msg.type)) {
-            controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
+            controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
                     controller.getNetworkService().sendTextMessage(msg));
         } else {
-            controller.getNetStreams()[Math.abs((int) (localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
+            controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
                     controller.getNetworkService().sendMediaMessage(msg));
         }
     }

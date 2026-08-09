@@ -33,6 +33,7 @@ import com.safelogj.lim.AppController;
 import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentUserBinding;
+import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.viewmodels.UserViewModel;
 
 import java.io.InputStream;
@@ -108,8 +109,17 @@ public class UserFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), chatList -> {
             if (!chatList.isEmpty()) {
-                Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + chatList.get(0).id);
-                NotificationHelper.showNotification(controller, chatList);
+                long maxTimestamp = 0;
+                for (Chat chat : chatList) {
+                    if (chat.lastTimestamp > maxTimestamp) {
+                        maxTimestamp = chat.lastTimestamp;
+                    }
+                }
+                if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+                    controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+                    NotificationHelper.showNotification(controller, chatList);
+                    Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + chatList.get(0).id);
+                }
             }
         });
         userViewModel = new ViewModelProvider(this).get(UserViewModel.class);

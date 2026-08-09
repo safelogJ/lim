@@ -3,12 +3,15 @@ package com.safelogj.lim.adapters;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
+import android.database.Cursor;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -332,6 +335,19 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     }
 
     private void startPlaying(Message msg, ItemMessageBinding binding) {
+        if (msg.filePath == null || msg.filePath.isEmpty()) return;
+        Context context = binding.getRoot().getContext();
+        try {
+            Uri uri = Uri.parse(msg.filePath);
+            if (!isFileExist(context, uri)) {
+                Toast.makeText(context, context.getString(R.string.file_not_found_on_disk), Toast.LENGTH_SHORT).show();
+                return;
+            }
+        } catch (Exception e) {
+            Toast.makeText(context, context.getString(R.string.file_not_found_on_disk), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         try {
             stopPlaying(); // Останавливаем старый трек
             mediaPlayer = new MediaPlayer();
@@ -380,5 +396,26 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
     private String formatDuration(int ms) {
         return String.format(Locale.US, "%02d:%02d", ms / (1000 * 60), (ms / 1000) % 60);
+    }
+
+    private boolean isFileExist(Context context, Uri uri) {
+        if ("file".equals(uri.getScheme())) {
+            String path = uri.getPath();
+            if (path != null) {
+                File file = new File(path);
+                return file.exists();
+            }
+        } else if ("content".equals(uri.getScheme())) {
+            try (Cursor cursor = context.getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                    if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) {
+                        return cursor.getLong(sizeIndex) > 0;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
     }
 }

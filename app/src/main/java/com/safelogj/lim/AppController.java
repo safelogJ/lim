@@ -29,6 +29,7 @@ import androidx.work.WorkManager;
 import androidx.work.WorkRequest;
 
 import com.safelogj.lim.model.Chat;
+import com.safelogj.lim.model.MediaLatch;
 import com.safelogj.lim.model.Message;
 
 import org.json.JSONObject;
@@ -64,7 +65,6 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -76,6 +76,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -147,9 +148,10 @@ public class AppController extends Application {
     public final Runnable resetStatusesRunnable = () -> {
         for (Map<Long, Boolean> chatMap : onlineUsersChats.values()) {
             chatMap.replaceAll((id, status) -> false);
-            notifyOnlineStatusChanged(chatMap.keySet().iterator().next());
         }
+        notifyOnlineMapChanged();
     };
+    public final AtomicLong lastNotifiedTimestamp = new AtomicLong(0);
     private final ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorService userExecutor = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService syncExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -159,10 +161,9 @@ public class AppController extends Application {
     private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
     private final MutableLiveData<List<Chat>> chatListTrigger = new MutableLiveData<>();
     private final MutableLiveData<List<Chat>> unreadChatTrigger = new MutableLiveData<>();
-    private final MutableLiveData<Long> onlineStatusTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Map<Long, Map<Long, Boolean>>> onlineMapTrigger = new MutableLiveData<>();
     private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
 
-    public long lastWorkerRunTime = 0;
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
@@ -204,7 +205,7 @@ public class AppController extends Application {
 
     public void notifyChatListChanged(List<Chat> chatList) { chatListTrigger.postValue(chatList); }
     public void notifyUnreadChatChanged(List<Chat> chatList) { unreadChatTrigger.postValue(chatList); }
-    public void notifyOnlineStatusChanged(long chatId) { onlineStatusTrigger.postValue(chatId); }
+    public void notifyOnlineMapChanged() { onlineMapTrigger.postValue(onlineUsersChats); }
     public void notifyMessagesChanged(long chatId) { messagesTrigger.postValue(chatId); }
 
     public LiveData<List<Chat> > getChatListTrigger() {
@@ -214,9 +215,8 @@ public class AppController extends Application {
     public LiveData<List<Chat> > getUnreadChatTrigger() {
         return unreadChatTrigger;
     }
-
-    public LiveData<Long> getOnlineStatusTrigger() {
-        return onlineStatusTrigger;
+    public LiveData<Map<Long, Map<Long, Boolean>>> getOnlineMapTrigger() {
+        return onlineMapTrigger;
     }
 
     public LiveData<Long> getMessagesTrigger() {
@@ -225,24 +225,21 @@ public class AppController extends Application {
 
     public void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
         onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
-        notifyOnlineStatusChanged(chatId);
+        notifyOnlineMapChanged();
     }
 
     public void clearOnlineStatuses() {
         onlineUsersChats.clear();
-        notifyOnlineStatusChanged(Chat.INVALID_ID);
+        notifyOnlineMapChanged();
     }
 
     public void clearInterlocutorOnlineStatus(long interlocutorId) {
        onlineUsersChats.remove(interlocutorId);
+       notifyOnlineMapChanged();
     }
 
     public Map<Long, Boolean> getChatStatuses(long interlocutorId) {
         return onlineUsersChats.get(interlocutorId);
-    }
-
-    public Collection<Map<Long, Boolean>> getChatsStatuses() {
-        return onlineUsersChats.values();
     }
 
     public static void updateChatColor(long chatId, int color) {
@@ -416,9 +413,8 @@ public class AppController extends Application {
     }
 
     public void startDownloadNewMsg() {
-        activeDownloadsCount.incrementAndGet();
         netStreams[POOL_SIZE - 1].execute(() ->
-                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), null));
+                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false)));
     }
 
     public void startSendingMsgList() {
@@ -475,7 +471,6 @@ public class AppController extends Application {
             e2eePublicKey = json.optString(E2EE_PUBLIC_KEY, EMPTY_STRING);
             String cert = json.optString(SERVER_CERT, EMPTY_STRING);
             certBytes = cert.isEmpty() ? null : Base64.decode(cert, Base64.NO_WRAP);
-            Log.d(LOG_TAG, "E2EE keys read: " + e2eePrivateKey + ", " + e2eePublicKey);
         } catch (Exception e) {
             String msg = "Error reading or decrypting full JSON data: " + e.getMessage();
             Log.e(LOG_TAG, msg);
@@ -505,7 +500,6 @@ public class AppController extends Application {
             json.put(E2EE_PRIVATE_KEY, e2eePrivateKey);
             json.put(E2EE_PUBLIC_KEY, e2eePublicKey);
             json.put(SERVER_CERT, certBytes != null ? Base64.encodeToString(certBytes, Base64.NO_WRAP) : EMPTY_STRING);
-            Log.d(LOG_TAG, "E2EE keys write: " + e2eePrivateKey + ", " + e2eePublicKey);
             String rawJsonString = json.toString();
             byte[] rawJsonBytes = rawJsonString.getBytes(StandardCharsets.UTF_8);
             byte[] encryptedCombinedBytes = encrypt(rawJsonBytes);
@@ -675,7 +669,7 @@ public class AppController extends Application {
                     .writeTimeout(15, TimeUnit.SECONDS)   // Время на отправку данных
                     .readTimeout(60, TimeUnit.SECONDS)    // Время на ожидание ответа от роутера
                     .callTimeout(190, TimeUnit.SECONDS) // Общее время на весь запрос с ответом, чтоб не переподключалось много раз
-                    .retryOnConnectionFailure(true)
+                    .retryOnConnectionFailure(false)
                     .build();
         } catch (Exception e) {
             String msg = "Error init OkHttpClient: " + e.getMessage();
@@ -705,6 +699,7 @@ public class AppController extends Application {
                     syncTask = syncExecutor.scheduleWithFixedDelay(() -> {
                         if (userId > 0 && isNetworkActive.get()) {
                             if (activeDownloadsCount.get() == 0) {
+                                activeDownloadsCount.incrementAndGet();
                                 startDownloadNewMsg();
                             }
                             startSendingMsgList();
@@ -908,7 +903,6 @@ public class AppController extends Application {
     private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException {
 
-        Log.d(LOG_TAG, "getSharedKey: " + theirPublicKeyBase64);
         return sharedKeys.computeIfAbsent(theirPublicKeyBase64, key -> {
             try {
                 return calculateSharedKey(key);

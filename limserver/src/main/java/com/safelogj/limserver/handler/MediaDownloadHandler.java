@@ -85,12 +85,12 @@ public class MediaDownloadHandler extends BaseHandler {
             exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
             exchange.sendResponseHeaders(200, file.length());
             try (FileInputStream fis = new FileInputStream(file); OutputStream os = exchange.getResponseBody()) {
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[65536];
                 int count;
                 while ((count = fis.read(buffer)) != -1) {
                     os.write(buffer, 0, count);
+                    os.flush();
                 }
-                os.flush();
             }
         } catch (Exception e) {
             LimController.log.error("MediaDownloadHandler error: ", e);

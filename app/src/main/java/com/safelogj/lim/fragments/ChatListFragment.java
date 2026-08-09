@@ -23,7 +23,7 @@ import com.safelogj.lim.adapters.ChatListAdapter;
 import com.safelogj.lim.databinding.FragmentChatListBinding;
 import com.safelogj.lim.model.Chat;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 public class ChatListFragment extends Fragment {
@@ -87,39 +87,34 @@ public class ChatListFragment extends Fragment {
         mBinding.chatsRecyclerView.setAdapter(adapter);
         setObserverUnreadChats();
         setObserverChatList(adapter);
-        setObserveOnlineStatus(adapter);
+        setObserveOnlineMap(adapter);
     }
 
-    private void setObserveOnlineStatus(ChatListAdapter adapter) {
-        controller.getOnlineStatusTrigger().observe(getViewLifecycleOwner(), chatId -> {
-            // Ищем чат в текущем списке адаптера
-            for (int i = 0; i < adapter.getCurrentList().size(); i++) {
-                Chat chat = adapter.getCurrentList().get(i);
-                if (chat.id == chatId) {
-                    // Берем актуальный статус из AppController
-                    Map<Long, Boolean> statuses = controller.getChatStatuses(chat.interlocutorId);
-                    if (statuses != null && statuses.containsKey(chatId)) {
-                        boolean newStatus = Boolean.TRUE.equals(statuses.get(chatId));
-                        // Обновляем статус только если он реально изменился
-                        if (chat.isOnline != newStatus) {
-                            chat.isOnline = newStatus;
-                            Bundle payload = new Bundle();
-                            payload.putBoolean("online", true); // "online" - константа в ChatListAdapter
-                            adapter.notifyItemChanged(i, payload); // Точечное обновление без мерцания
-                        }
+    private void setObserveOnlineMap(ChatListAdapter adapter) {
+        controller.getOnlineMapTrigger().observe(getViewLifecycleOwner(), onlineMap -> {
+            List<Chat> currentList = adapter.getCurrentList();
+            for (int i = 0; i < currentList.size(); i++) {
+                Chat chat = currentList.get(i);
+                if (chat.id == Chat.INVALID_ID) continue;
+                // Ищем статус именно для этого чата в пришедшей карте
+                Map<Long, Boolean> userChats = onlineMap.get(chat.interlocutorId);
+                if (userChats != null && userChats.containsKey(chat.id)) {
+                    boolean isOnline = Boolean.TRUE.equals(userChats.get(chat.id));
+                    // Обновляем только если статус реально отличается от того, что в адаптере
+                    if (chat.isOnline != isOnline) {
+                        chat.isOnline = isOnline;
+                        Bundle payload = new Bundle();
+                        payload.putBoolean("online", true); // Константа из адаптера
+                        adapter.notifyItemChanged(i, payload);
                     }
-                    break;
                 }
             }
         });
     }
 
     private void setObserverUnreadChats() {
-        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> {
-            if(!unreadChatList.isEmpty()) {
-                controller.notifyUnreadChatChanged(Collections.emptyList());
-            }
-        });
+        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> unreadChatList.stream()
+                .mapToLong(c -> c.lastTimestamp).max().ifPresent(max -> controller.lastNotifiedTimestamp.accumulateAndGet(max, Math::max)));
     }
 
     private void setObserverChatList(ChatListAdapter adapter) {
@@ -129,7 +124,6 @@ public class ChatListFragment extends Fragment {
                     Map<Long, Boolean> userChats = controller.getChatStatuses(chat.interlocutorId);
                     if (userChats != null && userChats.containsKey(chat.id)) {
                         Boolean status = userChats.get(chat.id);
-                        Log.d(AppController.LOG_TAG, "статус чата онлайн  " + status);
                         chat.isOnline = status != null && status;
                     }
                     chat.color = AppController.getChatColor(chat.id, chat.color);
