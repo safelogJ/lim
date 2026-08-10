@@ -53,7 +53,7 @@
     <string name="new_msg">Новое сообщение</string>
     <string name="new_msgs">Новые сообщения</string>
     <string name="new_msg_from">От:</string>
-    <string name="new_msgs_size">У вас есть непрочитанные сообщения</string>
+    <string name="unread_chats"> В чатах</string>
     <string name="error_starting_record">Ошибка при начале записи</string>
     <string name="recording">Запись…</string>
     <string name="stop_recording">Нажмите вне окна для сохранения</string>

@@ -289,6 +289,7 @@ public class DatabaseManager {
             if (stmt.executeUpdate() > 0) {
                 LimController.log.info("User id={} deleted. Login blocked.", user.id);
                 authCache.remove(user.username);
+                LimController.removeUserFromOnline(user.id);
                 return true;
             } else {
                 LimController.log.warn("failed to delete user id={}. It may have already been deleted or may not have existed.", user.id);

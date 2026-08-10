@@ -53,7 +53,7 @@
     <string name="new_msg">Yeni mesaj</string>
     <string name="new_msgs">Yeni mesajlar</string>
     <string name="new_msg_from">Gönderen:</string>
-    <string name="new_msgs_size">Okunmamış mesajlarınız var</string>
+    <string name="unread_chats">Sohbetlerde</string>
     <string name="error_starting_record">Kayıt başlatılırken hata oluştu</string>
     <string name="recording">Kaydediliyor…</string>
     <string name="stop_recording">Kaydetmek için dışarı dokunun</string>

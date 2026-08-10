@@ -53,7 +53,7 @@
     <string name="new_msg">नया संदेश</string>
     <string name="new_msgs">नए संदेश</string>
     <string name="new_msg_from">से:</string>
-    <string name="new_msgs_size">आपके पास अपठित संदेश हैं</string>
+    <string name="unread_chats">चैट में</string>
     <string name="error_starting_record">रिकॉर्डिंग शुरू करने में त्रुटि</string>
     <string name="recording">रिकॉर्डिंग हो रही है…</string>
     <string name="stop_recording">सहेजने के लिए बाहर टैप करें</string>

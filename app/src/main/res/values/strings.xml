@@ -60,7 +60,7 @@
     <string name="new_msg">New message</string>
     <string name="new_msgs">New messages</string>
     <string name="new_msg_from">From:</string>
-    <string name="new_msgs_size">You have unread messages</string>
+    <string name="unread_chats">In chats</string>
     <string name="error_starting_record">Error starting record</string>
     <string name="recording">Recording…</string>
     <string name="stop_recording">Tap outside to save</string>

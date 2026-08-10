@@ -49,7 +49,7 @@ public class NotificationHelper {
             intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
             title = context.getString(R.string.new_msgs);
-            text = context.getString(R.string.new_msgs_size) + " (" + unreadChats.size() + ")";
+            text = context.getString(R.string.unread_chats) + " (" + unreadChats.size() + ")";
             intent.putExtra(EXTRA_OPEN_CHAT_LIST, true);
 
             intent.removeExtra(EXTRA_CHAT_ID);
@@ -77,6 +77,7 @@ public class NotificationHelper {
                 .setAutoCancel(true)
                 .setWhen(maxTimestamp)
                 .setShowWhen(maxTimestamp > 0)
+                .setNumber(unreadChats.size())
                 .setExtras(extras);
         manager.notify(NOTIFICATION_ID, builder.build());
     }

@@ -105,6 +105,10 @@ public class LimController {
        return onlineUsers.containsKey(id);
     }
 
+    public static void removeUserFromOnline(Long userId) {
+        onlineUsers.remove(userId);
+    }
+
     public static String putFilePath(long userId, String path) {
        return ACTIVE_DOWNLOADS.putIfAbsent(userId, path);
     }
@@ -224,4 +228,5 @@ public class LimController {
         long now = System.currentTimeMillis();
         onlineUsers.entrySet().removeIf(entry -> (now - entry.getValue() > 12000));
     }
+
 }

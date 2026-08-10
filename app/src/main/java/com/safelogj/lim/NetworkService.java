@@ -377,6 +377,7 @@ public class NetworkService {
                         }
                         sink.write(cipher.doFinal());
                     } catch (Exception e) {
+                        Log.w(AppController.LOG_TAG, "Encryption error " + e.getMessage());
                         throw new IOException("Encryption error during upload", e);
                     }
                 }

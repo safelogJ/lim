@@ -53,7 +53,7 @@
     <string name="new_msg">رسالة جديدة</string>
     <string name="new_msgs">رسائل جديدة</string>
     <string name="new_msg_from">من:</string>
-    <string name="new_msgs_size">لديك رسائل غير مقروءة</string>
+    <string name="unread_chats"> في الدردشات</string>
     <string name="error_starting_record">خطأ عند بدء التسجيل</string>
     <string name="recording">جاري التسجيل…</string>
     <string name="stop_recording">انقر في الخارج للحفظ</string>

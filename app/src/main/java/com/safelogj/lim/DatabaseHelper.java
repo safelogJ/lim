@@ -662,6 +662,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         if (msg.senderId != controller.getUserId()) {
                             chatValues.put(INTERLOCUTOR_ID, msg.senderId);
                             chatValues.put(HAS_NEW_MSG, 1);
+                            chatValues.put(LAST_SEND_STATUS, Message.STATUS_SENDING_OR_RECEIVE);
                             try (Cursor c = database.rawQuery(GET_LOCAL_CHAT_ID_SQL, new String[]{String.valueOf(msg.chatId)})) {
                                 if (c.moveToFirst()) {
                                     localChatId = c.getLong(0);

@@ -53,7 +53,7 @@
     <string name="new_msg">Nuevo mensaje</string>
     <string name="new_msgs">Nuevos mensajes</string>
     <string name="new_msg_from">De:</string>
-    <string name="new_msgs_size">Tienes mensajes sin leer</string>
+    <string name="unread_chats">En los chats</string>
     <string name="error_starting_record">Error al iniciar la grabación</string>
     <string name="recording">Grabando…</string>
     <string name="stop_recording">Toque fuera para guardar</string>

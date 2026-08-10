@@ -53,7 +53,7 @@
     <string name="new_msg">Nowa wiadomość</string>
     <string name="new_msgs">Nowe wiadomości</string>
     <string name="new_msg_from">Od:</string>
-    <string name="new_msgs_size">Masz nieprzeczytane wiadomości</string>
+    <string name="unread_chats">Na czatach</string>
     <string name="error_starting_record">Błąd podczas rozpoczynania nagrywania</string>
     <string name="recording">Nagrywanie…</string>
     <string name="stop_recording">Dotknij poza oknem, aby zapisać</string>
