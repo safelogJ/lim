@@ -480,7 +480,7 @@ public class NetworkService {
     }
     @Nullable
     private Message decryptMessage(Message msg) {
-        Log.e(AppController.LOG_TAG, "расшифровываю id: " + msg.id + " key " + msg.interlocutorPublicKey);
+        //  Log.e(AppController.LOG_TAG, "расшифровываю id: " + msg.id + " key " + msg.interlocutorPublicKey);
         msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
         if (msg.text == null) {
             Log.i(AppController.LOG_TAG, "расшифровка сообщения не удалась " + msg.id);

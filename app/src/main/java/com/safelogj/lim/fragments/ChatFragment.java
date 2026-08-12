@@ -365,6 +365,7 @@ public class ChatFragment extends Fragment {
                 currentChatName = chat.name;
                 chatViewModel.getDbPublicKey(currentChatId);
                 chatViewModel.loadDbMessages(currentChatId, lastMsgListSize);
+                clearNotificationIfMatch();
                 updateBottomPanel();
             }
         });

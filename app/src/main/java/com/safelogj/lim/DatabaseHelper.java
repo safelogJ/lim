@@ -19,11 +19,12 @@ import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -76,11 +77,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String GET_MEDIA_DOWNLOAD_LIST_SQL = "SELECT m.id, m.chat_id, m.file_path, m.file_name, u.public_key FROM messages m JOIN chats c ON c.id = m.chat_id JOIN users u ON u.id = c.interlocutor_id WHERE m.media_status = 1";
 
     private final AtomicLong cachedLastMsgServerId = new AtomicLong(0);
-    private final Map<Long, Chat> unreadChatsCache = new ConcurrentHashMap<>();
-    private final Map<Long, Message> pendingMessagesCache = new ConcurrentHashMap<>();
-    private final Map<Long, Message> pendingMediaCache = new ConcurrentHashMap<>();
-    private final Map<Long, List<Message>> chatMessagesCache = new HashMap<>();
-    private final List<Chat> cachedChatList = new ArrayList<>();
+    private final Map<Long, Chat> unreadChatsCache = new HashMap<>();
+    private final Map<Long, Message> pendingMessagesCache = new HashMap<>();
+    private final Map<Long, Message> pendingMediaCache = new HashMap<>();
+    private final Map<Long, List<Message>> chatMessagesCache = new HashMap<>(); // только БД нить
+    private final List<Chat> cachedChatList = new ArrayList<>(); // только БД нить
     private SQLiteDatabase database;
     private final AppController controller;
     private final ExecutorService dbExecutor;
@@ -182,15 +183,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 controller.clearOnlineStatuses();
                 AppController.clearChatColors();
                 cachedLastMsgServerId.set(0);
-                unreadChatsCache.clear();
+                unreadChatsSynchronizedTask(unreadChatsCache::clear);
                 controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
                 NotificationHelper.clearNotification(controller);
-                pendingMessagesCache.clear();
-                pendingMediaCache.clear();
+                synchronized (pendingMessagesCache) {
+                    pendingMessagesCache.clear();
+                }
+                synchronized (pendingMediaCache) {
+                    pendingMediaCache.clear();
+                }
                 chatMessagesCache.clear();
                 controller.notifyMessagesChanged(Chat.INVALID_ID);
                 cachedChatList.clear();
-                broadcastChatList();
+                notifyChatsList();
                 callback.onSuccess(result);
                 Log.i(AppController.LOG_TAG, result);
             } catch (Exception e) {
@@ -308,7 +313,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             }
                         }
                         sortCachedChatList();
-                        broadcastChatList();
+                        notifyChatsList();
                     }
                     database.setTransactionSuccessful();
                     controller.updateOnlineStatus(foundChat.interlocutorId, foundChat.id, false);
@@ -349,7 +354,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     } else {
                         callback.onSuccess(cached);
                     }
-                    broadcastChatList();
+                    notifyChatsList();
                     controller.updateOnlineStatus(chat.interlocutorId, chat.id, false);
                     return;
                 }
@@ -377,7 +382,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             break;
                         }
                     }
-                    broadcastChatList();
+                    notifyChatsList();
                     // 2. Обновляем chat_name во всех сообщениях этого чата.
                     // Это нужно, чтобы при входе в чат синхронизация подхватила новое имя.
                     ContentValues msgValues = new ContentValues();
@@ -413,8 +418,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 values.put(IS_HIDDEN, 1); // 1 - "Hidden"
                 if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chat.id)}) > 0) {
                     cachedChatList.removeIf(c -> c.id == chat.id);
-                    broadcastChatList();
-                    unreadChatsCache.remove(chat.id);
+                    notifyChatsList();
+                    unreadChatsSynchronizedTask(() -> unreadChatsCache.remove(chat.id));
                     chatMessagesCache.remove(chat.id);
                     controller.clearInterlocutorOnlineStatus(chat.interlocutorId);
                 } else {
@@ -443,7 +448,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         }
                     }
 
-                    broadcastChatList();
+                    notifyChatsList();
                 } else {
                     Log.d(AppController.LOG_TAG, "chat blocking error");
                 }
@@ -470,7 +475,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         }
                     }
 
-                    broadcastChatList();
+                    notifyChatsList();
                     Log.d(AppController.LOG_TAG, "set color success " + color);
                 } else {
                     Log.d(AppController.LOG_TAG, "error set color " + color);
@@ -479,13 +484,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 Log.d(AppController.LOG_TAG, "error set color " + color, e);
             }
         });
-    }
-
-    private void broadcastChatList() {
-        List<Chat> uiList = new ArrayList<>();
-        uiList.add(Chat.createNewChatAction(controller.getString(R.string.new_chat), controller.getString(R.string.find_user)));
-        uiList.addAll(cachedChatList);
-        controller.notifyChatListChanged(uiList);
     }
 
     public List<Chat> getUnreadChats() {
@@ -560,7 +558,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void markChatAsRead(long chatId) {
-        if (unreadChatsCache.remove(chatId) != null) {
+        Chat unreadChat;
+        synchronized (unreadChatsCache) {
+            unreadChat = unreadChatsCache.remove(chatId);
+        }
+        if (unreadChat != null) {
             controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
             dbExecutor.execute(() -> {
                 try {
@@ -577,7 +579,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             }
                         }
                         sortCachedChatList();
-                        broadcastChatList();
+                        notifyChatsList();
                     } else {
                         Log.d(AppController.LOG_TAG, "error mark chat as read " + chatId);
                     }
@@ -606,7 +608,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 // 2. СРАЗУ ОБНОВЛЯЕМ ЧАТ
                 // Если сообщение сохранилось успешно (msg.localId != -1)
                 if (msg.localId != Chat.INVALID_ID) {
-                    pendingMessagesCache.put(msg.localId, msg);
+                    synchronized (pendingMessagesCache) {
+                        pendingMessagesCache.put(msg.localId, msg);
+                    }
                     List<Message> cacheList = chatMessagesCache.get(msg.chatId);
                     if (cacheList != null) {
                         cacheList.add(0, msg);
@@ -625,7 +629,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             cached.isHidden = false;
                             cached.lastSendStatus = Message.STATUS_SENDING_OR_RECEIVE;
                             sortCachedChatList();
-                            broadcastChatList();
+                            notifyChatsList();
                         }
                     }
                 }
@@ -640,6 +644,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             dbExecutor.execute(() -> {
                 database.beginTransaction();
                 try {
+                    Set<Long> newMsgChatIds = new HashSet<>();
                     for (Message msg : messages) {
                         cachedLastMsgServerId.accumulateAndGet(msg.id, Math::max);
                         try (Cursor c = database.rawQuery(CHECK_MESSAGE_EXISTS_SQL, new String[]{String.valueOf(msg.id)})) {
@@ -649,7 +654,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                         List<Message> cacheList = chatMessagesCache.get(msg.chatId);
                         if (cacheList != null) {
                             cacheList.add(0, msg);
-                            controller.notifyMessagesChanged(msg.chatId);
+                            newMsgChatIds.add(msg.chatId);
                         }
                         ContentValues chatValues = new ContentValues();
                         chatValues.put(LAST_MESSAGE, msg.text);
@@ -702,13 +707,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             c.id = msg.chatId;
                             c.name = msg.chatName;
                             c.lastTimestamp = msg.timestamp;
-                            unreadChatsCache.put(c.id, c);
+                            unreadChatsSynchronizedTask(() -> unreadChatsCache.put(c.id, c));
                             Log.d(AppController.LOG_TAG, "в кэш непрочитанных чатов добавлено сообщение" + msg.chatName);
                         }
                     }
+                    newMsgChatIds.forEach(controller::notifyMessagesChanged);
                     controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
                     sortCachedChatList();
-                    broadcastChatList();
+                    notifyChatsList();
                     database.setTransactionSuccessful();
                 } catch (Exception e) {
                     Log.d(AppController.LOG_TAG, "Error syncing messages: " + e.getMessage());
@@ -742,7 +748,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 Log.d(AppController.LOG_TAG, "в msg есть путь к серверному файлу, метим для загрузки " + msg.filePath);
                 values.put(MEDIA_STATUS, Message.MEDIA_STATUS_PENDING);
                 msg.mediaStatus = Message.MEDIA_STATUS_PENDING;
-                pendingMediaCache.put(msg.id, msg);
+                synchronized (pendingMediaCache) {
+                    pendingMediaCache.put(msg.id, msg);
+                }
             }
         }
         Log.w(AppController.LOG_TAG, "сохранено сообщение: serverId " + msg.id + " в чат id " + msg.chatId);
@@ -781,13 +789,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private boolean isSendingMessage(Message msg) {
-        if (msg.senderId == controller.getUserId() && !pendingMessagesCache.isEmpty()) {
-            for (Message pending : pendingMessagesCache.values()) {
-                if (msg.chatId == pending.chatId
-                        && Objects.equals(msg.type, pending.type)
-                        && Objects.equals(msg.fileName, pending.fileName)
-                        && Objects.equals(msg.text, pending.text)) {
-                    return true;
+        synchronized (pendingMessagesCache) {
+            if (msg.senderId == controller.getUserId() && !pendingMessagesCache.isEmpty()) {
+                for (Message pending : pendingMessagesCache.values()) {
+                    if (msg.chatId == pending.chatId
+                            && Objects.equals(msg.type, pending.type)
+                            && Objects.equals(msg.fileName, pending.fileName)
+                            && Objects.equals(msg.text, pending.text)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -801,7 +811,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 v.put(FILE_PATH, filePath);
                 v.put(MEDIA_STATUS, Message.MEDIA_STATUS_DOWNLOADED);
                 if (database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(msg.localId)}) > 0) {
-                    pendingMediaCache.remove(msg.id);
+                    synchronized (pendingMediaCache) {
+                        pendingMediaCache.remove(msg.id);
+                    }
                     List<Message> cacheList = chatMessagesCache.get(msg.chatId);
                     if (cacheList != null) {
                         for (int i = 0; i < cacheList.size(); i++) {
@@ -865,10 +877,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (database.update(MESSAGES, v, LOCAL_ID_ANCHOR, new String[]{String.valueOf(msg.localId)}) > 0
                         && database.update(CHATS, chatValues, ID_ANCHOR, new String[]{String.valueOf(msg.chatId)}) > 0) {
                     Log.d(AppController.LOG_TAG, "confirm msg send, id " + msg.id + " chat id " + msg.chatId);
-                    pendingMessagesCache.remove(msg.localId);
+                    synchronized (pendingMessagesCache) {
+                        pendingMessagesCache.remove(msg.localId);
+                    }
                     updateMessageInCache(msg);
                     updateChatInCache(msg);
-                    broadcastChatList();
+                    notifyChatsList();
                 } else {
                     Log.d(AppController.LOG_TAG, "error confirm msg send" + msg.id);
                 }
@@ -920,9 +934,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void notConfirmMessageSent(Message msg) {
-        Message cached = pendingMessagesCache.get(msg.localId);
-        if (cached != null) {
-            cached.sendStatus = Message.STATUS_WAITING;
+        synchronized (pendingMessagesCache) {
+            Message cached = pendingMessagesCache.get(msg.localId);
+            if (cached != null) {
+                cached.sendStatus = Message.STATUS_WAITING;
+            }
         }
     }
 
@@ -989,7 +1005,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 chat.localId = cursor.getLong(0);
                 chat.id = cursor.getLong(1);
                 chat.name = cursor.getString(2);
-                unreadChatsCache.put(chat.id, chat);
+                unreadChatsSynchronizedTask(() -> unreadChatsCache.put(chat.id, chat));
             }
             controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
         }
@@ -1048,7 +1064,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 chat.lastTimestamp = cursor.getLong(10);
                 cachedChatList.add(chat);
             }
-            dbExecutor.execute(this::broadcastChatList);
+            dbExecutor.execute(this::notifyChatsList);
         }
     }
 
@@ -1075,6 +1091,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return null;
     }
 
+    private void notifyChatsList() {
+        List<Chat> uiList = new ArrayList<>();
+        uiList.add(Chat.createNewChatAction(controller.getString(R.string.new_chat), controller.getString(R.string.find_user)));
+        uiList.addAll(cachedChatList);
+        controller.notifyChatListChanged(uiList);
+    }
+
     private void sortCachedChatList() {
         cachedChatList.sort((c1, c2) -> {
             if (c1.hasNewMsg != c2.hasNewMsg) return c2.hasNewMsg ? 1 : -1;
@@ -1085,5 +1108,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private Chat findChatInCache(long chatId) {
         for (Chat c : cachedChatList) if (c.id == chatId) return c;
         return null;
+    }
+
+    private void unreadChatsSynchronizedTask(Runnable unreadChatTask) {
+        synchronized (unreadChatsCache) {
+            unreadChatTask.run();
+        }
     }
 }
