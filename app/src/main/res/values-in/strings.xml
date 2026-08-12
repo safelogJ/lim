@@ -44,7 +44,6 @@
     <string name="user_fields">bidang pengguna</string>
     <string name="new_chat">obrolan baru</string>
     <string name="find_user">buat</string>
-    <string name="hello_blank_fragment">Halo fragmen kosong</string>
     <string name="yesterday">kemarin</string>
     <string name="big_file_error">File terlalu besar (maksimum 50MB)</string>
     <string name="select_file_error">tidak ada file yang dipilih untuk dikirim</string>
@@ -58,4 +57,5 @@
     <string name="recording">Merekam…</string>
     <string name="stop_recording">Ketuk di luar untuk menyimpan</string>
     <string name="image">pratinjau gambar</string>
+    <string name="interlocutor_deleted_error">Tidak ada lawan bicara dalam obrolan ini</string>
 </resources>

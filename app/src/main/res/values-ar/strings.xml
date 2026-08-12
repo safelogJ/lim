@@ -44,7 +44,6 @@
     <string name="user_fields">حقول المستخدم</string>
     <string name="new_chat">دردشة جديدة</string>
     <string name="find_user">إنشاء</string>
-    <string name="hello_blank_fragment">مرحباً</string>
     <string name="yesterday">أمس</string>
     <string name="big_file_error">الملف كبير جداً (الأقصى 50 ميجابايت)</string>
     <string name="select_file_error">لم يتم اختيار ملف للإرسال</string>
@@ -58,4 +57,5 @@
     <string name="recording">جاري التسجيل…</string>
     <string name="stop_recording">انقر في الخارج للحفظ</string>
     <string name="image">معاينة الصورة</string>
+    <string name="interlocutor_deleted_error">ليس لديك محاور في هذه الدرдشة</string>
 </resources>

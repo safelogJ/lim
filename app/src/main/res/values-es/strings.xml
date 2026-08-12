@@ -44,7 +44,6 @@
     <string name="user_fields">campos de usuario</string>
     <string name="new_chat">nuevo chat</string>
     <string name="find_user">crear</string>
-    <string name="hello_blank_fragment">Hola fragmento vacío</string>
     <string name="yesterday">ayer</string>
     <string name="big_file_error">El archivo es demasiado grande (máximo 50MB)</string>
     <string name="select_file_error">no se ha seleccionado ningún archivo para enviar</string>
@@ -58,4 +57,5 @@
     <string name="recording">Grabando…</string>
     <string name="stop_recording">Toque fuera para guardar</string>
     <string name="image">vista previa de imagen</string>
+    <string name="interlocutor_deleted_error">No tienes interlocutor en este chat</string>
 </resources>

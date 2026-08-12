@@ -39,8 +39,14 @@ public class SendMessageHandler extends BaseHandler {
             if (messageId != Message.INVALID_MSG_ID) {
                 response.messageId = messageId;
                 response.timestamp = timestamp;
-                response.message = "message saved on server";
-                sendSuccess(exchange, response);
+                response.status = BaseResponse.SUCCESS;
+                if (LimController.dbManager.isLiveChat(user.id, req.chatId())) {
+                    response.message = "message saved on server";
+                    sendResponse(exchange, 200, response);
+                } else {
+                    response.message = "CH_ERR_NO_INTERLOCUTOR";
+                    sendResponse(exchange, 203, response);
+                }
             } else {
                 sendInternalServerError(exchange, response);
                 LimController.log.error("sendInternalServerError ");

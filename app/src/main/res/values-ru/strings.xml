@@ -44,7 +44,6 @@
     <string name="user_fields">поля пользователя</string>
     <string name="new_chat">новый чат</string>
     <string name="find_user">создать</string>
-    <string name="hello_blank_fragment">Привет, пустой фрагмент</string>
     <string name="yesterday">вчера</string>
     <string name="big_file_error">Файл слишком велик (максимум 50МБ)</string>
     <string name="select_file_error">файл для отправки не выбран</string>
@@ -58,4 +57,5 @@
     <string name="recording">Запись…</string>
     <string name="stop_recording">Нажмите вне окна для сохранения</string>
     <string name="image">предпросмотр изображения</string>
+    <string name="interlocutor_deleted_error">В этом чате у вас нет собеседника</string>
 </resources>

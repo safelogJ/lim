@@ -64,6 +64,12 @@ public abstract class BaseHandler implements HttpHandler {
         sendResponse(exchange, 401, response);
     }
 
+    protected void sendChatLiveStatus(HttpExchange exchange, BaseResponse response) throws IOException {
+        response.status = BaseResponse.SUCCESS;
+        response.message = "CH_ERR_NO_INTERLOCUTOR";
+        sendResponse(exchange, 203, response);
+    }
+
     protected void sendUserNotFoundError(HttpExchange exchange, BaseResponse response) throws IOException {
         response.status = BaseResponse.ERROR;
         response.message = "user not found";

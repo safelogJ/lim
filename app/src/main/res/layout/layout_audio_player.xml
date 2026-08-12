@@ -12,7 +12,6 @@
         android:id="@+id/btnPlayPause"
         android:layout_width="36dp"
         android:layout_height="36dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/app_name"
         android:padding="4dp"
         android:src="@drawable/play_arrow_48px" />

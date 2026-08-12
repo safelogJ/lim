@@ -44,7 +44,6 @@
     <string name="user_fields">user fields</string>
     <string name="new_chat">bagong chat</string>
     <string name="find_user">lumikha</string>
-    <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="yesterday">kahapon</string>
     <string name="big_file_error">Masyadong malaki ang file (maximum 50MB)</string>
     <string name="select_file_error">walang file na napili para ipadala</string>
@@ -58,4 +57,5 @@
     <string name="recording">Nagre-record…</string>
     <string name="stop_recording">I-tap sa labas para i-save</string>
     <string name="image">preview ng imahe</string>
+    <string name="interlocutor_deleted_error">Wala kang kausap sa chat na ito</string>
 </resources>

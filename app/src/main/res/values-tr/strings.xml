@@ -44,7 +44,6 @@
     <string name="user_fields">kullanıcı alanları</string>
     <string name="new_chat">yeni sohbet</string>
     <string name="find_user">oluştur</string>
-    <string name="hello_blank_fragment">Merhaba boş fragment</string>
     <string name="yesterday">dün</string>
     <string name="big_file_error">Dosya çok büyük (maksimum 50MB)</string>
     <string name="select_file_error">gönderilecek dosya seçilmedi</string>
@@ -58,4 +57,5 @@
     <string name="recording">Kaydediliyor…</string>
     <string name="stop_recording">Kaydetmek için dışarı dokunun</string>
     <string name="image">resim önizleme</string>
+    <string name="interlocutor_deleted_error">Bu sohbette muhatabınız yok</string>
 </resources>

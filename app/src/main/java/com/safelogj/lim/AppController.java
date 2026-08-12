@@ -420,9 +420,9 @@ public class AppController extends Application {
     public void startSendingMsgList() {
         for (Message msg : dbHelper.getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
-                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg));
+                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg, null));
             } else {
-                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg));
+                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg, null));
             }
         }
     }

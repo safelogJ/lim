@@ -47,7 +47,7 @@ public class DatabaseManager {
     private static final String CHECK_USER_EXISTS_SQL = "SELECT 1 FROM users WHERE username = ? LIMIT 1";
     private static final String INSERT_USER_SQL = "INSERT INTO users (username, password_hash, public_key, private_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)";
     private static final String AUTH_USER_SQL = "SELECT id, display_name, password_hash, public_key, private_hash FROM users WHERE username = ? AND is_deleted = 0";
-    private static final String SOFT_DELETE_USER_SQL = "UPDATE users SET is_deleted = 1, password_hash = '', public_key = '', private_hash = '', display_name = 'Deleted account' WHERE id = ? AND is_deleted = 0";
+    private static final String SOFT_DELETE_USER_SQL = "UPDATE users SET is_deleted = 1, password_hash = '', private_hash = '' WHERE id = ? AND is_deleted = 0";
     private static final String CHECK_IS_DELETED_SQL = "SELECT 1 FROM users WHERE username = ? AND is_deleted = 1 LIMIT 1";
     private static final String SEARCH_USER_BY_NAME_SQL = "SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0";
     // Chat
@@ -64,6 +64,7 @@ public class DatabaseManager {
     private static final String GET_NEW_MESSAGES_SQL = "SELECT m.id, m.chat_id, m.sender_id, m.text, m.type, m.file_path, m.file_name, CASE WHEN m.sender_id = ? THEN m.chat_name ELSE u_sender.display_name END, m.timestamp, u_interlocutor.public_key, u_interlocutor.id FROM messages m JOIN chat_members cm_me ON m.chat_id = cm_me.chat_id AND cm_me.user_id = ? JOIN chat_members cm_other ON m.chat_id = cm_other.chat_id AND cm_other.user_id != ? JOIN users u_interlocutor ON cm_other.user_id = u_interlocutor.id JOIN users u_sender ON m.sender_id = u_sender.id WHERE m.id > ? AND cm_me.is_blocked = 0 ORDER BY m.id ASC";
     // Security & File
     private static final String CHECK_FILE_ACCESSIBILITY_SQL = "SELECT 1 FROM messages m JOIN chat_members cm ON m.chat_id = cm.chat_id WHERE m.chat_id = ? AND m.file_path = ? AND cm.user_id = ? LIMIT 1";
+    private static final String CHECK_IS_LIVE_CHAT_SQL = "SELECT 1 FROM chat_members cm JOIN chat_members cm_other ON cm.chat_id = cm_other.chat_id AND cm_other.user_id != cm.user_id JOIN users u_other ON cm_other.user_id = u_other.id WHERE cm.chat_id = ? AND cm.user_id = ? AND u_other.is_deleted = 0 LIMIT 1";
     private static final String CHECK_MEMBER_OF_CHAT_SQL = "SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1";
     private static final String GET_CHAT_MEMBERS_FOR_CACHE_SQL = "SELECT chat_id, user_id FROM chat_members";
     private static final String GET_MAX_MSG_ID_SQL_PER_USER = "SELECT cm.user_id, MAX(m.id) FROM chat_members cm JOIN messages m ON cm.chat_id = m.chat_id GROUP BY cm.user_id";
@@ -268,6 +269,7 @@ public class DatabaseManager {
                 if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
                     User user = new User();
                     user.id = rs.getLong(1);
+                    user.username = username;
                     user.displayName = rs.getString(2);
                     user.publicKey = rs.getString(4);
                     user.privateHash = rs.getString(5);
@@ -593,6 +595,19 @@ public class DatabaseManager {
         }
     }
 
+
+    public boolean isLiveChat(long userId, long chatId) {
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_IS_LIVE_CHAT_SQL)) {
+            stmt.setLong(1, chatId);
+            stmt.setLong(2, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LimController.log.error("Security live check error: ", e);
+            return false;
+        }
+    }
 
     public boolean isMemberOfChat(long userId, long chatId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_MEMBER_OF_CHAT_SQL)) {

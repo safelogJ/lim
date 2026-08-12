@@ -390,7 +390,11 @@ public class ChatFragment extends Fragment {
     private void setObserveErrorStatus() {
         chatViewModel.getErrorStatus().observe(getViewLifecycleOwner(), error -> {
             if (error != null && mBinding != null) {
-                addSystemMessageToList(error);
+                if ("CH_ERR_NO_INTERLOCUTOR".equals(error)) {
+                    Toast.makeText(controller, getString(R.string.interlocutor_deleted_error), Toast.LENGTH_SHORT).show();
+                } else {
+                    addSystemMessageToList(error);
+                }
             }
         });
     }
@@ -579,5 +583,4 @@ public class ChatFragment extends Fragment {
             Log.e(AppController.LOG_TAG, "Stop recording error: " + e.getMessage());
         }
     }
-
 }

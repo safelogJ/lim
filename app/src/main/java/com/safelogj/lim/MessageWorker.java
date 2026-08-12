@@ -7,13 +7,8 @@ import androidx.annotation.NonNull;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.MediaLatch;
 import com.safelogj.lim.model.Message;
-
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 public class MessageWorker extends Worker {
 
@@ -46,9 +41,9 @@ public class MessageWorker extends Worker {
         Log.d(AppController.LOG_TAG, "MessageWorker.startSendingMsgList()");
         for (Message msg : controller.getDbHelper().getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
-                controller.getNetworkService().sendTextMessage(msg);
+                controller.getNetworkService().sendTextMessage(msg, null);
             } else {
-                controller.getNetworkService().sendMediaMessage(msg);
+                controller.getNetworkService().sendMediaMessage(msg, null);
             }
         }
         return Result.success();

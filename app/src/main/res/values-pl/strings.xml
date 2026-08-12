@@ -44,7 +44,6 @@
     <string name="user_fields">pola użytkownika</string>
     <string name="new_chat">nowy czat</string>
     <string name="find_user">utwórz</string>
-    <string name="hello_blank_fragment">Witaj, pusty fragmencie</string>
     <string name="yesterday">wczoraj</string>
     <string name="big_file_error">Plik jest zbyt duży (maksymalnie 50MB)</string>
     <string name="select_file_error">nie wybrano pliku do wysłania</string>
@@ -58,4 +57,5 @@
     <string name="recording">Nagrywanie…</string>
     <string name="stop_recording">Dotknij poza oknem, aby zapisać</string>
     <string name="image">podgląd obrazu</string>
+    <string name="interlocutor_deleted_error">W tym czacie nie masz rozmówcy</string>
 </resources>

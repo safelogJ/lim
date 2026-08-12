@@ -33,6 +33,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -113,6 +114,8 @@ public class NetworkService {
                 controller.setUserId(user.id);
                 controller.writeSettingsToFile();
                 Log.i(AppController.LOG_TAG, res.message());
+                Log.e(AppController.LOG_TAG, res.privateHash());
+                Log.e(AppController.LOG_TAG, "публичный автор,рега " + res.publicKey());
 
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
@@ -136,7 +139,7 @@ public class NetworkService {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
                 controller.eraseUser();
-                dbHelper.wipeAllData(callback, res.message(), res.message());
+                dbHelper.wipeAllData(callback, res.message());
                 controller.writeSettingsToFile();
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
@@ -200,7 +203,6 @@ public class NetworkService {
                 user.publicKey = res.publicKey();
                 dbHelper.saveUser(user, callback, user, chatId);
                 Log.i(AppController.LOG_TAG, res.message());
-
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }
@@ -227,7 +229,7 @@ public class NetworkService {
                 chat.id = res.chatId();
                 chat.name = queryUser.displayName;
                 chat.interlocutorId = queryUser.id;
-                dbHelper.saveChat(chat, callback, chat);
+                dbHelper.saveChat(chat, callback);
                 Log.i(AppController.LOG_TAG, res.message());
 
             } else {
@@ -277,16 +279,22 @@ public class NetworkService {
         }
     }
 
-    public void sendTextMessage(Message msg) {
-        if (msg.interlocutorPublicKey == null) {
-            Log.e(AppController.LOG_TAG, "Send Text Cannot encrypt: recipient public key not found");
+    public void sendTextMessage(Message msg, @Nullable ResultCallback<String> liveChat) {
+        if (msg.interlocutorPublicKey == null || msg.interlocutorPublicKey.isEmpty()) {
+            Log.e(AppController.LOG_TAG, "Send Text Cannot encrypt: recipient public key not found or empty");
             dbHelper.notConfirmMessageSent(msg);
             return;
         }
         Request request;
         try {
+            String encryptText = controller.encryptMessage(msg.text, msg.interlocutorPublicKey);
+            if (encryptText == null) {
+                dbHelper.notConfirmMessageSent(msg);
+                Log.w(AppController.LOG_TAG, "ошибка при шифровании текста");
+                return;
+            }
             RequestBody body = RequestBody.create(gson.toJson(new SendMessageRequest(controller.getUsername(),
-                    hashPassword(controller.getPassword()), msg.senderId, msg.chatId, controller.encryptMessage(msg.text, msg.interlocutorPublicKey),
+                    hashPassword(controller.getPassword()), msg.senderId, msg.chatId, encryptText,
                     msg.type, msg.filePath, msg.fileName, msg.chatName)), MediaType.parse(MEDIA_TYPE_JSON));
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/send").post(body).build();
         } catch (Exception e) {
@@ -304,6 +312,9 @@ public class NetworkService {
                     dbHelper.saveMsgBeforeSending(msg);
                 }
                 dbHelper.confirmMessageSent(msg);
+                if (response.code() == 203 && liveChat != null) {
+                      liveChat.onError(res.message());
+                }
                 Log.i(AppController.LOG_TAG, res.message());
                 return;
 
@@ -316,7 +327,7 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg);
     }
 
-    public void sendMediaMessage(Message msg) {
+    public void sendMediaMessage(Message msg, @Nullable ResultCallback<String> liveChat) {
         Uri uri;
         long fileSize;
         try {
@@ -333,8 +344,8 @@ public class NetworkService {
             return;
         }
 
-        if (msg.interlocutorPublicKey == null) {
-            Log.e(AppController.LOG_TAG, "Send Media Cannot encrypt: recipient public key not found");
+        if (msg.interlocutorPublicKey == null || msg.interlocutorPublicKey.isEmpty()) {
+            Log.e(AppController.LOG_TAG, "Send Media Cannot encrypt: recipient public key not found or empty");
             dbHelper.notConfirmMessageSent(msg);
             return;
         }
@@ -350,6 +361,11 @@ public class NetworkService {
 
             String encText = controller.encryptMessage(msg.text, msg.interlocutorPublicKey);
             String encFileName = controller.encryptMessage(msg.fileName, msg.interlocutorPublicKey);
+            if (encText == null || encFileName == null) {
+                dbHelper.notConfirmMessageSent(msg);
+                Log.e(AppController.LOG_TAG, "ошибка при шифровании текста или имени файла в медиа сообщении");
+                return;
+            }
 
             RequestBody requestBody = new RequestBody() {
                 @Override
@@ -406,6 +422,9 @@ public class NetworkService {
                         dbHelper.saveMsgBeforeSending(msg);
                     }
                     dbHelper.confirmMessageSent(msg);
+                    if (response.code() == 203 && liveChat != null) {
+                        liveChat.onError(res.message());
+                    }
                     Log.i(AppController.LOG_TAG, "Media message sent: " + res.message());
                     return;
 
@@ -435,13 +454,14 @@ public class NetworkService {
         try (Response response = client.newCall(request).execute()) {
             BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
             if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                List<Message> decryptMessages = new ArrayList<>();
                 for (Message msg : res.messages()) {
-                    msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
-                    if (msg.fileName != null && !msg.fileName.isEmpty()) {
-                        msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
+                    Message decryptMsg = decryptMessage(msg);
+                    if (decryptMsg != null) {
+                        decryptMessages.add(decryptMsg);
                     }
                 }
-                dbHelper.saveIncomingMsgList(res.messages(), mediaLatch);
+                dbHelper.saveIncomingMsgList(decryptMessages, mediaLatch);
                 fillChatStatus(res.onlineStatuses());
                 controller.offlineHandler.removeCallbacks(controller.resetStatusesRunnable);
             } else {
@@ -457,6 +477,23 @@ public class NetworkService {
             controller.activeDownloadsCount.decrementAndGet();
         }
         checkMediaThread(mediaLatch);
+    }
+    @Nullable
+    private Message decryptMessage(Message msg) {
+        Log.e(AppController.LOG_TAG, "расшифровываю id: " + msg.id + " key " + msg.interlocutorPublicKey);
+        msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
+        if (msg.text == null) {
+            Log.i(AppController.LOG_TAG, "расшифровка сообщения не удалась " + msg.id);
+            return null;
+        }
+        if (msg.fileName != null && !msg.fileName.isEmpty()) {
+            msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
+            if (msg.fileName == null) {
+                Log.i(AppController.LOG_TAG, "расшифровка имени файла не удалась " + msg.id);
+                return null;
+            }
+        }
+        return msg;
     }
 
     private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {

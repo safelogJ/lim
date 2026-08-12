@@ -54,6 +54,10 @@ public class MediaUploadHandler extends BaseHandler {
             sendUnauthorizedError(exchange, response);
             return;
         }
+        if (!LimController.dbManager.isLiveChat(user.id, chatId)) {
+            skipFileUpload(exchange, response, chatId, text, type, fileName, chatName, user);
+            return;
+        }
         // Резервируем место под текущие загрузки + нашу новую
         long reserved = (LimController.ACTIVE_UPLOADS.get() + 1) * (DatabaseManager.FILE_SIZE_LIMIT + 1024); // 50MB + запас
         // 1. Проверка квоты пользователя
@@ -121,6 +125,29 @@ public class MediaUploadHandler extends BaseHandler {
                 deleteFileWithRetry(targetFile);
             }
             LimController.ACTIVE_UPLOADS.decrementAndGet();
+        }
+    }
+
+    private void skipFileUpload(HttpExchange exchange, BaseResponse response,
+                                long chatId, String text, String type, String fileName, String chatName, User user) throws IOException {
+        long timestamp = System.currentTimeMillis();
+        String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8); // Генерация уникального имени файла
+        try {
+            long messageId = LimController.dbManager.saveMessage(new SendMessageRequest(
+                    null, null, null, chatId, text, type, serverFileName, fileName, chatName), user.id, timestamp);
+
+            if (messageId != Message.INVALID_MSG_ID) {
+                response.messageId = messageId;
+                response.timestamp = timestamp;
+                response.status = BaseResponse.SUCCESS;
+                response.message = "CH_ERR_NO_INTERLOCUTOR";
+                sendResponse(exchange, 203, response);
+            } else {
+                sendInternalServerError(exchange, response);
+            }
+        } catch (Exception e) {
+            LimController.log.error("SendMessageHandler error: ", e);
+            sendCatchError(exchange, response, e);
         }
     }
 

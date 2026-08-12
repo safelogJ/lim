@@ -97,10 +97,32 @@ public class ChatViewModel extends AndroidViewModel {
                 + Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2))) + ")");
         if (Message.TYPE_TEXT.equals(msg.type)) {
             controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
-                    controller.getNetworkService().sendTextMessage(msg));
+                    controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
+
+                        @Override
+                        public void onSuccess(String result) {
+                            //
+                        }
+
+                        @Override
+                        public void onError(String interlocutorDeleted) {
+                            errorStatus.postValue(interlocutorDeleted);
+                        }
+                    }));
         } else {
             controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
-                    controller.getNetworkService().sendMediaMessage(msg));
+                    controller.getNetworkService().sendMediaMessage(msg,  new ResultCallback<>() {
+
+                        @Override
+                        public void onSuccess(String result) {
+                            //
+                        }
+
+                        @Override
+                        public void onError(String interlocutorDeleted) {
+                            errorStatus.postValue(interlocutorDeleted);
+                        }
+                    }));
         }
     }
 

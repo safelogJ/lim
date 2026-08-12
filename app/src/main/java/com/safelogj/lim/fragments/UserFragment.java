@@ -27,6 +27,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 
 import com.google.android.material.textfield.TextInputLayout;
 import com.safelogj.lim.AppController;
@@ -138,6 +139,19 @@ public class UserFragment extends Fragment {
         addCertBtnListener();
         setTouchFieldListeners();
         setKeyboardPadding();
+        initSecurityMeasures();
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        requireActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        requireActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     @Override
@@ -380,5 +394,19 @@ public class UserFragment extends Fragment {
         });
     }
 
+    private void initSecurityMeasures() {
+        applySecurityMeasures(mBinding.addressEditText);
+        applySecurityMeasures(mBinding.loginEditText);
+        applySecurityMeasures(mBinding.passwordEditText);
+        applySecurityMeasures(mBinding.displayNameEditText);
+    }
+
+    private void applySecurityMeasures(View view) {
+        view.setFilterTouchesWhenObscured(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            view.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES);
+        }
+        view.setAutofillHints(AppController.EMPTY_STRING);
+    }
 }
 
