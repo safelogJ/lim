@@ -57,6 +57,7 @@ public class LimController {
     private static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
     public static DatabaseManager dbManager;
     public static ServerConfig config;
+    private static UdpRelayServer udpRelayServer;
     private static ThreadPoolExecutor EXECUTOR_POOL;
     private static final ScheduledExecutorService CLEANUP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -88,6 +89,8 @@ public class LimController {
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
             server.start();
+            udpRelayServer = new UdpRelayServer(config.getUdpRelayPort());
+            udpRelayServer.start();
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOfflineUsers, 10, 10, TimeUnit.SECONDS);
         } catch (Exception e) {
@@ -158,6 +161,9 @@ public class LimController {
             log.info("📥 The signal to stop the container has been received. We are beginning a smooth shutdown....");
             server.stop(1);
             log.info("HttpServer has stopped. New requests are not accepted..");
+            if (udpRelayServer != null) {
+                udpRelayServer.stop();
+            }
             EXECUTOR_POOL.shutdown();
             CLEANUP_SCHEDULER.shutdown();
             log.info("⏳ Waiting for active tasks in the thread pool to complete...");

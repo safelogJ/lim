@@ -58,4 +58,8 @@
     <string name="stop_recording">Dotknij poza oknem, aby zapisać</string>
     <string name="image">podgląd obrazu</string>
     <string name="interlocutor_deleted_error">W tym czacie nie masz rozmówcy</string>
+    <string name="incoming_call">Połączenie przychodzące</string>
+    <string name="cancel_call">Anuluj</string>
+    <string name="end_call">Zakończ</string>
+    <string name="calling">Dzwonienie…</string>
 </resources>

@@ -58,4 +58,8 @@
     <string name="stop_recording">I-tap sa labas para i-save</string>
     <string name="image">preview ng imahe</string>
     <string name="interlocutor_deleted_error">Wala kang kausap sa chat na ito</string>
+    <string name="incoming_call">Papasok na tawag</string>
+    <string name="cancel_call">Kanselahin</string>
+    <string name="end_call">Tapusin ang tawag</string>
+    <string name="calling">Tumatawag…</string>
 </resources>

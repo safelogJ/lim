@@ -3,7 +3,6 @@ package com.safelogj.lim.adapters;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;

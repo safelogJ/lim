@@ -58,4 +58,8 @@
     <string name="stop_recording">Ketuk di luar untuk menyimpan</string>
     <string name="image">pratinjau gambar</string>
     <string name="interlocutor_deleted_error">Tidak ada lawan bicara dalam obrolan ini</string>
+    <string name="incoming_call">Panggilan masuk</string>
+    <string name="cancel_call">Batal</string>
+    <string name="end_call">Akhiri panggilan</string>
+    <string name="calling">Memanggil…</string>
 </resources>

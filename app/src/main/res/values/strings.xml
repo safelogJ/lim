@@ -65,4 +65,8 @@
     <string name="stop_recording">Tap outside to save</string>
     <string name="image">image preview</string>
     <string name="interlocutor_deleted_error">There is no interlocutor in this chat</string>
+    <string name="incoming_call">Incoming call</string>
+    <string name="cancel_call">Cancel</string>
+    <string name="end_call">End call</string>
+    <string name="calling">Calling</string>
 </resources>

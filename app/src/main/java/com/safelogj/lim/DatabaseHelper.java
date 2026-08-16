@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -75,6 +76,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String GET_LAST_MSG_ID_SQL = "SELECT MAX(id) FROM messages";
     private static final String GET_PENDING_MESSAGES_SQL = "SELECT m.local_id, m.chat_id, m.chat_name, m.sender_id, m.text, m.type, m.file_path, m.file_name, m.timestamp, c.local_id, u.public_key FROM messages m JOIN chats c ON m.chat_id = c.id JOIN users u ON u.id = c.interlocutor_id WHERE m.send_status = 1 AND m.sender_id = ? ORDER BY m.timestamp ASC LIMIT ";
     private static final String GET_MEDIA_DOWNLOAD_LIST_SQL = "SELECT m.id, m.chat_id, m.file_path, m.file_name, u.public_key FROM messages m JOIN chats c ON c.id = m.chat_id JOIN users u ON u.id = c.interlocutor_id WHERE m.media_status = 1";
+    private static final String GET_CHAT_NAME_BY_INTERLOCUTOR_SQL = "SELECT name, color FROM chats WHERE interlocutor_id = ? LIMIT 1";
+    private static final String GET_BLOCKED_USERS_SQL = "SELECT interlocutor_id FROM chats WHERE is_blocked = 1";
 
     private final AtomicLong cachedLastMsgServerId = new AtomicLong(0);
     private final Map<Long, Chat> unreadChatsCache = new HashMap<>();
@@ -82,6 +85,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private final Map<Long, Message> pendingMediaCache = new HashMap<>();
     private final Map<Long, List<Message>> chatMessagesCache = new HashMap<>(); // только БД нить
     private final List<Chat> cachedChatList = new ArrayList<>(); // только БД нить
+    private final Set<Long> blockedUserIds = ConcurrentHashMap.newKeySet();
     private SQLiteDatabase database;
     private final AppController controller;
     private final ExecutorService dbExecutor;
@@ -148,6 +152,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             initPendingMessagesCache();
             initPendingMediaCache();
             initChatCache();
+            initBlockedUsersCache();
         } catch (SQLiteException e) {
             controller.setInitAppError(true);
             Log.d(AppController.LOG_TAG, "Критическая ошибка при инициализации базы данных: ", e);
@@ -437,17 +442,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 ContentValues v = new ContentValues();
                 v.put(IS_BLOCKED, 1);
                 if (database.update(CHATS, v, ID_ANCHOR, new String[]{String.valueOf(chatId)}) > 0) {
-
                     for (int i = 0; i < cachedChatList.size(); i++) {
                         Chat c = cachedChatList.get(i);
                         if (c.id == chatId) {
                             Chat updated = c.copy();
                             updated.isBlocked = true;
                             cachedChatList.set(i, updated);
+                            blockedUserIds.add(updated.interlocutorId);
                             break;
                         }
                     }
-
                     notifyChatsList();
                 } else {
                     Log.d(AppController.LOG_TAG, "chat blocking error");
@@ -456,6 +460,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 Log.d(AppController.LOG_TAG, "chat blocking error " + e);
             }
         });
+    }
+
+    public boolean isInterlocutorBlocked(long interlocutorId) {
+        return blockedUserIds.contains(interlocutorId);
     }
 
     public void setChatColor(long chatId, int color) {
@@ -482,6 +490,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 }
             } catch (Exception e) {
                 Log.d(AppController.LOG_TAG, "error set color " + color, e);
+            }
+        });
+    }
+
+    public void getChatName(long interlocutorId, ResultCallback<Chat> callback) {
+        dbExecutor.execute(() -> {
+            try (Cursor cursor = database.rawQuery(GET_CHAT_NAME_BY_INTERLOCUTOR_SQL, new String[]{String.valueOf(interlocutorId)})) {
+                if (cursor.moveToFirst()) {
+                    Chat chat = new Chat();
+                    chat.name = cursor.getString(0);
+                    chat.color = cursor.getInt(1);
+                    callback.onSuccess(chat);
+                } else {
+                    callback.onError("Chat not found for interlocutor ID: " + interlocutorId);
+                }
+            } catch (Exception e) {
+                Log.e(AppController.LOG_TAG, "Error getting chat name from DB", e);
+                callback.onError("Database error");
             }
         });
     }
@@ -918,6 +944,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 cached.lastSendStatus = Message.STATUS_SENT;
                 cached.isBlocked = false;
                 cachedChatList.add(cached);
+                blockedUserIds.remove(cached.interlocutorId);
                 controller.updateOnlineStatus(cached.interlocutorId, cached.id, false);
             }
         } else {
@@ -927,6 +954,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     updated.lastSendStatus = Message.STATUS_SENT;
                     updated.isBlocked = false;
                     cachedChatList.set(i, updated);
+                    blockedUserIds.remove(updated.interlocutorId);
                     break;
                 }
             }
@@ -975,7 +1003,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void addInterlocutorToUsers(Message msg) {
-        controller.getNetStreams()[AppController.POOL_SIZE - 1].execute(() ->
+        controller.getNetStreams()[AppController.GET_MSG].execute(() ->
                 controller.getNetworkService().searchInterlocutor(controller.getUsername(), controller.getPassword(), null,
                         msg.chatId, new ResultCallback<>() {
                             @Override
@@ -1065,6 +1093,14 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 cachedChatList.add(chat);
             }
             dbExecutor.execute(this::notifyChatsList);
+        }
+    }
+
+    private void initBlockedUsersCache() {
+        try (Cursor cursor = database.rawQuery(GET_BLOCKED_USERS_SQL, null)) {
+            while (cursor.moveToNext()) {
+                blockedUserIds.add(cursor.getLong(0));
+            }
         }
     }
 

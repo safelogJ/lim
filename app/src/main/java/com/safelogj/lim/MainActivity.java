@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
@@ -12,6 +13,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -22,13 +24,24 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.safelogj.lim.databinding.ActivityMainBinding;
+import com.safelogj.lim.fragments.CallFragment;
 import com.safelogj.lim.fragments.ChatFragment;
 import com.safelogj.lim.fragments.ChatListFragment;
 import com.safelogj.lim.model.Chat;
+import com.safelogj.lim.viewmodels.ResultCallback;
 
 public class MainActivity extends AppCompatActivity {
 
     private AppController controller;
+    private ActivityMainBinding mBinding;
+    private long incomingInterlocutorId = Chat.INVALID_ID;
+    private String incomingChatName;
+    private int chatColor;
+
+    private static final String STATE_INTERLOCUTOR_ID = "incoming_id";
+    private static final String STATE_CHAT_NAME = "incoming_name";
+    private static final String STATE_CHAT_COLOR = "incoming_color";
+
 
 
     public void showFragment(Fragment fragment) {
@@ -45,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
-        ActivityMainBinding mBinding = ActivityMainBinding.inflate(getLayoutInflater());
+        mBinding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(mBinding.getRoot());
         ViewCompat.setOnApplyWindowInsetsListener(mBinding.getRoot(), (v, insets) -> {
             Insets systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -77,6 +90,13 @@ public class MainActivity extends AppCompatActivity {
                     .add(R.id.main_container, new ChatListFragment())
                     .commit();
             handleIntent(getIntent());
+        } else {
+            incomingInterlocutorId = savedInstanceState.getLong(STATE_INTERLOCUTOR_ID, Chat.INVALID_ID);
+            incomingChatName = savedInstanceState.getString(STATE_CHAT_NAME);
+            chatColor = savedInstanceState.getInt(STATE_CHAT_COLOR);
+            if (incomingInterlocutorId != Chat.INVALID_ID) {
+                showIncomingCallBanner(chatColor);
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -84,7 +104,16 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
         }
 
+        setObserveIncomingCall();
         setDarkStatusBar();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putLong(STATE_INTERLOCUTOR_ID, incomingInterlocutorId);
+        outState.putString(STATE_CHAT_NAME, incomingChatName);
+        outState.putInt(STATE_CHAT_COLOR, chatColor);
     }
 
     @Override
@@ -138,5 +167,64 @@ public class MainActivity extends AppCompatActivity {
             System.exit(0);
         });
         dialog.show();
+    }
+
+    private void setObserveIncomingCall() {
+        controller.getIncomingCallTrigger().observe(this, interlocutorId -> {
+            if (interlocutorId == Chat.INVALID_ID) {
+                hideIncomingCallBanner();
+                return;
+            }
+            // Если ID тот же, что мы уже показываем (после поворота), ничего не делаем
+            if (interlocutorId == incomingInterlocutorId) return;
+
+            controller.getDbHelper().getChatName(interlocutorId, new ResultCallback<>() {
+
+                @Override
+                public void onError(String errorMsg) {
+                    Log.d(AppController.LOG_TAG, errorMsg);
+                }
+
+                @Override
+                public void onSuccess(Chat chat) {
+                    runOnUiThread(() -> {
+                        incomingChatName = chat.name;
+                        incomingInterlocutorId = interlocutorId;
+                        showIncomingCallBanner(chat.color);
+                    });
+                }
+            });
+        });
+    }
+
+    private void showIncomingCallBanner(int color) {
+        controller.getCallService().startRinging();
+        mBinding.tvIncomingCallerName.setText(incomingChatName);
+        switch (color) {
+            case 1 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_pink));
+            case 2 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_yellow));
+            case 3 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_blue));
+            default -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_green));
+        }
+        mBinding.incomingCallBanner.setVisibility(View.VISIBLE);
+
+        mBinding.btnAcceptCall.setOnClickListener(v -> {
+            if (getSupportFragmentManager().findFragmentById(R.id.main_container) instanceof ChatFragment fragment) {
+                fragment.stopRecordAndPlay();
+            }
+            mBinding.incomingCallBanner.setVisibility(View.GONE);
+            showFragment(CallFragment.newInstance(incomingInterlocutorId, incomingChatName, false));
+        });
+
+        mBinding.btnRejectCall.setOnClickListener(v -> {
+            hideIncomingCallBanner();
+            controller.getCallService().rejectCall();
+        });
+    }
+
+    private void hideIncomingCallBanner() {
+        incomingInterlocutorId = Chat.INVALID_ID;
+        incomingChatName = null;
+        mBinding.incomingCallBanner.setVisibility(View.GONE);
     }
 }

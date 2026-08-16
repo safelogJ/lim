@@ -58,4 +58,8 @@
     <string name="stop_recording">Kaydetmek için dışarı dokunun</string>
     <string name="image">resim önizleme</string>
     <string name="interlocutor_deleted_error">Bu sohbette muhatabınız yok</string>
+    <string name="incoming_call">Gelen arama</string>
+    <string name="cancel_call">İptal</string>
+    <string name="end_call">Bitir</string>
+    <string name="calling">Aranıyor…</string>
 </resources>

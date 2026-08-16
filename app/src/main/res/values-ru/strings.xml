@@ -58,4 +58,8 @@
     <string name="stop_recording">Нажмите вне окна для сохранения</string>
     <string name="image">предпросмотр изображения</string>
     <string name="interlocutor_deleted_error">В этом чате у вас нет собеседника</string>
+    <string name="incoming_call">Входящий звонок</string>
+    <string name="cancel_call">Отмена</string>
+    <string name="end_call">Завершить</string>
+    <string name="calling">Вызов…</string>
 </resources>

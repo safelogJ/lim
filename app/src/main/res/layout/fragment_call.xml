@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/main_background"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvCallStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:ellipsize="end"
+        android:text="@string/calling"
+        android:textColor="@color/last_time"
+        android:textSize="18sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvCallName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:textColor="@color/chat_name"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toStartOf="@+id/onlineStatusHolder"
+        app:layout_constraintStart_toEndOf="@+id/onlineStatus"
+        app:layout_constraintTop_toBottomOf="@id/tvCallStatus"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/onlineStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/cloud_48px"
+        app:layout_constraintBottom_toBottomOf="@+id/tvCallName"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/tvCallName" />
+
+    <TextView
+        android:id="@+id/onlineStatusHolder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/cloud_48px"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/tvCallName"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/tvCallName"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/btnSpeaker"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/phone_in_talk_48px"
+        android:textColor="@color/white"
+        app:layout_constraintBottom_toTopOf="@+id/btnEndCall"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvCallName" />
+
+    <TextView
+        android:id="@+id/btnEndCall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/fielder_background"
+        android:paddingStart="48dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="48dp"
+        android:paddingBottom="16dp"
+        android:textColor="@color/redA400"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:visibility="visible" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

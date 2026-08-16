@@ -58,4 +58,8 @@
     <string name="stop_recording">Toque fora para salvar</string>
     <string name="image">pré-visualização da imagem</string>
     <string name="interlocutor_deleted_error">Você não tem interlocutor nesta conversa</string>
+    <string name="incoming_call">Chamada recebida</string>
+    <string name="cancel_call">Cancelar</string>
+    <string name="end_call">Encerrar</string>
+    <string name="calling">Chamando…</string>
 </resources>

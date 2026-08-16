@@ -58,4 +58,8 @@
     <string name="stop_recording">सहेजने के लिए बाहर टैप करें</string>
     <string name="image">छवि पूर्वावलोकन</string>
     <string name="interlocutor_deleted_error">इस चैट में आपका कोई वार्ताकार नहीं है</string>
+    <string name="incoming_call">आने वाली कॉल</string>
+    <string name="cancel_call">रद्द करें</string>
+    <string name="end_call">कॉल समाप्त करें</string>
+    <string name="calling">कॉल हो रही है…</string>
 </resources>

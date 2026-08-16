@@ -102,7 +102,11 @@ public class AppController extends Application {
     public static final Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
     public static final String EMPTY_STRING = "";
     public static final int QUEUE_SIZE = 100;
-    public static final int POOL_SIZE = 5;  // 0-2 отправка, 3 качает файлы, 4 получает сообщения
+    private static final int POOL_SIZE = 7;  // 0-2 отправка, 3 качает файлы, 4 получает сообщения
+    public static final int GET_MEDIA = 3;
+    public static final int GET_MSG = 4;
+    public static final int UDP_IN = 5;
+    public static final int UDP_OUT = 6;
     public static final String NOTIFICATION_CHANNEL = "lim_messages";
     public static final String LIM_SYNC = "LimSync";
     private static final String USER_DATA = "userdata";
@@ -143,6 +147,7 @@ public class AppController extends Application {
     private static final Map<Long, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
     private final Map<Long, Map<Long, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
     public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
+    public final AtomicBoolean udpListening = new AtomicBoolean(false);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     public final Handler offlineHandler = new Handler(Looper.getMainLooper());
     public final Runnable resetStatusesRunnable = () -> {
@@ -163,12 +168,18 @@ public class AppController extends Application {
     private final MutableLiveData<List<Chat>> unreadChatTrigger = new MutableLiveData<>();
     private final MutableLiveData<Map<Long, Map<Long, Boolean>>> onlineMapTrigger = new MutableLiveData<>();
     private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Long> incomingCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Long> endCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Long> startCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<String> callDurationTrigger = new MutableLiveData<>();
+
 
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
     private OkHttpClient okHttpClient;
     private DatabaseHelper dbHelper;
+    private CallService callService;
     private boolean initAppError;
     private String initAppErrStr = EMPTY_STRING;
     private DateTimeFormatter timeFormatter;
@@ -193,6 +204,7 @@ public class AppController extends Application {
     private volatile String serverUrl = EMPTY_STRING;
     @NonNull
     private volatile String serverIp = EMPTY_STRING;
+    private volatile int udpRelayPort = 4011; // По умолчанию, обновим при ответе сервера
 
 
     static {
@@ -207,6 +219,12 @@ public class AppController extends Application {
     public void notifyUnreadChatChanged(List<Chat> chatList) { unreadChatTrigger.postValue(chatList); }
     public void notifyOnlineMapChanged() { onlineMapTrigger.postValue(onlineUsersChats); }
     public void notifyMessagesChanged(long chatId) { messagesTrigger.postValue(chatId); }
+    public void notifyIncomingCallChanged(long chatId) { incomingCallTrigger.postValue(chatId); }
+    public void notifyEndCallChanged(long chatId) { endCallTrigger.postValue(chatId); }
+    public void notifyStartCallChanged(long chatId) { startCallTrigger.postValue(chatId); }
+    public void notifyCallDurationChanged(String duration) { callDurationTrigger.postValue(duration); }
+
+
 
     public LiveData<List<Chat> > getChatListTrigger() {
         return chatListTrigger;
@@ -222,6 +240,24 @@ public class AppController extends Application {
     public LiveData<Long> getMessagesTrigger() {
         return messagesTrigger;
     }
+
+    public LiveData<Long> getIncomingCallTrigger() {
+        return incomingCallTrigger;
+    }
+
+    public LiveData<Long> getEndCallTrigger() {
+        return endCallTrigger;
+    }
+
+    public LiveData<Long> getStartCallTrigger() {
+        return startCallTrigger;
+    }
+
+    public LiveData<String> getCallDurationTrigger() {
+        return callDurationTrigger;
+    }
+
+
 
     public void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
         onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
@@ -334,6 +370,7 @@ public class AppController extends Application {
         displayName = EMPTY_STRING;
         e2eePrivateKey = EMPTY_STRING;
         e2eePublicKey = EMPTY_STRING;
+        callService = null;
     }
 
     public void setServerUrl(@NonNull String serverIp) {
@@ -388,6 +425,14 @@ public class AppController extends Application {
         return secureRandom;
     }
 
+    public int getUdpRelayPort() {
+        return udpRelayPort;
+    }
+
+    public CallService getCallService() {
+        return callService;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -412,19 +457,31 @@ public class AppController extends Application {
         userExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
 
-    public void startDownloadNewMsg() {
-        netStreams[POOL_SIZE - 1].execute(() ->
+    private void startDownloadNewMsg() {
+        netStreams[GET_MSG].execute(() ->
                 networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false)));
     }
 
-    public void startSendingMsgList() {
+    private void startSendingMsgList() {
         for (Message msg : dbHelper.getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
-                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendTextMessage(msg, null));
+                netStreams[Math.abs((int) (msg.localChatId % 3))].execute(() -> networkService.sendTextMessage(msg, null));
             } else {
-                netStreams[Math.abs((int) (msg.localChatId % (POOL_SIZE - 2)))].execute(() -> networkService.sendMediaMessage(msg, null));
+                netStreams[Math.abs((int) (msg.localChatId % 3))].execute(() -> networkService.sendMediaMessage(msg, null));
             }
         }
+    }
+
+    private void startUdpSending() {
+        if (callService == null) {
+            callService = new CallService(this);
+        }
+        callService.sendKeepAlive();
+        callService.startListeningUdp();
+    }
+
+    private void stopUdpPooling() {
+
     }
 
     private void readRoutersListAndSettingsEncrypted() {
@@ -681,9 +738,13 @@ public class AppController extends Application {
 
     @SuppressWarnings("resource")
     private void initStreams() {
-        for (int i = 0; i < POOL_SIZE; i++) {
-            netStreams[i] = Executors.newSingleThreadExecutor();
-        }
+        netStreams[0] = Executors.newSingleThreadExecutor();
+        netStreams[1] = Executors.newSingleThreadExecutor();
+        netStreams[2] = Executors.newSingleThreadExecutor();
+        netStreams[GET_MEDIA] = Executors.newSingleThreadExecutor();
+        netStreams[GET_MSG] = Executors.newSingleThreadExecutor();
+        netStreams[UDP_IN] = Executors.newSingleThreadExecutor();
+        netStreams[UDP_OUT] = Executors.newSingleThreadExecutor();
     }
 
     private void regActivityListener() {
@@ -703,8 +764,9 @@ public class AppController extends Application {
                                 startDownloadNewMsg();
                             }
                             startSendingMsgList();
+                            startUdpSending();
                         }
-                    }, 4, 4, TimeUnit.SECONDS);
+                    }, 0, 4, TimeUnit.SECONDS);
                 }
             }
 
@@ -720,8 +782,13 @@ public class AppController extends Application {
 
             @Override
             public void onActivityStopped(@NonNull Activity activity) {
-                if (startedActivities.decrementAndGet() == 0 && syncTask != null && !syncTask.isCancelled()) {
-                    syncTask.cancel(false);
+                if (startedActivities.decrementAndGet() == 0) {
+                    if (syncTask != null && !syncTask.isCancelled()) {
+                        syncTask.cancel(false);
+                    }
+                    if (!activity.isChangingConfigurations()) {
+                        callService.stopUdpTraffic();
+                    }
                 }
             }
 

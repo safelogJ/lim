@@ -58,4 +58,8 @@
     <string name="stop_recording">انقر في الخارج للحفظ</string>
     <string name="image">معاينة الصورة</string>
     <string name="interlocutor_deleted_error">ليس لديك محاور في هذه الدرдشة</string>
+    <string name="incoming_call">مكالمة واردة</string>
+    <string name="cancel_call">إلغاء</string>
+    <string name="end_call">إنهاء المكالمة</string>
+    <string name="calling">جاري الاتصال…</string>
 </resources>

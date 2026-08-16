@@ -168,13 +168,13 @@ public class ChatListFragment extends Fragment {
 
         dialogView.findViewById(R.id.btnHide).setOnClickListener(v -> {
             controller.getDbHelper().hideChatLocally(chat);
-            controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))]
+            controller.getNetStreams()[Math.abs((int) (chat.localId % 3))]
                     .execute(() -> controller.getNetworkService().hideChat(chat.id));
             dialog.dismiss();
         });
 
         dialogView.findViewById(R.id.btnBlock).setOnClickListener(v -> {
-            controller.getNetStreams()[Math.abs((int) (chat.localId % (AppController.POOL_SIZE - 2)))]
+            controller.getNetStreams()[Math.abs((int) (chat.localId % 3))]
                     .execute(() -> controller.getNetworkService().blockChat(chat.id));
             dialog.dismiss();
         });

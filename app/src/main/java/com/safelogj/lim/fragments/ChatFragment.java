@@ -40,6 +40,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.safelogj.lim.AppController;
+import com.safelogj.lim.MainActivity;
 import com.safelogj.lim.NetworkService;
 import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
@@ -107,7 +108,7 @@ public class ChatFragment extends Fragment {
 
     private MediaRecorder mediaRecorder;
     private File audioFile;
-    private long startTime = 0L;
+    private long startTime;
     private AlertDialog recordingDialog;
     private final Handler recordingHandler = new Handler(Looper.getMainLooper());
     private final Runnable recordingTimerRunnable = new Runnable() {
@@ -177,6 +178,7 @@ public class ChatFragment extends Fragment {
         mBinding.messagesRecyclerView.setAdapter(adapter);
         setSendBtnListener();
         setAddFileBtnListener();
+        setCallBtnListener();
         mBinding.clearFileButton.setOnClickListener(v -> chatViewModel.clearFile());
         chatViewModel = new ViewModelProvider(this).get(ChatViewModel.class);
         setObserveUnreadChats();
@@ -212,6 +214,11 @@ public class ChatFragment extends Fragment {
         if (adapter != null) {
             adapter.pausePlaying();
         }
+    }
+
+    public void stopRecordAndPlay() {
+        if (recordingDialog != null && recordingDialog.isShowing()) recordingDialog.dismiss();
+        if (adapter != null) adapter.stopPlaying();
     }
 
     private void setSendBtnListener() {
@@ -252,6 +259,15 @@ public class ChatFragment extends Fragment {
                 }
             }
             return true;
+        });
+    }
+
+    private void setCallBtnListener() {
+        mBinding.onlineStatus.setOnClickListener(v -> {
+            if (currentChatId != Chat.INVALID_ID) {
+                stopRecordAndPlay();
+                ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(currentChatId, currentChatName, true));
+            }
         });
     }
 
@@ -320,7 +336,6 @@ public class ChatFragment extends Fragment {
         });
     }
 
-    // В ChatFragment.java
     private void setObserveOnlineMap() {
         controller.getOnlineMapTrigger().observe(getViewLifecycleOwner(), onlineMap -> {
             if (currentChatId == Chat.INVALID_ID || mBinding == null) return;
@@ -402,12 +417,7 @@ public class ChatFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        if (recordingDialog != null && recordingDialog.isShowing()) {
-            recordingDialog.dismiss();
-        }
-        if (adapter != null) {
-            adapter.stopPlaying();
-        }
+        stopRecordAndPlay();
         super.onDestroyView();
         mBinding = null;
     }
@@ -526,9 +536,10 @@ public class ChatFragment extends Fragment {
     private void startRecording() {
         try {
             // 1. Создаем файл для записи
-            audioFile = new File(controller.getExternalFileDir(), "voice_" + System.currentTimeMillis() + ".m4a");
+            startTime = System.currentTimeMillis();
+            audioFile = new File(controller.getExternalFileDir(), "voice_" + startTime + ".m4a");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                mediaRecorder = new android.media.MediaRecorder(controller);
+                mediaRecorder = new MediaRecorder(controller);
             } else {
                 @SuppressWarnings("deprecation")
                 MediaRecorder legacyRecorder = new MediaRecorder();
@@ -553,8 +564,6 @@ public class ChatFragment extends Fragment {
                 recordingDialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
             }
             recordingDialog.show();
-            // 4. Запускаем таймер
-            startTime = System.currentTimeMillis();
             recordingHandler.post(recordingTimerRunnable);
 
         } catch (Exception e) {

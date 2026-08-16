@@ -93,10 +93,8 @@ public class ChatViewModel extends AndroidViewModel {
 
     public void sendMessage(Message msg) {
         controller.getDbHelper().saveMsgBeforeSending(msg);
-        Log.w(AppController.LOG_TAG, "сообщение из чата c local id : " + msg.localChatId + " (отправлено в нити "
-                + Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2))) + ")");
         if (Message.TYPE_TEXT.equals(msg.type)) {
-            controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
+            controller.getNetStreams()[Math.abs((int) (msg.localChatId % 3))].execute(()->
                     controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
 
                         @Override
@@ -110,7 +108,7 @@ public class ChatViewModel extends AndroidViewModel {
                         }
                     }));
         } else {
-            controller.getNetStreams()[Math.abs((int) (msg.localChatId % (AppController.POOL_SIZE - 2)))].execute(()->
+            controller.getNetStreams()[Math.abs((int) (msg.localChatId % 3))].execute(()->
                     controller.getNetworkService().sendMediaMessage(msg,  new ResultCallback<>() {
 
                         @Override

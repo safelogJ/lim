@@ -517,7 +517,7 @@ public class NetworkService {
         } else {
             for (Message msg : dbHelper.getMediaList()) {
                 Log.d(AppController.LOG_TAG, "пнули загрузку в нити 4 сообщение " + msg.id);
-                controller.getNetStreams()[AppController.POOL_SIZE - 2].execute(() -> downloadMedia(msg));
+                controller.getNetStreams()[AppController.GET_MEDIA].execute(() -> downloadMedia(msg));
             }
         }
     }
@@ -681,7 +681,7 @@ public class NetworkService {
                     maxTimestamp = chat.lastTimestamp;
                 }
             }
-            if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+            if (!controller.getCallService().lineBusy.get() && controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                 controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
                 NotificationHelper.showNotification(controller, allUnread);
             }
