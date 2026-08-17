@@ -39,10 +39,13 @@ This project contains components from the following third-party projects:
 10. SLF4J (MIT License)
    Copyright © QOS.ch
 
-11. Glide (BSD 3-Clause License)
+11. Concentus (MIT License)
+   Copyright © 2017-2024 Jared Dobson and other contributors.
+
+12. Glide (BSD 3-Clause License)
    Copyright © Google LLC, Bump Technologies, Inc.
 
-12. Logback Classic (EPL-1.0 or LGPL-2.1)
+13. Logback Classic (EPL-1.0 or LGPL-2.1)
    Copyright © QOS.ch
 
 
@@ -230,7 +233,7 @@ FULL LICENSE TEXTS:
    END OF TERMS AND CONDITIONS
 
 
---- [10] MIT License ---
+--- [10-11] MIT License ---
 
    Copyright (c) 2004-2024 QOS.ch
 
@@ -254,7 +257,7 @@ FULL LICENSE TEXTS:
    WITH THE PROGRAM OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
---- [11] BSD 3-Clause License ---
+--- [12] BSD 3-Clause License ---
 
    Copyright (c) Google LLC, Bumptech Inc. All rights reserved.
 
@@ -284,7 +287,7 @@ FULL LICENSE TEXTS:
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
---- [12] Eclipse Public License - v 1.0 ---
+--- [13] Eclipse Public License - v 1.0 ---
 
    THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE PUBLIC
    LICENSE ("AGREEMENT"). ANY USE, REPRODUCTION OR DISTRIBUTION OF THE PROGRAM

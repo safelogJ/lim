@@ -78,6 +78,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String GET_MEDIA_DOWNLOAD_LIST_SQL = "SELECT m.id, m.chat_id, m.file_path, m.file_name, u.public_key FROM messages m JOIN chats c ON c.id = m.chat_id JOIN users u ON u.id = c.interlocutor_id WHERE m.media_status = 1";
     private static final String GET_CHAT_NAME_BY_INTERLOCUTOR_SQL = "SELECT name, color FROM chats WHERE interlocutor_id = ? LIMIT 1";
     private static final String GET_BLOCKED_USERS_SQL = "SELECT interlocutor_id FROM chats WHERE is_blocked = 1";
+    private static final String GET_ALL_USER_KEYS_SQL = "SELECT id, public_key FROM users";
 
     private final AtomicLong cachedLastMsgServerId = new AtomicLong(0);
     private final Map<Long, Chat> unreadChatsCache = new HashMap<>();
@@ -86,6 +87,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private final Map<Long, List<Message>> chatMessagesCache = new HashMap<>(); // только БД нить
     private final List<Chat> cachedChatList = new ArrayList<>(); // только БД нить
     private final Set<Long> blockedUserIds = ConcurrentHashMap.newKeySet();
+    private final Map<Long, String> userKeysCache = new ConcurrentHashMap<>();
     private SQLiteDatabase database;
     private final AppController controller;
     private final ExecutorService dbExecutor;
@@ -153,6 +155,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             initPendingMediaCache();
             initChatCache();
             initBlockedUsersCache();
+            initUserKeysCache();
         } catch (SQLiteException e) {
             controller.setInitAppError(true);
             Log.d(AppController.LOG_TAG, "Критическая ошибка при инициализации базы данных: ", e);
@@ -186,6 +189,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 database.delete(USERS, null, null);
                 database.setTransactionSuccessful();
                 controller.clearOnlineStatuses();
+                userKeysCache.clear();
                 AppController.clearChatColors();
                 cachedLastMsgServerId.set(0);
                 unreadChatsSynchronizedTask(unreadChatsCache::clear);
@@ -222,6 +226,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 userValues.put(DISPLAY_NAME, user.displayName);
                 userValues.put(PUBLIC_KEY, user.publicKey);
                 database.insertWithOnConflict(USERS, null, userValues, SQLiteDatabase.CONFLICT_REPLACE);
+                userKeysCache.put(user.id, user.publicKey);
                 // Если известен чат — привязываем к нему собеседника
                 if (chatId != null) {
                     ContentValues chatValues = new ContentValues();
@@ -1144,6 +1149,21 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private Chat findChatInCache(long chatId) {
         for (Chat c : cachedChatList) if (c.id == chatId) return c;
         return null;
+    }
+
+    private void initUserKeysCache() {
+        try (Cursor cursor = database.rawQuery(GET_ALL_USER_KEYS_SQL, null)) {
+            while (cursor.moveToNext()) {
+                userKeysCache.put(cursor.getLong(0), cursor.getString(1));
+            }
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Error initializing user keys cache", e);
+        }
+    }
+
+    @Nullable
+    public String getUserPublicKey(long userId) {
+        return userKeysCache.get(userId);
     }
 
     private void unreadChatsSynchronizedTask(Runnable unreadChatTask) {

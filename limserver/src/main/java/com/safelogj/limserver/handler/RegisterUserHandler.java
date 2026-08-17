@@ -51,6 +51,7 @@ public class RegisterUserHandler extends BaseHandler {
                 response.displayName = user.displayName;
                 response.publicKey = user.publicKey;
                 response.privateHash = user.privateHash;
+                response.udpRelayPort = LimController.getUdpRelayPort();
                 response.message = "login successful: " + user.displayName;
                 sendSuccess(exchange, response);
                 LimController.log.info("User '{}' login successfully", user.displayName);
@@ -68,6 +69,7 @@ public class RegisterUserHandler extends BaseHandler {
                 response.userId = user.id;
                 response.displayName = user.displayName;
                 response.publicKey = req.publicKey();
+                response.udpRelayPort = LimController.getUdpRelayPort();
                 response.message = "registration successful: " + user.displayName;
                 sendSuccess(exchange, response);
                 LimController.log.info("User '{}' registered successfully", user.displayName);

@@ -36,3 +36,7 @@
 }
 # Если используешь Glide на Android 10+ (API 29)
 -dontwarn com.bumptech.glide.load.resource.bitmap.VideoDecoder
+
+# Concentus Opus Library (Чистая Java реализация Opus)
+-keep class io.github.jaredmdobson.concentus.** { *; }
+-dontwarn io.github.jaredmdobson.concentus.**

@@ -206,18 +206,18 @@ public class MainActivity extends AppCompatActivity {
             case 3 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_blue));
             default -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_green));
         }
-        mBinding.incomingCallBanner.setVisibility(View.VISIBLE);
+        mBinding.callBanner.setVisibility(View.VISIBLE);
 
         mBinding.btnAcceptCall.setOnClickListener(v -> {
             if (getSupportFragmentManager().findFragmentById(R.id.main_container) instanceof ChatFragment fragment) {
                 fragment.stopRecordAndPlay();
             }
-            mBinding.incomingCallBanner.setVisibility(View.GONE);
+            controller.notifyIncomingCallChanged(Chat.INVALID_ID);
             showFragment(CallFragment.newInstance(incomingInterlocutorId, incomingChatName, false));
         });
 
         mBinding.btnRejectCall.setOnClickListener(v -> {
-            hideIncomingCallBanner();
+            controller.notifyIncomingCallChanged(Chat.INVALID_ID);
             controller.getCallService().rejectCall();
         });
     }
@@ -225,6 +225,6 @@ public class MainActivity extends AppCompatActivity {
     private void hideIncomingCallBanner() {
         incomingInterlocutorId = Chat.INVALID_ID;
         incomingChatName = null;
-        mBinding.incomingCallBanner.setVisibility(View.GONE);
+        mBinding.callBanner.setVisibility(View.GONE);
     }
 }

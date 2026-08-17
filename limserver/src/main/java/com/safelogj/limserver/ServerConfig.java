@@ -21,7 +21,7 @@ public class ServerConfig {
         serverPoolSize = Integer.parseInt(props.getProperty("server.pool.size", "8"));
         serverQueueSize = Integer.parseInt(props.getProperty("server.queue.size", "2"));
         dbPoolSize = Integer.parseInt(props.getProperty("db.connect.size", "8"));
-        udpRelayPort = Integer.parseInt(props.getProperty("udp.relay.port", "4011"));
+        udpRelayPort = Integer.parseInt(props.getProperty("udp.relay.port", "41011"));
         mediaQuota = Long.parseLong(props.getProperty("server.media.quota.mb", "50")) * 1024 * 1024;
         diskSafeMargin = Long.parseLong(props.getProperty("server.disk.safe_margin.mb", "20")) * 1024 * 1024;
     }

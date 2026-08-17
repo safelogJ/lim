@@ -63,8 +63,11 @@ public class UdpRelayServer {
                 headerReader.clear();
                 long senderId = headerReader.getLong();
                 long targetId = headerReader.getLong();
+
                 updateClientAddress(senderId);
-                if (targetId != 0) {
+
+                // Пересылка, если есть цель и это не мы сами
+                if (targetId != 0 && targetId != senderId) {
                     relayToTarget(senderId, targetId);
                 }
             }

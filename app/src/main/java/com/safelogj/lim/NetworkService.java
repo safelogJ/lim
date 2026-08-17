@@ -105,6 +105,7 @@ public class NetworkService {
                 user.displayName = displayName;
                 user.publicKey = res.publicKey();
 
+                controller.setUdpRelayPort(res.udpRelayPort());
                 controller.setUsername(username);
                 controller.setPassword(password);
                 controller.setDisplayName(displayName);

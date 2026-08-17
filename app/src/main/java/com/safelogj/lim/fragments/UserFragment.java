@@ -96,7 +96,7 @@ public class UserFragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         controller = (AppController) requireActivity().getApplication();
-        getUserValues();
+        getUserValuesForCompareInSendCommand();
     }
 
     @Override
@@ -281,7 +281,7 @@ public class UserFragment extends Fragment {
                 mBinding.displayNameEditText.requestFocus();
                 return;
             }
-            getUserValues();
+            getUserValuesForCompareInSendCommand();
             mBinding.displayNameEditText.setText(dName);
             sendCommand(ip, user, pass, dName);
             controller.setServerIp(ip);
@@ -370,7 +370,7 @@ public class UserFragment extends Fragment {
         mBinding.certTextView.setText(name);
     }
 
-    private void getUserValues() {
+    private void getUserValuesForCompareInSendCommand() {
         username = controller.getUsername();
         password = controller.getPassword();
         address = controller.getServerIp();

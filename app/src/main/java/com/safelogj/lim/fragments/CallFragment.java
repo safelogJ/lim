@@ -74,10 +74,7 @@ public class CallFragment extends Fragment {
             chatName = getArguments().getString(ARG_CHAT_NAME);
             isOutgoing = getArguments().getBoolean(ARG_IS_OUTGOING);
         }
-        setObserveEndCall();
-        setObserveStartCall();
-        setObserveOnlineMap();
-        setObserveCallDuration();
+
         requireActivity().getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -106,6 +103,10 @@ public class CallFragment extends Fragment {
         setSpeakerIcon();
         setBtnListener();
         setSpeakerBtnListener();
+        setObserveEndCall();
+        setObserveStartCall();
+        setObserveOnlineMap();
+        setObserveCallDuration();
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             requestCallPermit.launch(Manifest.permission.RECORD_AUDIO);
@@ -129,7 +130,8 @@ public class CallFragment extends Fragment {
     }
 
     private void setSpeakerIcon() {
-        if (callService != null) {
+        if (callService != null && controller.hasEarpiece() && controller.hasSpeaker()) {
+            mBinding.btnSpeaker.setVisibility(View.VISIBLE);
             mBinding.btnSpeaker.setBackground(AppCompatResources.getDrawable(requireContext(),
                     callService.isSpeakerphoneOn() ? R.drawable.speaker_phone_48px : R.drawable.phone_in_talk_48px));
         }
@@ -148,15 +150,17 @@ public class CallFragment extends Fragment {
     }
 
     private void setSpeakerBtnListener() {
-        mBinding.btnSpeaker.setOnClickListener(v -> {
-            if (callService != null) {
-                boolean isSpeaker = callService.isSpeakerphoneOn();
-                isSpeaker = !isSpeaker;
-                callService.toggleSpeakerphone(isSpeaker);
-                mBinding.btnSpeaker.setBackground(AppCompatResources.getDrawable(requireContext(),
-                        isSpeaker ? R.drawable.speaker_phone_48px : R.drawable.phone_in_talk_48px));
-            }
-        });
+        if (controller.hasEarpiece() && controller.hasSpeaker()) {
+            mBinding.btnSpeaker.setOnClickListener(v -> {
+                if (callService != null) {
+                    boolean isSpeaker = callService.isSpeakerphoneOn();
+                    isSpeaker = !isSpeaker;
+                    callService.toggleSpeakerphone(isSpeaker);
+                    mBinding.btnSpeaker.setBackground(AppCompatResources.getDrawable(requireContext(),
+                            isSpeaker ? R.drawable.speaker_phone_48px : R.drawable.phone_in_talk_48px));
+                }
+            });
+        }
     }
 
     private void call() {
@@ -164,7 +168,7 @@ public class CallFragment extends Fragment {
             if (isOutgoing && !callService.lineBusy.get()) { // исходящий
                 Log.d(AppController.LOG_TAG, "исходящий звонок");
                 callService.startOutgoingCall(interlocutorId);
-            } else if (!callService.isTalking.get()) { // входящий
+            } else if (!isOutgoing && !callService.isTalking.get()) { // входящий
                 Log.d(AppController.LOG_TAG, "входящий звонок");
                 callService.acceptCall();
             }
@@ -173,11 +177,13 @@ public class CallFragment extends Fragment {
 
     private void setObserveEndCall() {
         controller.getEndCallTrigger().observe(getViewLifecycleOwner(), id -> {
-            if (id == Chat.INVALID_ID) {
-                requireActivity().getSupportFragmentManager().popBackStack();
-            } else {
-                Toast.makeText(requireContext(), "Ошибка доступа к микрофону", Toast.LENGTH_LONG).show();
-            }
+                if (id == Chat.INVALID_ID) {
+                    requireActivity().getSupportFragmentManager().popBackStack();
+                    controller.notifyEndCallChanged(CallService.LINE_FREE);
+                } else if (!id.equals(CallService.LINE_FREE)) {
+                    Toast.makeText(requireContext(), "Ошибка доступа к микрофону", Toast.LENGTH_LONG).show();
+                }
+
         });
     }
 
@@ -213,7 +219,7 @@ public class CallFragment extends Fragment {
 
     private void setObserveCallDuration() {
         controller.getCallDurationTrigger().observe(getViewLifecycleOwner(), duration -> {
-            if (duration != null) {
+            if (duration != null && callService.isTalking.get()) {
                 mBinding.tvCallStatus.setText(duration);
             } else {
                 mBinding.tvCallStatus.setText(R.string.calling);
@@ -239,6 +245,7 @@ public class CallFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        lastOnlineState = null;
         super.onDestroyView();
         mBinding = null;
     }

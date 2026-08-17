@@ -250,7 +250,7 @@ public class ChatFragment extends Fragment {
         });
 
         mBinding.addFileButton.setOnLongClickListener(v -> {
-            if (currentChatId != Chat.INVALID_ID) {
+            if (currentChatId != Chat.INVALID_ID && controller.hasMic()) {
                 if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO)
                         != PackageManager.PERMISSION_GRANTED) {
                     requestRecordPermit.launch(Manifest.permission.RECORD_AUDIO);
@@ -263,10 +263,11 @@ public class ChatFragment extends Fragment {
     }
 
     private void setCallBtnListener() {
-        mBinding.onlineStatus.setOnClickListener(v -> {
-            if (currentChatId != Chat.INVALID_ID) {
+        mBinding.onlineContainer.setOnClickListener(v -> {
+            Long interlocutorId = controller.getOnlineInterlocutorId(currentChatId);
+            if (currentChatId != Chat.INVALID_ID && interlocutorId != null && controller.hasMic() && controller.hasAudioOut() && controller.hasVoiceCipher(interlocutorId)) {
                 stopRecordAndPlay();
-                ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(currentChatId, currentChatName, true));
+                ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(interlocutorId, currentChatName, true));
             }
         });
     }
@@ -418,6 +419,7 @@ public class ChatFragment extends Fragment {
     @Override
     public void onDestroyView() {
         stopRecordAndPlay();
+        lastOnlineState = null;
         super.onDestroyView();
         mBinding = null;
     }
@@ -593,4 +595,5 @@ public class ChatFragment extends Fragment {
             Log.e(AppController.LOG_TAG, "Stop recording error: " + e.getMessage());
         }
     }
+
 }

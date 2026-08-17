@@ -5,6 +5,9 @@ import android.app.Application;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.os.Bundle;
@@ -119,6 +122,7 @@ public class AppController extends Application {
     private static final String SERVER_CERT_NAME = "servercertname";
     private static final String SERVER_URL = "serverurl";
     private static final String SERVER_IP = "serverip";
+    private static final String UDP_PORT = "udpPort";
     private static final String E2EE_PRIVATE_KEY = "e2eePrivateKey";
     private static final String E2EE_PUBLIC_KEY = "e2eePublicKey";
     private static final String KEY_ALIAS = "MikrotikRouterKeyAlias";
@@ -169,11 +173,15 @@ public class AppController extends Application {
     private final MutableLiveData<Map<Long, Map<Long, Boolean>>> onlineMapTrigger = new MutableLiveData<>();
     private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
     private final MutableLiveData<Long> incomingCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
-    private final MutableLiveData<Long> endCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Long> endCallTrigger = new MutableLiveData<>(CallService.LINE_FREE);
     private final MutableLiveData<Long> startCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
     private final MutableLiveData<String> callDurationTrigger = new MutableLiveData<>();
 
 
+    private boolean hasMic;
+    private boolean hasEarpiece;
+    private boolean hasSpeaker;
+    private boolean hasAudioOut;
     private NetworkService networkService;
     private ScheduledFuture<?> syncTask;
     private File mExternalFileDir;
@@ -204,8 +212,7 @@ public class AppController extends Application {
     private volatile String serverUrl = EMPTY_STRING;
     @NonNull
     private volatile String serverIp = EMPTY_STRING;
-    private volatile int udpRelayPort = 4011; // По умолчанию, обновим при ответе сервера
-
+    private volatile int udpRelayPort; // По умолчанию, обновим при ответе сервера
 
     static {
         try {
@@ -215,24 +222,47 @@ public class AppController extends Application {
         }
     }
 
-    public void notifyChatListChanged(List<Chat> chatList) { chatListTrigger.postValue(chatList); }
-    public void notifyUnreadChatChanged(List<Chat> chatList) { unreadChatTrigger.postValue(chatList); }
-    public void notifyOnlineMapChanged() { onlineMapTrigger.postValue(onlineUsersChats); }
-    public void notifyMessagesChanged(long chatId) { messagesTrigger.postValue(chatId); }
-    public void notifyIncomingCallChanged(long chatId) { incomingCallTrigger.postValue(chatId); }
-    public void notifyEndCallChanged(long chatId) { endCallTrigger.postValue(chatId); }
-    public void notifyStartCallChanged(long chatId) { startCallTrigger.postValue(chatId); }
-    public void notifyCallDurationChanged(String duration) { callDurationTrigger.postValue(duration); }
+    public void notifyChatListChanged(List<Chat> chatList) {
+        chatListTrigger.postValue(chatList);
+    }
+
+    public void notifyUnreadChatChanged(List<Chat> chatList) {
+        unreadChatTrigger.postValue(chatList);
+    }
+
+    public void notifyOnlineMapChanged() {
+        onlineMapTrigger.postValue(onlineUsersChats);
+    }
+
+    public void notifyMessagesChanged(long chatId) {
+        messagesTrigger.postValue(chatId);
+    }
+
+    public void notifyIncomingCallChanged(long chatId) {
+        incomingCallTrigger.postValue(chatId);
+    }
+
+    public void notifyEndCallChanged(long chatId) {
+        endCallTrigger.postValue(chatId);
+    }
+
+    public void notifyStartCallChanged(long chatId) {
+        startCallTrigger.postValue(chatId);
+    }
+
+    public void notifyCallDurationChanged(String duration) {
+        callDurationTrigger.postValue(duration);
+    }
 
 
-
-    public LiveData<List<Chat> > getChatListTrigger() {
+    public LiveData<List<Chat>> getChatListTrigger() {
         return chatListTrigger;
     }
 
-    public LiveData<List<Chat> > getUnreadChatTrigger() {
+    public LiveData<List<Chat>> getUnreadChatTrigger() {
         return unreadChatTrigger;
     }
+
     public LiveData<Map<Long, Map<Long, Boolean>>> getOnlineMapTrigger() {
         return onlineMapTrigger;
     }
@@ -257,6 +287,15 @@ public class AppController extends Application {
         return callDurationTrigger;
     }
 
+    @Nullable
+    public Long getOnlineInterlocutorId(long chatId) {
+        for (Map.Entry<Long, Map<Long, Boolean>> onlineUser : onlineUsersChats.entrySet()) {
+            if (onlineUser.getValue().containsKey(chatId)) {
+                return onlineUser.getKey();
+            }
+        }
+        return null;
+    }
 
 
     public void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
@@ -270,8 +309,8 @@ public class AppController extends Application {
     }
 
     public void clearInterlocutorOnlineStatus(long interlocutorId) {
-       onlineUsersChats.remove(interlocutorId);
-       notifyOnlineMapChanged();
+        onlineUsersChats.remove(interlocutorId);
+        notifyOnlineMapChanged();
     }
 
     public Map<Long, Boolean> getChatStatuses(long interlocutorId) {
@@ -370,6 +409,9 @@ public class AppController extends Application {
         displayName = EMPTY_STRING;
         e2eePrivateKey = EMPTY_STRING;
         e2eePublicKey = EMPTY_STRING;
+        if (callService != null) {
+            callService.releaseToneGenerator();
+        }
         callService = null;
     }
 
@@ -379,6 +421,10 @@ public class AppController extends Application {
         } else {
             serverUrl = "https://" + serverIp + ":443";
         }
+    }
+
+    public void setUdpRelayPort(int udpRelayPort) {
+        this.udpRelayPort = udpRelayPort;
     }
 
     @NonNull
@@ -433,6 +479,26 @@ public class AppController extends Application {
         return callService;
     }
 
+    public boolean hasMic() {
+        return hasMic;
+    }
+
+    public boolean hasEarpiece() {
+        return hasEarpiece;
+    }
+
+    public boolean hasSpeaker() {
+        return hasSpeaker;
+    }
+
+    public boolean hasAudioOut() {
+        return hasAudioOut;
+    }
+
+    public boolean hasVoiceCipher(long interlocutorId) {
+       return callService.initCallEncryption(interlocutorId);
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -451,6 +517,10 @@ public class AppController extends Application {
         }
         createNotificationChannel();
         setupWorkManager();
+        checkMic();
+        checkEarpiece();
+        checkSpeaker();
+        checkAnyAudioOut();
     }
 
     public void writeSettingsToFile() {
@@ -478,10 +548,6 @@ public class AppController extends Application {
         }
         callService.sendKeepAlive();
         callService.startListeningUdp();
-    }
-
-    private void stopUdpPooling() {
-
     }
 
     private void readRoutersListAndSettingsEncrypted() {
@@ -523,6 +589,7 @@ public class AppController extends Application {
             displayName = json.optString(USER_DISPLAY_NAME, EMPTY_STRING);
             serverUrl = json.optString(SERVER_URL, EMPTY_STRING);
             serverIp = json.optString(SERVER_IP, EMPTY_STRING);
+            udpRelayPort = json.optInt(UDP_PORT, 0);
             certName = json.optString(SERVER_CERT_NAME, EMPTY_STRING);
             e2eePrivateKey = json.optString(E2EE_PRIVATE_KEY, EMPTY_STRING);
             e2eePublicKey = json.optString(E2EE_PUBLIC_KEY, EMPTY_STRING);
@@ -553,6 +620,7 @@ public class AppController extends Application {
             json.put(USER_DISPLAY_NAME, displayName);
             json.put(SERVER_URL, serverUrl);
             json.put(SERVER_IP, serverIp);
+            json.put(UDP_PORT, udpRelayPort);
             json.put(SERVER_CERT_NAME, certName);
             json.put(E2EE_PRIVATE_KEY, e2eePrivateKey);
             json.put(E2EE_PUBLIC_KEY, e2eePublicKey);
@@ -712,7 +780,7 @@ public class AppController extends Application {
             };
 
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            sslContext.init(null, trustAllCerts, new SecureRandom());
 
             Dispatcher dispatcher = new Dispatcher();
             dispatcher.setMaxRequests(POOL_SIZE);
@@ -967,6 +1035,18 @@ public class AppController extends Application {
         }
     }
 
+    @Nullable
+    public SecretKey getChatSecretKey(long interlocutorId) {
+        String publicKey = dbHelper.getUserPublicKey(interlocutorId);
+        if (publicKey == null || publicKey.isEmpty()) return null;
+        try {
+            return getSharedKey(publicKey);
+        } catch (Exception e) {
+            Log.e(LOG_TAG, "Error calculating secret key for call: " + e.getMessage());
+            return null;
+        }
+    }
+
     private SecretKey getSharedKey(String theirPublicKeyBase64) throws IllegalArgumentException, NullPointerException,
             UnsupportedOperationException, IllegalStateException {
 
@@ -999,6 +1079,7 @@ public class AppController extends Application {
         mac.update((byte) 0x01);
         return mac.doFinal();
     }
+
     /**
      * Создает Cipher для потокового шифрования/расшифровки файла.
      */
@@ -1017,5 +1098,64 @@ public class AppController extends Application {
             case AppController.CHAT_COLOR_BLUE -> R.drawable.interlocutor_background_blue;
             default -> R.drawable.interlocutor_background_green;
         };
+    }
+
+
+    private void checkMic() {
+        hasMic = getPackageManager().hasSystemFeature(PackageManager.FEATURE_MICROPHONE);
+    }
+
+    private void checkEarpiece() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            hasEarpiece = false;
+            return;
+        }
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo device : devices) {
+            if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
+                hasEarpiece = true;
+                break;
+            }
+        }
+    }
+
+    private void checkSpeaker() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            hasSpeaker = false;
+            return;
+        }
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo device : devices) {
+            if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                hasSpeaker = true;
+                break;
+            }
+        }
+    }
+
+    private void checkAnyAudioOut() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            hasAudioOut = false;
+            return;
+        }
+
+        AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo device : devices) {
+            int type = device.getType();
+            // Список типов, которые реально могут издавать звук
+            if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER ||
+                    type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE ||
+                    type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                    type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                    type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    type == AudioDeviceInfo.TYPE_HDMI ||
+                    type == AudioDeviceInfo.TYPE_USB_DEVICE) {
+                hasAudioOut = true;
+                break;
+            }
+        }
     }
 }

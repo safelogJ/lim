@@ -27,4 +27,5 @@ public class BaseResponse {
     public String privateHash;
     public List<Message> messages;
     public Map<Long, Boolean> onlineStatuses;
+    public Integer udpRelayPort;
 }

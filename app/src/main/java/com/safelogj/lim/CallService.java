@@ -12,6 +12,9 @@ import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
+import android.media.ToneGenerator;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.NoiseSuppressor;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,11 +29,17 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 import io.github.jaredmdobson.concentus.OpusApplication;
 import io.github.jaredmdobson.concentus.OpusDecoder;
@@ -39,6 +48,7 @@ import io.github.jaredmdobson.concentus.OpusException;
 import io.github.jaredmdobson.concentus.OpusSignal;
 
 public class CallService {
+    public static final Long LINE_FREE = 0L;
     private static final int BUFFER_SIZE = 2048;
     private static final int OPUS_BUFFER_SIZE = 1024;
     private static final int HEADER_SIZE = 16;
@@ -46,7 +56,7 @@ public class CallService {
     private static final int FRAME_SIZE = 960; // 20мс при 48кГц
     public final AtomicBoolean isTalking = new AtomicBoolean(false);
     public final AtomicBoolean lineBusy = new AtomicBoolean(false);
-    private final AppController appController;
+    private AppController appController;
     private final DatabaseHelper dbHelper;
     private final AtomicBoolean isListeningUdp = new AtomicBoolean(false);
     private final AtomicBoolean isOutputCall = new AtomicBoolean(false);
@@ -61,14 +71,15 @@ public class CallService {
     private final DatagramPacket packetIn = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
     private final Map<Long, Long> tempBlockedUsers = new ConcurrentHashMap<>();
     private final Handler callHandler = new Handler(Looper.getMainLooper());
-    private final Runnable endCallRunnable = this::cancelCall;
+    private final Runnable endCallRunnable = () -> {
+        toggleSpeakerphone(false); // Сбрасываем при выходе
+        cancelCall();
+    };
     private final Runnable ringingStopRunnable = () -> {
-        if (interlocutorId != Chat.INVALID_ID) {
-            tempBlockedUsers.put(interlocutorId, System.currentTimeMillis() + 120000); // 2мин
-        }
         interlocutorId = Chat.INVALID_ID;
         stopRinging();
         lineBusy.set(false);
+        appController.notifyIncomingCallChanged(Chat.INVALID_ID);
     };
     private long callStartTime = 0;
     private final Runnable durationRunnable = new Runnable() {
@@ -85,15 +96,23 @@ public class CallService {
         }
     };
     private final short[] decodeBuffer = new short[FRAME_SIZE];
-    private final byte[] voiceOutBuffer = new byte[HEADER_SIZE + OPUS_BUFFER_SIZE];
+    private final byte[] voiceOutBuffer = new byte[HEADER_SIZE + 12 + OPUS_BUFFER_SIZE + 16];
+    private final byte[] voiceInIv = new byte[12];
+    private final byte[] voiceInDecryptBuffer = new byte[OPUS_BUFFER_SIZE + 16];
+    private final byte[] voiceOutIv = new byte[12];
     private final short[] pcmBuffer = new short[FRAME_SIZE];
     private final byte[] opusBuffer = new byte[OPUS_BUFFER_SIZE];
     private final ByteBuffer udpHeader = ByteBuffer.allocate(HEADER_SIZE);
+    private final ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_VOICE_CALL, 80); // 80 - громкость
+    private final SecureRandom secureRandom;
     private DatagramSocket udpSocket;
     private AudioRecord audioRecord;
     private AudioTrack audioTrack;
     private OpusEncoder opusEncoder;
     private OpusDecoder opusDecoder;
+    private SecretKey currentCallKey;
+    private Cipher encryptCipher;
+    private Cipher decryptCipher;
     private Ringtone currentRingtone;
     private final AudioManager audioManager;
 
@@ -105,18 +124,25 @@ public class CallService {
         serverIp = appController.getServerIp();
         udpPort = appController.getUdpRelayPort();
         packetOut = buildKeepAlivePacket();
+        secureRandom = appController.getSecureRandom();
 
+    }
+
+    public void releaseToneGenerator() {
+        toneGenerator.release();
     }
 
     public void stopUdpTraffic() {
-        isListeningUdp.set(false);
-        killCall();
-        closeUdpSocket(udpSocket);
-        udpSocket = null;
+        if (!isTalking.get()) {
+            isListeningUdp.set(false);
+            killCall();
+            closeUdpSocket(udpSocket);
+            udpSocket = null;
+        }
     }
 
     public void sendKeepAlive() {
-        if (!lineBusy.get() && !isTalking.get()) {
+        if (!lineBusy.get() && !isTalking.get() && appController.hasMic() && appController.hasAudioOut()) {
             appController.getNetStreams()[AppController.UDP_OUT].execute(() -> {
                 DatagramSocket socket = null;
                 try {
@@ -133,7 +159,7 @@ public class CallService {
     }
 
     public void startListeningUdp() {
-        if (!isListeningUdp.get()) {
+        if (!isListeningUdp.get() && appController.hasMic() && appController.hasAudioOut()) {
             isListeningUdp.set(true);
             appController.getNetStreams()[AppController.UDP_IN].execute(() -> {
                 while (isListeningUdp.get() && hasSocket()) {
@@ -172,7 +198,7 @@ public class CallService {
             appController.getNetStreams()[AppController.UDP_OUT].execute(() -> {
                 isOutputCall.set(true);
                 interlocutorId = targetUserId;
-                tempBlockedUsers.remove(interlocutorId);
+                freezeInterlocutor(3_100); // 3 сек
                 Log.d(AppController.LOG_TAG, "Outgoing call started to: " + interlocutorId);
                 sendVoiceCycle(lineBusy);
             });
@@ -181,7 +207,11 @@ public class CallService {
 
     private void sendVoiceCycle(AtomicBoolean lineStatus) {
         try {
+            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
             initAudioPlayAndOpusDec();
+            if (isOutputCall.get()) {
+                toneGenerator.startTone(ToneGenerator.TONE_SUP_RINGTONE);
+            }
             initAudioRecAndOpusEnc(); // вкл микрофон
             audioRecord.startRecording();
             DatagramPacket voiceOutPacket = new DatagramPacket(voiceOutBuffer, voiceOutBuffer.length, InetAddress.getByName(serverIp), udpPort);
@@ -193,10 +223,14 @@ public class CallService {
                         udpHeader.putLong(userId);
                         udpHeader.putLong(interlocutorId);
 
-                        System.arraycopy(udpHeader.array(), 0, voiceOutBuffer, 0, HEADER_SIZE);
-                        System.arraycopy(opusBuffer, 0, voiceOutBuffer, HEADER_SIZE, encodedLen);
+                        secureRandom.nextBytes(voiceOutIv);
+                        encryptCipher.init(Cipher.ENCRYPT_MODE, currentCallKey, new GCMParameterSpec(128, voiceOutIv));
+                        int encryptedLen = encryptCipher.doFinal(opusBuffer, 0, encodedLen, voiceOutBuffer, HEADER_SIZE + 12);
 
-                        voiceOutPacket.setLength(HEADER_SIZE + encodedLen);
+                        System.arraycopy(udpHeader.array(), 0, voiceOutBuffer, 0, HEADER_SIZE);
+                        System.arraycopy(voiceOutIv, 0, voiceOutBuffer, HEADER_SIZE, 12);
+
+                        voiceOutPacket.setLength(HEADER_SIZE + 12 + encryptedLen);
                         udpSocket.send(voiceOutPacket);
                     }
                 }
@@ -208,13 +242,12 @@ public class CallService {
         } finally {
             stopAudioRecOpusEnc();
             stopAudioPlayOpusDec();
+            audioManager.setMode(AudioManager.MODE_NORMAL);
         }
     }
 
     public void rejectCall() {
-        if (interlocutorId != Chat.INVALID_ID) {
-            tempBlockedUsers.put(interlocutorId, System.currentTimeMillis() + 120000); // 2мин
-        }
+        freezeInterlocutor(120_000); // 2 мин
         interlocutorId = Chat.INVALID_ID;
         renewOrStopRingRunnable(0);
         stopRinging();
@@ -222,14 +255,20 @@ public class CallService {
     }
 
     public void cancelCall() {
+        toneGenerator.stopTone();
         isTalking.set(false);
         lineBusy.set(false);
         isOutputCall.set(false);
         interlocutorId = Chat.INVALID_ID;
         appController.notifyEndCallChanged(Chat.INVALID_ID);  // закрыть фрагмент
+        if (appController.startedActivities.get() == 0) {
+            closeUdpSocket(udpSocket);
+            udpSocket = null;
+        }
     }
 
     public void endCall() {
+        freezeInterlocutor(4_000); // 4 сек
         toggleSpeakerphone(false); // Сбрасываем при выходе
         renewOrStopEndCallRunnable(0);
         cancelCall();
@@ -238,7 +277,7 @@ public class CallService {
     public void killCall() {
         if (isTalking.get()) {
             endCall();
-        } else {
+        } else if (lineBusy.get()) {
             cancelCall();
         }
     }
@@ -254,27 +293,36 @@ public class CallService {
     }
 
     public void toggleSpeakerphone(boolean on) {
-        if (audioManager != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Современный способ (Android 12+)
-                if (on) {
-                    AudioDeviceInfo speakerDevice = null;
-                    for (AudioDeviceInfo device : audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-                        if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-                            speakerDevice = device;
-                            break;
-                        }
-                    }
-                    if (speakerDevice != null) {
-                        audioManager.setCommunicationDevice(speakerDevice);
-                    }
-                } else {
-                    audioManager.clearCommunicationDevice();
-                }
-            } else { // Классический способ (до Android 12)
-                audioManager.setSpeakerphoneOn(on);
-            }
-            Log.d(AppController.LOG_TAG, "Speakerphone: " + on);
+        if (audioManager == null) return;
+        // 1. Гарантируем правильный режим
+        if (audioManager.getMode() != AudioManager.MODE_IN_COMMUNICATION) {
+            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // (Android 12+)
+            if (on) {
+                AudioDeviceInfo speakerDevice = null;
+                List<AudioDeviceInfo> devices = audioManager.getAvailableCommunicationDevices();
+                for (AudioDeviceInfo device : devices) {
+                    if (device.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                        speakerDevice = device;
+                        break;
+                    }
+                }
+                if (speakerDevice != null) {
+                    boolean result = audioManager.setCommunicationDevice(speakerDevice);
+                    Log.d(AppController.LOG_TAG, "Set speakerphone result: " + result);
+                }
+            } else {
+                audioManager.clearCommunicationDevice();
+                Log.d(AppController.LOG_TAG, "Cleared communication device (back to earpiece)");
+            }
+        } else {
+            // (до Android 12)
+            audioManager.setSpeakerphoneOn(on);
+        }
+        Log.d(AppController.LOG_TAG, "Loudspeaker is now: " + on);
     }
 
     private void handleIncomingPacket(DatagramPacket packet) {
@@ -289,6 +337,7 @@ public class CallService {
                         tempBlockedUsers.remove(senderId); // Время вышло, чистим карту
                     }
                 }
+                Log.d(AppController.LOG_TAG, "Incoming packet from: " + senderId);
                 routeInputPacket(senderId, packet);
             }
         }
@@ -296,17 +345,19 @@ public class CallService {
 
     private void routeInputPacket(long senderId, DatagramPacket packet) {
         if (!lineBusy.get() && interlocutorId == Chat.INVALID_ID) {  // ПЕРВЫЙ ПАКЕТ: Начало входящего вызова
+            if (!initCallEncryption(senderId)) return;
             interlocutorId = senderId;
             lineBusy.set(true);
             isOutputCall.set(false);
             ringingStopLastTimeout.set(System.currentTimeMillis()); // входящий
             appController.notifyIncomingCallChanged(interlocutorId);
-            callHandler.postDelayed(ringingStopRunnable, 5000);
+            callHandler.postDelayed(ringingStopRunnable, 3000);
             Log.d(AppController.LOG_TAG, "New incoming call from: " + senderId);
         } else if (senderId == interlocutorId) { // второй пакет при входящем или первый при исходящем
             if (isOutputCall.get()) {
                 if (!isTalking.get()) {
                     isTalking.set(true);
+                    toneGenerator.stopTone();
                     callingEndLastTimeout.set(System.currentTimeMillis()); // исходящий
                     appController.notifyStartCallChanged(senderId); // Пинаем фрагмент
                     callStartTime = System.currentTimeMillis();
@@ -326,16 +377,38 @@ public class CallService {
     }
 
     private void playVoice(DatagramPacket packet) {
-        if (opusDecoder != null && audioTrack != null) {
+        if (opusDecoder != null && audioTrack != null && decryptCipher != null) {
             try {
-                int decodedLen = opusDecoder.decode(packet.getData(), 8, packet.getLength() - 8,
+                int len = packet.getLength();
+                if (len < 20) return; // 8 (server header) + 12 (iv)
+                byte[] data = packet.getData();
+                System.arraycopy(data, 8, voiceInIv, 0, 12);
+                decryptCipher.init(Cipher.DECRYPT_MODE, currentCallKey, new GCMParameterSpec(128, voiceInIv));
+                int decryptedLen = decryptCipher.doFinal(data, 20, len - 20, voiceInDecryptBuffer, 0);
+                int decodedLen = opusDecoder.decode(voiceInDecryptBuffer, 0, decryptedLen,
                         decodeBuffer, 0, FRAME_SIZE, false);
                 if (decodedLen > 0) {
                     audioTrack.write(decodeBuffer, 0, decodedLen);
                 }
             } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "Opus decode error: " + e.getMessage());
+                Log.e(AppController.LOG_TAG, "Voice decrypt/decode error: " + e.getMessage());
             }
+        }
+    }
+
+    public boolean initCallEncryption(long interlocutorId) {
+        currentCallKey = appController.getChatSecretKey(interlocutorId);
+        if (currentCallKey == null) {
+            Log.e(AppController.LOG_TAG, "Cannot start call: Secret key not found");
+            return false;
+        }
+        try {
+            encryptCipher = Cipher.getInstance("AES/GCM/NoPadding");
+            decryptCipher = Cipher.getInstance("AES/GCM/NoPadding");
+            return true;
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "Error initializing ciphers: " + e.getMessage());
+            return false;
         }
     }
 
@@ -347,7 +420,7 @@ public class CallService {
             } else if (ringingStopLastTimeout.get() != 0 && time - ringingStopLastTimeout.get() > 2000) {
                 ringingStopLastTimeout.set(time);
                 callHandler.removeCallbacks(ringingStopRunnable);
-                callHandler.postDelayed(ringingStopRunnable, 5000); // 5 сек тишины = сброс
+                callHandler.postDelayed(ringingStopRunnable, 3000); // 3 сек тишины = сброс
             }
         }
     }
@@ -360,7 +433,7 @@ public class CallService {
             } else if (callingEndLastTimeout.get() != 0 && time - callingEndLastTimeout.get() > 2000) {
                 callingEndLastTimeout.set(time);
                 callHandler.removeCallbacks(endCallRunnable);
-                callHandler.postDelayed(endCallRunnable, 5000);
+                callHandler.postDelayed(endCallRunnable, 3000);
             }
         }
     }
@@ -416,12 +489,25 @@ public class CallService {
                 opusEncoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
             }
 
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                    Math.max(AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), FRAME_SIZE * 2));
+            int bufferSize = Math.max(AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), FRAME_SIZE * 2);
+
+            audioRecord = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO, 
+                    AudioFormat.ENCODING_PCM_16BIT, 
+                    bufferSize);
 
             if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
                 throw new SecurityException("AudioRecord initialization failed");
+            }
+
+            if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler aec = AcousticEchoCanceler.create(audioRecord.getAudioSessionId());
+                if (aec != null) aec.setEnabled(true);
+            }
+            if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor ns = NoiseSuppressor.create(audioRecord.getAudioSessionId());
+                if (ns != null) ns.setEnabled(true);
             }
         }
     }
@@ -493,6 +579,12 @@ public class CallService {
                 currentRingtone.stop();
             }
             currentRingtone = null;
+        }
+    }
+
+    private void freezeInterlocutor(long millis) {
+        if (interlocutorId != Chat.INVALID_ID) {
+            tempBlockedUsers.put(interlocutorId, System.currentTimeMillis() + millis);
         }
     }
 }

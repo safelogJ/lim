@@ -55,6 +55,7 @@ public class LimController {
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
     private static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
     private static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
+    private static int udpRelayPort;
     public static DatabaseManager dbManager;
     public static ServerConfig config;
     private static UdpRelayServer udpRelayServer;
@@ -89,7 +90,7 @@ public class LimController {
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
             server.start();
-            udpRelayServer = new UdpRelayServer(config.getUdpRelayPort());
+            udpRelayServer = new UdpRelayServer(udpRelayPort);
             udpRelayServer.start();
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOfflineUsers, 10, 10, TimeUnit.SECONDS);
@@ -98,6 +99,10 @@ public class LimController {
             System.exit(ERROR);
         }
         log.info("LimServer run");
+    }
+
+    public static int getUdpRelayPort() {
+        return udpRelayPort;
     }
 
     public static void setOnline(long userId) {
@@ -151,6 +156,7 @@ public class LimController {
                 }
             }
         });
+        udpRelayPort = config.getUdpRelayPort();
         EXECUTOR_POOL = ServerThreadPool.createPool(config.getServerPoolSize(), config.getServerQueueSize());
         server.setExecutor(EXECUTOR_POOL);
         return server;
