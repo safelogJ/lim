@@ -68,7 +68,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:ellipsize="middle"
-                android:singleLine="true"
+                android:maxLines="1"
                 android:textColor="@color/light_gray"
                 android:textSize="14sp"
                 tools:text="документ.pdf" />

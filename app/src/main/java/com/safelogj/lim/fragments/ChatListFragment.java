@@ -56,7 +56,7 @@ public class ChatListFragment extends Fragment {
             public void onChatClick(Chat chat) {
                 MainActivity activity = (MainActivity) requireActivity();
                 if (chat.id == Chat.INVALID_ID) {
-                    if (controller.getUserId() > 0) {
+                    if (controller.userId() > 0) {
                         activity.showFragment(ChatFragment.newInstance(chat.id, chat.localId, chat.name));
                     } else {
                         activity.showFragment(new UserFragment());
@@ -96,7 +96,7 @@ public class ChatListFragment extends Fragment {
                 Chat chat = currentList.get(i);
                 if (chat.id == Chat.INVALID_ID) continue;
                 // Ищем статус именно для этого чата в пришедшей карте
-                Map<Long, Boolean> userChats = onlineMap.get(chat.interlocutorId);
+                Map<Integer, Boolean> userChats = onlineMap.get(chat.interlocutorId);
                 if (userChats != null && userChats.containsKey(chat.id)) {
                     boolean isOnline = Boolean.TRUE.equals(userChats.get(chat.id));
                     // Обновляем только если статус реально отличается от того, что в адаптере
@@ -120,7 +120,7 @@ public class ChatListFragment extends Fragment {
         controller.getChatListTrigger().observe(getViewLifecycleOwner(), chatList -> {
             for (Chat chat : chatList) {
                 if (chat.id != Chat.INVALID_ID) {
-                    Map<Long, Boolean> userChats = controller.getChatStatuses(chat.interlocutorId);
+                    Map<Integer, Boolean> userChats = controller.getChatStatuses(chat.interlocutorId);
                     if (userChats != null && userChats.containsKey(chat.id)) {
                         Boolean status = userChats.get(chat.id);
                         chat.isOnline = status != null && status;

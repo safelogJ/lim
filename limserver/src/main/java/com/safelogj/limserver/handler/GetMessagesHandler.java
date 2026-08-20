@@ -37,7 +37,7 @@ public class GetMessagesHandler extends BaseHandler {
             }
             // 3. Ищем пользователя в базе данных
             List<Message> messages = LimController.dbManager.getNewMessages(user.id, req.lastMessageId());
-            if (messages != null && !messages.isEmpty()) {
+            if (!messages.isEmpty()) {
                 response.message = "has new messages: " + messages.size();
             } else {
                 response.message = "no new messages";
@@ -46,10 +46,10 @@ public class GetMessagesHandler extends BaseHandler {
             response.displayName = user.displayName;
             response.messages = messages;
 
-            LimController.setOnline(user.id);
+            LimController.setOnlineStatus(user.id, System.currentTimeMillis());
             if (req.interlocutorIds() != null && !req.interlocutorIds().isEmpty()) {
-                Map<Long, Boolean> statuses = new HashMap<>();
-                for (Long id : req.interlocutorIds()) {
+                Map<Integer, Boolean> statuses = new HashMap<>();
+                for (Integer id : req.interlocutorIds()) {
                     statuses.put(id, LimController.getOnlineStatus(id));
                 }
                 response.onlineStatuses = statuses;

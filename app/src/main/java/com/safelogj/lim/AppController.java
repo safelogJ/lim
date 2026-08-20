@@ -148,14 +148,13 @@ public class AppController extends Application {
                 }
             });
     private static final KeyFactory EC_KEY_FACTORY;
-    private static final Map<Long, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
-    private final Map<Long, Map<Long, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
+    private static final Map<Integer, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
+    private final Map<Integer, Map<Integer, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
     public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
-    public final AtomicBoolean udpListening = new AtomicBoolean(false);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     public final Handler offlineHandler = new Handler(Looper.getMainLooper());
     public final Runnable resetStatusesRunnable = () -> {
-        for (Map<Long, Boolean> chatMap : onlineUsersChats.values()) {
+        for (Map<Integer, Boolean> chatMap : onlineUsersChats.values()) {
             chatMap.replaceAll((id, status) -> false);
         }
         notifyOnlineMapChanged();
@@ -170,11 +169,11 @@ public class AppController extends Application {
     private final ConcurrentHashMap<String, SecretKey> sharedKeys = new ConcurrentHashMap<>();
     private final MutableLiveData<List<Chat>> chatListTrigger = new MutableLiveData<>();
     private final MutableLiveData<List<Chat>> unreadChatTrigger = new MutableLiveData<>();
-    private final MutableLiveData<Map<Long, Map<Long, Boolean>>> onlineMapTrigger = new MutableLiveData<>();
-    private final MutableLiveData<Long> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
-    private final MutableLiveData<Long> incomingCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
-    private final MutableLiveData<Long> endCallTrigger = new MutableLiveData<>(CallService.LINE_FREE);
-    private final MutableLiveData<Long> startCallTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Map<Integer, Map<Integer, Boolean>>> onlineMapTrigger = new MutableLiveData<>();
+    private final MutableLiveData<Integer> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
+    private final MutableLiveData<Integer> incomingCallTrigger = new MutableLiveData<>(CallService.INVALID_ID);
+    private final MutableLiveData<Integer> endCallTrigger = new MutableLiveData<>(CallService.LINE_FREE);
+    private final MutableLiveData<Integer> startCallTrigger = new MutableLiveData<>(CallService.INVALID_ID);
     private final MutableLiveData<String> callDurationTrigger = new MutableLiveData<>();
 
 
@@ -203,7 +202,7 @@ public class AppController extends Application {
     private volatile String certName = EMPTY_STRING;
     @NonNull
     private volatile String username = EMPTY_STRING;
-    private volatile long userId;
+    private volatile int userId;
     @NonNull
     private volatile String password = EMPTY_STRING;
     @NonNull
@@ -234,19 +233,19 @@ public class AppController extends Application {
         onlineMapTrigger.postValue(onlineUsersChats);
     }
 
-    public void notifyMessagesChanged(long chatId) {
+    public void notifyMessagesChanged(int chatId) {
         messagesTrigger.postValue(chatId);
     }
 
-    public void notifyIncomingCallChanged(long chatId) {
-        incomingCallTrigger.postValue(chatId);
+    public void notifyIncomingCallChanged(int interlocutorId) {
+        incomingCallTrigger.postValue(interlocutorId);
     }
 
-    public void notifyEndCallChanged(long chatId) {
+    public void notifyEndCallChanged(int chatId) {
         endCallTrigger.postValue(chatId);
     }
 
-    public void notifyStartCallChanged(long chatId) {
+    public void notifyStartCallChanged(int chatId) {
         startCallTrigger.postValue(chatId);
     }
 
@@ -263,23 +262,23 @@ public class AppController extends Application {
         return unreadChatTrigger;
     }
 
-    public LiveData<Map<Long, Map<Long, Boolean>>> getOnlineMapTrigger() {
+    public LiveData<Map<Integer, Map<Integer, Boolean>>> getOnlineMapTrigger() {
         return onlineMapTrigger;
     }
 
-    public LiveData<Long> getMessagesTrigger() {
+    public LiveData<Integer> getMessagesTrigger() {
         return messagesTrigger;
     }
 
-    public LiveData<Long> getIncomingCallTrigger() {
+    public LiveData<Integer> getIncomingCallTrigger() {
         return incomingCallTrigger;
     }
 
-    public LiveData<Long> getEndCallTrigger() {
+    public LiveData<Integer> getEndCallTrigger() {
         return endCallTrigger;
     }
 
-    public LiveData<Long> getStartCallTrigger() {
+    public LiveData<Integer> getStartCallTrigger() {
         return startCallTrigger;
     }
 
@@ -288,8 +287,8 @@ public class AppController extends Application {
     }
 
     @Nullable
-    public Long getOnlineInterlocutorId(long chatId) {
-        for (Map.Entry<Long, Map<Long, Boolean>> onlineUser : onlineUsersChats.entrySet()) {
+    public Integer getOnlineInterlocutorId(int chatId) {
+        for (Map.Entry<Integer, Map<Integer, Boolean>> onlineUser : onlineUsersChats.entrySet()) {
             if (onlineUser.getValue().containsKey(chatId)) {
                 return onlineUser.getKey();
             }
@@ -298,7 +297,7 @@ public class AppController extends Application {
     }
 
 
-    public void updateOnlineStatus(long interlocutorId, long chatId, boolean isOnline) {
+    public void updateOnlineStatus(int interlocutorId, int chatId, boolean isOnline) {
         onlineUsersChats.computeIfAbsent(interlocutorId, k -> new ConcurrentHashMap<>()).put(chatId, isOnline);
         notifyOnlineMapChanged();
     }
@@ -308,20 +307,20 @@ public class AppController extends Application {
         notifyOnlineMapChanged();
     }
 
-    public void clearInterlocutorOnlineStatus(long interlocutorId) {
+    public void clearInterlocutorOnlineStatus(int interlocutorId) {
         onlineUsersChats.remove(interlocutorId);
         notifyOnlineMapChanged();
     }
 
-    public Map<Long, Boolean> getChatStatuses(long interlocutorId) {
+    public Map<Integer, Boolean> getChatStatuses(int interlocutorId) {
         return onlineUsersChats.get(interlocutorId);
     }
 
-    public static void updateChatColor(long chatId, int color) {
+    public static void updateChatColor(int chatId, int color) {
         CHAT_COLORS.put(chatId, color);
     }
 
-    public static int getChatColor(long chatId, int defaultColor) {
+    public static int getChatColor(int chatId, int defaultColor) {
         Integer color = CHAT_COLORS.get(chatId);
         return color != null ? color : defaultColor;
     }
@@ -364,7 +363,7 @@ public class AppController extends Application {
         return password;
     }
 
-    public long getUserId() {
+    public int userId() {
         return userId;
     }
 
@@ -390,7 +389,7 @@ public class AppController extends Application {
         this.username = username;
     }
 
-    public void setUserId(long userId) {
+    public void setUserId(int userId) {
         this.userId = userId;
     }
 
@@ -495,7 +494,7 @@ public class AppController extends Application {
         return hasAudioOut;
     }
 
-    public boolean hasVoiceCipher(long interlocutorId) {
+    public boolean hasVoiceCipher(int interlocutorId) {
        return callService.initCallEncryption(interlocutorId);
     }
 
@@ -583,7 +582,7 @@ public class AppController extends Application {
             String rawJsonString = new String(decryptedBytes, StandardCharsets.UTF_8);
             // 3. Парсинг дешифрованного полного JSON
             JSONObject json = new JSONObject(rawJsonString);
-            userId = json.optLong(USER_ID, 0);
+            userId = json.optInt(USER_ID, 0);
             username = json.optString(USER_NAME, EMPTY_STRING);
             password = json.optString(USER_PASS, EMPTY_STRING);
             displayName = json.optString(USER_DISPLAY_NAME, EMPTY_STRING);
@@ -1036,7 +1035,7 @@ public class AppController extends Application {
     }
 
     @Nullable
-    public SecretKey getChatSecretKey(long interlocutorId) {
+    public SecretKey getChatSecretKey(int interlocutorId) {
         String publicKey = dbHelper.getUserPublicKey(interlocutorId);
         if (publicKey == null || publicKey.isEmpty()) return null;
         try {

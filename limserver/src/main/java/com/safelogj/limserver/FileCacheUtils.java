@@ -6,6 +6,9 @@ import com.sun.jna.Platform;
 import java.io.File;
 
 public class FileCacheUtils {
+
+    private FileCacheUtils() {}
+
     // Объявляем прямое обращение к функции открытия файла и fadvise из C-библиотеки Linux
     private static class DirectCLib {
         static {

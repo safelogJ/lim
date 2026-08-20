@@ -184,7 +184,7 @@ public class NetworkService {
     }
 
     public void searchInterlocutor(String username, String password, @Nullable String queryUsername,
-                                   @Nullable Long chatId, ResultCallback<User> callback) {
+                                   @Nullable Integer chatId, ResultCallback<User> callback) {
         Request request;
         try {
             RequestBody body = RequestBody.create(
@@ -241,7 +241,7 @@ public class NetworkService {
         }
     }
 
-    public void hideChat(long chatId) {
+    public void hideChat(int chatId) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new HideChatRequest(controller.getUsername(),
@@ -258,7 +258,7 @@ public class NetworkService {
         }
     }
 
-    public void blockChat(long chatId) {
+    public void blockChat(int chatId) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new BlockChatRequest(
@@ -440,7 +440,7 @@ public class NetworkService {
         dbHelper.notConfirmMessageSent(msg);
     }
 
-    public void getNewMessages(long lastMessageId, @Nullable List<Long> interlocutorIds, @NonNull MediaLatch mediaLatch) {
+    public void getNewMessages(long lastMessageId, @Nullable List<Integer> interlocutorIds, @NonNull MediaLatch mediaLatch) {
         Request request;
         try {
             RequestBody body = RequestBody.create(gson.toJson(new GetMessagesRequest(controller.getUsername(),
@@ -497,10 +497,10 @@ public class NetworkService {
         return msg;
     }
 
-    private void fillChatStatus(@Nullable Map<Long, Boolean> onlineStatuses) {
+    private void fillChatStatus(@Nullable Map<Integer, Boolean> onlineStatuses) {
         if (onlineStatuses == null) return;
-        for (Map.Entry<Long, Boolean> userStatus : onlineStatuses.entrySet()) {
-            Map<Long, Boolean> chat = controller.getChatStatuses(userStatus.getKey());
+        for (Map.Entry<Integer, Boolean> userStatus : onlineStatuses.entrySet()) {
+            Map<Integer, Boolean> chat = controller.getChatStatuses(userStatus.getKey());
             if (chat == null) continue;
             chat.replaceAll((id, oldStatus) -> userStatus.getValue());
         }

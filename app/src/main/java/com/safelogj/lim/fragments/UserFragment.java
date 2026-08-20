@@ -291,16 +291,16 @@ public class UserFragment extends Fragment {
     }
 
     private void sendCommand(String ip, String user, String pass, String dName) {
-        if (controller.getUserId() > 0 && username.equals(user) && REMOVE.equals(dName.toLowerCase(Locale.US))) {  // remove
+        if (controller.userId() > 0 && username.equals(user) && REMOVE.equals(dName.toLowerCase(Locale.US))) {  // remove
             userViewModel.deleteAccount(username, password);
             userViewModel.setResultMessage(getString(R.string.wait_server_answer));
             Log.d(AppController.LOG_TAG, "deleting an account");
-        } else if (controller.getUserId() > 0 && controller.getServerIp().equals(ip) && username.equals(user)
+        } else if (controller.userId() > 0 && controller.getServerIp().equals(ip) && username.equals(user)
                 && (!password.equals(pass) || !displayName.equals(dName))) { // edit
             userViewModel.editUser(username, password, displayName.equals(dName) ? null : dName, password.equals(pass) ? null : pass);
             userViewModel.setResultMessage(getString(R.string.wait_server_answer));
             Log.d(AppController.LOG_TAG, "editing an account");
-        } else if (controller.getUserId() == 0 && !REMOVE.equals(dName.toLowerCase(Locale.US))) {  // reg or auth
+        } else if (controller.userId() == 0 && !REMOVE.equals(dName.toLowerCase(Locale.US))) {  // reg or auth
             userViewModel.register(user, pass, dName);
             userViewModel.setResultMessage(getString(R.string.wait_server_answer));
             Log.d(AppController.LOG_TAG, "account registration or authorization");

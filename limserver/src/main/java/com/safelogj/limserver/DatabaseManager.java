@@ -23,11 +23,14 @@ import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class DatabaseManager {
 
@@ -50,6 +53,8 @@ public class DatabaseManager {
     private static final String SOFT_DELETE_USER_SQL = "UPDATE users SET is_deleted = 1, password_hash = '', private_hash = '' WHERE id = ? AND is_deleted = 0";
     private static final String CHECK_IS_DELETED_SQL = "SELECT 1 FROM users WHERE username = ? AND is_deleted = 1 LIMIT 1";
     private static final String SEARCH_USER_BY_NAME_SQL = "SELECT id, display_name, public_key FROM users WHERE username = ? AND is_deleted = 0";
+    private static final String GET_USERS_COUNT = "SELECT MAX(id) FROM users";
+    private static final String GET_CHATS_COUNT = "SELECT MAX(id) FROM chats";
     // Chat
     private static final String FIND_PERSONAL_CHAT_SQL = "SELECT cm1.chat_id FROM chat_members cm1 JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id JOIN chats c ON cm1.chat_id = c.id WHERE c.is_group = 0 AND cm1.user_id = ? AND cm2.user_id = ? LIMIT 1";
     private static final String UNHIDE_CHAT_MEMBERS_SQL = "UPDATE chat_members SET is_hidden = 0 WHERE chat_id = ?";
@@ -69,9 +74,12 @@ public class DatabaseManager {
     private static final String GET_CHAT_MEMBERS_FOR_CACHE_SQL = "SELECT chat_id, user_id FROM chat_members";
     private static final String GET_MAX_MSG_ID_SQL_PER_USER = "SELECT cm.user_id, MAX(m.id) FROM chat_members cm JOIN messages m ON cm.chat_id = m.chat_id GROUP BY cm.user_id";
 
-    private final Map<Long, Long> usersMaxIdCache = new ConcurrentHashMap<>();
-    private final Map<Long, List<Long>> chatMembersCache = new ConcurrentHashMap<>();
+    private final Object msgIdLock = new Object();
+    private volatile long[] usersMaxMsgIdArray;
+    private volatile int[][] chatMembersArray;
     private final Map<String, UserCacheEntry> authCache = new ConcurrentHashMap<>();
+    private final AtomicInteger usersCount = new AtomicInteger(0);
+    private final AtomicInteger chatsCount = new AtomicInteger(0);
     private static final long AUTH_CACHE_TTL_MS = 21_600_000; // 6 hour
 
     private record UserCacheEntry(User user, String clientHash, long timestamp) {
@@ -166,17 +174,46 @@ public class DatabaseManager {
             stmt.execute(createChatMembersTable);
             stmt.execute(createMessagesTable);
 
+            // 0. Получаем максимальный ID чатов
+            try (ResultSet rs = stmt.executeQuery(GET_CHATS_COUNT)) {
+                if (rs.next()) {
+                    chatsCount.set(rs.getInt(1));
+                }
+                chatMembersArray = new int[Math.max(10, chatsCount.get())][2];
+            }
+
             // 1. Загружаем участников всех чатов
             try (ResultSet rs = stmt.executeQuery(GET_CHAT_MEMBERS_FOR_CACHE_SQL)) {
+                int[][] temp = chatMembersArray;
                 while (rs.next()) {
-                    chatMembersCache.computeIfAbsent(rs.getLong(1), k -> new ArrayList<>()).add(rs.getLong(2));
+                    int chatIdx = rs.getInt(1) - 1;
+                    int userId = rs.getInt(2);
+                    if (chatIdx >= 0 && chatIdx < temp.length) {
+                        if (temp[chatIdx][0] == 0) {
+                            temp[chatIdx][0] = userId;
+                        } else {
+                            temp[chatIdx][1] = userId;
+                        }
+                    }
                 }
+                chatMembersArray = temp;
             }
-            // 2. Инициализируем персональные кэши (самый большой ID, который юзер может видеть)
-            try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL_PER_USER)) {
-                while (rs.next()) {
-                    usersMaxIdCache.put(rs.getLong(1), rs.getLong(2));
+
+            // 2. Получаем максимальный ID пользователя для UDP-сервиса
+            try (ResultSet rs = stmt.executeQuery(GET_USERS_COUNT)) {
+                if (rs.next()) {
+                    usersCount.set(rs.getInt(1));
                 }
+                usersMaxMsgIdArray = new long[Math.max(10, usersCount.get())];
+            }
+
+            // 3. Инициализируем персональные кэши (самый большой ID, который юзер может видеть)
+            try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL_PER_USER)) {
+                long[] temp = usersMaxMsgIdArray;
+                while (rs.next()) {
+                    temp[rs.getInt(1) - 1] = rs.getLong(2);
+                }
+                usersMaxMsgIdArray = temp;
             }
         } catch (Exception e) {
             LimController.log.error("critical error while initializing database: ", e);
@@ -184,9 +221,17 @@ public class DatabaseManager {
         }
     }
 
+    public int getUsersCount() {
+        return usersCount.get();
+    }
+
     @Nullable
     public User registerUser(@NotNull String username, @NotNull String clientPasswordHash, @NotNull String displayName,
                              @NotNull String publicKey, @NotNull String privateHash) throws SQLException {
+        if (usersCount.get() == Integer.MAX_VALUE) {
+            LimController.log.error("Database full. Cannot register user '{}'", username);
+            return null;
+        }
         String serverPasswordHash = hashPassword(clientPasswordHash);
         if (serverPasswordHash.isEmpty()) {
             throw new SQLException("critical error: password hashing failed");
@@ -206,7 +251,7 @@ public class DatabaseManager {
                         }
                     }
                 }
-                long userId = -1;
+                int userId = -1;
                 try (PreparedStatement insertStmt = conn.prepareStatement(INSERT_USER_SQL, Statement.RETURN_GENERATED_KEYS)) {
                     insertStmt.setString(1, username);
                     insertStmt.setString(2, serverPasswordHash);
@@ -217,7 +262,7 @@ public class DatabaseManager {
                     insertStmt.executeUpdate();
 
                     try (ResultSet rs = insertStmt.getGeneratedKeys()) {
-                        if (rs.next()) userId = rs.getLong(1);
+                        if (rs.next()) userId = rs.getInt(1);
                     }
                 }
 
@@ -228,6 +273,8 @@ public class DatabaseManager {
                 User user = new User();
                 user.id = userId;
                 user.displayName = displayName;
+                usersCount.set(userId);
+                ensureUserMaxMsgIdCapacity(usersMaxMsgIdArray);
                 return user;
 
             } catch (SQLException e) {
@@ -268,7 +315,7 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next() && rs.getString(3).equals(serverPasswordHash)) {
                     User user = new User();
-                    user.id = rs.getLong(1);
+                    user.id = rs.getInt(1);
                     user.username = username;
                     user.displayName = rs.getString(2);
                     user.publicKey = rs.getString(4);
@@ -287,11 +334,11 @@ public class DatabaseManager {
 
     public boolean deleteUser(User user) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(SOFT_DELETE_USER_SQL)) {
-            stmt.setLong(1, user.id);
+            stmt.setInt(1, user.id);
             if (stmt.executeUpdate() > 0) {
                 LimController.log.info("User id={} deleted. Login blocked.", user.id);
                 authCache.remove(user.username);
-                LimController.removeUserFromOnline(user.id);
+                LimController.setOnlineStatus(user.id, 0);
                 return true;
             } else {
                 LimController.log.warn("failed to delete user id={}. It may have already been deleted or may not have existed.", user.id);
@@ -315,7 +362,7 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public Chat getOrCreatePersonalChat(long senderId, long receiverId) {
+    public Chat getOrCreatePersonalChat(int senderId, int receiverId) {
         if (senderId == receiverId) {
             throw new IllegalArgumentException("can't create a chat with yourself");
         }
@@ -326,50 +373,61 @@ public class DatabaseManager {
             conn.setAutoCommit(false);
 
             try {
-                long chatId = -1;
+                int chatId = -1;
                 try (PreparedStatement findStmt = conn.prepareStatement(FIND_PERSONAL_CHAT_SQL)) {
-                    findStmt.setLong(1, senderId);
-                    findStmt.setLong(2, receiverId);
+                    findStmt.setInt(1, senderId);
+                    findStmt.setInt(2, receiverId);
                     try (ResultSet rs = findStmt.executeQuery()) {
-                        if (rs.next()) chatId = rs.getLong(1);
+                        if (rs.next()) chatId = rs.getInt(1);
                     }
                 }
 
                 if (chatId != -1) {
                     try (PreparedStatement unhideStmt = conn.prepareStatement(UNHIDE_CHAT_MEMBERS_SQL);
                          PreparedStatement unblockStmt = conn.prepareStatement(UNBLOCK_CHAT_MEMBER_SQL)) {
-                        unhideStmt.setLong(1, chatId);
+                        unhideStmt.setInt(1, chatId);
                         unhideStmt.executeUpdate();
-                        unblockStmt.setLong(1, chatId);
-                        unblockStmt.setLong(2, senderId);
+                        unblockStmt.setInt(1, chatId);
+                        unblockStmt.setInt(2, senderId);
                         unblockStmt.executeUpdate();
                     }
                 } else { // --- СЦЕНАРИЙ Б: СОЗДАЕМ НОВЫЙ ЧАТ ---
+                    if (chatsCount.get() == Integer.MAX_VALUE) {
+                        LimController.log.error("Database full. Cannot create a personal chat.");
+                        return null;
+                    }
                     long now = System.currentTimeMillis();
                     try (PreparedStatement createChatStmt = conn.prepareStatement(INSERT_CHAT_SQL, Statement.RETURN_GENERATED_KEYS)) {
                         createChatStmt.setLong(1, now);
                         createChatStmt.executeUpdate();
                         try (ResultSet keys = createChatStmt.getGeneratedKeys()) {
                             if (keys.next()) {
-                                chatId = keys.getLong(1);
+                                chatId = keys.getInt(1);
                             } else {
                                 throw new SQLException("failed to get new chat ID.");
                             }
                         }
                     }
+                    chatsCount.set(chatId);
+                    ensureChatMembersCapacity();
+
                     try (PreparedStatement memberStmt = conn.prepareStatement(INSERT_CHAT_MEMBER_SQL)) {
-                        memberStmt.setLong(1, chatId);
-                        memberStmt.setLong(2, senderId);
+                        memberStmt.setInt(1, chatId);
+                        memberStmt.setInt(2, senderId);
                         memberStmt.setLong(3, now);
                         memberStmt.addBatch();
                         // Участник 2
-                        memberStmt.setLong(1, chatId);
-                        memberStmt.setLong(2, receiverId);
+                        memberStmt.setInt(1, chatId);
+                        memberStmt.setInt(2, receiverId);
                         memberStmt.setLong(3, now);
                         memberStmt.addBatch();
                         memberStmt.executeBatch();
-                        // В блоке, где создаются участники (insert chat_members):
-                        chatMembersCache.put(chatId, new ArrayList<>(List.of(senderId, receiverId)));
+                        if (chatId > 0 && chatId <= chatMembersArray.length) {
+                            synchronized (msgIdLock) {
+                                chatMembersArray[chatId - 1][0] = senderId;
+                                chatMembersArray[chatId - 1][1] = receiverId;
+                            }
+                        }
                     }
                 }
                 conn.commit();
@@ -391,10 +449,10 @@ public class DatabaseManager {
         }
     }
 
-    public boolean hideChat(long chatId, long userId) {
+    public boolean hideChat(int chatId, int userId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(HIDE_CHAT_SQL)) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, userId);
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, userId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             LimController.log.error("error hiding chat {} for user {}: ", chatId, userId, e);
@@ -402,10 +460,10 @@ public class DatabaseManager {
         }
     }
 
-    public boolean blockChat(long chatId, long userId) {
+    public boolean blockChat(int chatId, int userId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(BLOCK_CHAT_SQL)) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, userId);
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, userId);
             return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             LimController.log.error("error blocking chat {} for user {}: ", chatId, userId, e);
@@ -436,7 +494,7 @@ public class DatabaseManager {
             int paramIndex = 1;
             if (isNewDisplayName) stmt.setString(paramIndex++, newDisplayName);
             if (isNewPassword) stmt.setString(paramIndex++, newServerPasswordHash);
-            stmt.setLong(paramIndex, user.id);
+            stmt.setInt(paramIndex, user.id);
             if (stmt.executeUpdate() > 0) {
                 authCache.remove(user.username);
                 return new User();
@@ -456,7 +514,7 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     User user = new User();
-                    user.id = rs.getLong(1);
+                    user.id = rs.getInt(1);
                     user.username = targetUsername;
                     user.displayName = rs.getString(2);
                     user.publicKey = rs.getString(3);
@@ -470,14 +528,14 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public User searchUserByChatId(@NotNull Long userId, @NotNull Long chatId) {
+    public User searchUserByChatId(int userId, int chatId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(SEARCH_USER_IN_CHAT_SQL)) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, userId);
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     User user = new User();
-                    user.id = rs.getLong(1);
+                    user.id = rs.getInt(1);
                     user.username = rs.getString(2);
                     user.displayName = rs.getString(3);
                     user.publicKey = rs.getString(4);
@@ -490,15 +548,15 @@ public class DatabaseManager {
         return null;
     }
 
-    public long saveMessage(SendMessageRequest req, long senderId, long timestamp) {
+    public long saveMessage(SendMessageRequest req, int senderId, long timestamp) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement insertStmt = conn.prepareStatement(INSERT_MESSAGE_SQL, Statement.RETURN_GENERATED_KEYS);
                  PreparedStatement updateStmt = conn.prepareStatement(UNHIDE_CHAT_MEMBERS_SQL);
                  PreparedStatement updateBlock = conn.prepareStatement(UNBLOCK_CHAT_MEMBER_SQL)) {
 
-                insertStmt.setLong(1, req.chatId());
-                insertStmt.setLong(2, senderId);
+                insertStmt.setInt(1, req.chatId());
+                insertStmt.setInt(2, senderId);
                 insertStmt.setString(3, req.text());
                 insertStmt.setString(4, req.type());
                 insertStmt.setString(5, req.chatName());
@@ -515,19 +573,20 @@ public class DatabaseManager {
                     if (rs.next()) serverId = rs.getLong(1);
                 }
                 LimController.log.info("save: msg_id={}, in chat={}, from id={}", serverId, req.chatId(), senderId);
-                updateStmt.setLong(1, req.chatId());
+                updateStmt.setInt(1, req.chatId());
                 updateStmt.executeUpdate();
-                updateBlock.setLong(1, req.chatId());
-                updateBlock.setLong(2, senderId);
+                updateBlock.setInt(1, req.chatId());
+                updateBlock.setInt(2, senderId);
                 updateBlock.executeUpdate();
                 conn.commit();
-
-                if (serverId != Message.INVALID_MSG_ID) {
-                    List<Long> members = chatMembersCache.get(req.chatId());
-                    if (members != null) {
-                        for (Long mId : members) {
-                            usersMaxIdCache.merge(mId, serverId, Math::max);
-                        }
+                synchronized (msgIdLock) {
+                    if (serverId != Message.INVALID_MSG_ID) {
+                        long[] userTemp = usersMaxMsgIdArray;
+                        int[][] chatTemp = chatMembersArray;
+                        userTemp[chatTemp[req.chatId() - 1][0] - 1] = Math.max(userTemp[chatTemp[req.chatId() - 1][0] - 1], serverId);
+                        userTemp[chatTemp[req.chatId() - 1][1] - 1] = Math.max(userTemp[chatTemp[req.chatId() - 1][1] - 1], serverId);
+                        usersMaxMsgIdArray = userTemp;
+                        chatMembersArray = chatTemp;
                     }
                 }
                 return serverId;
@@ -543,17 +602,20 @@ public class DatabaseManager {
         }
     }
 
-    @Nullable
-    public List<Message> getNewMessages(long userId, long lastMessageId) {
-        Long uMax = usersMaxIdCache.get(userId);
-        if (uMax != null && lastMessageId >= uMax) {
+    @NotNull
+    public List<Message> getNewMessages(int userId, long lastMessageId) {
+        long[] temp = usersMaxMsgIdArray;
+        if (userId > 0 && userId <= temp.length && lastMessageId >= temp[userId - 1]) {
+            return Collections.emptyList();
+        } else if (userId > temp.length) {
+            ensureUserMaxMsgIdCapacity(temp);
             return Collections.emptyList();
         }
 
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(GET_NEW_MESSAGES_SQL)) {
-            stmt.setLong(1, userId);
-            stmt.setLong(2, userId);
-            stmt.setLong(3, userId);
+            stmt.setInt(1, userId);
+            stmt.setInt(2, userId);
+            stmt.setInt(3, userId);
             stmt.setLong(4, lastMessageId);
 
             try (ResultSet rs = stmt.executeQuery()) {
@@ -561,8 +623,8 @@ public class DatabaseManager {
                 while (rs.next()) {
                     Message msg = new Message();
                     msg.id = rs.getLong(1);
-                    msg.chatId = rs.getLong(2);
-                    msg.senderId = rs.getLong(3);
+                    msg.chatId = rs.getInt(2);
+                    msg.senderId = rs.getInt(3);
                     msg.text = rs.getString(4);
                     msg.type = rs.getString(5);
                     msg.filePath = rs.getString(6);
@@ -570,7 +632,7 @@ public class DatabaseManager {
                     msg.chatName = rs.getString(8);
                     msg.timestamp = rs.getLong(9);
                     msg.interlocutorPublicKey = rs.getString(10);
-                    msg.receiverId = rs.getLong(11);
+                    msg.receiverId = rs.getInt(11);
                     messages.add(msg);
                 }
                 return messages;
@@ -578,14 +640,14 @@ public class DatabaseManager {
         } catch (SQLException e) {
             LimController.log.error("receiving messages error: ", e);
         }
-        return null;
+        return Collections.emptyList();
     }
 
-    public boolean isFileAccessible(long userId, long chatId, String serverFileName) {
+    public boolean isFileAccessible(int userId, int chatId, String serverFileName) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_FILE_ACCESSIBILITY_SQL)) {
-            stmt.setLong(1, chatId);
+            stmt.setInt(1, chatId);
             stmt.setString(2, serverFileName);
-            stmt.setLong(3, userId);
+            stmt.setInt(3, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
@@ -596,10 +658,10 @@ public class DatabaseManager {
     }
 
 
-    public boolean isLiveChat(long userId, long chatId) {
+    public boolean isLiveChat(int userId, int chatId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_IS_LIVE_CHAT_SQL)) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, userId);
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
@@ -609,10 +671,10 @@ public class DatabaseManager {
         }
     }
 
-    public boolean isMemberOfChat(long userId, long chatId) {
+    public boolean isMemberOfChat(int userId, int chatId) {
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(CHECK_MEMBER_OF_CHAT_SQL)) {
-            stmt.setLong(1, chatId);
-            stmt.setLong(2, userId);
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 return rs.next();
             }
@@ -636,5 +698,27 @@ public class DatabaseManager {
             hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
+    }
+
+    private void ensureUserMaxMsgIdCapacity(long[] temp) {
+        synchronized (msgIdLock) {
+            if (temp.length < usersCount.get()) {
+                usersMaxMsgIdArray = Arrays.copyOf(temp, usersCount.get());
+            }
+        }
+    }
+
+    private void ensureChatMembersCapacity() {
+        synchronized (msgIdLock) {
+            int [][] temp = chatMembersArray;
+            int oldSize = temp.length;
+            if (oldSize < chatsCount.get()) {
+                temp = Arrays.copyOf(temp, chatsCount.get());
+                for (int i = oldSize; i < temp.length; i++) {
+                    temp[i] = new int[2];
+                }
+                chatMembersArray = temp;
+            }
+        }
     }
 }

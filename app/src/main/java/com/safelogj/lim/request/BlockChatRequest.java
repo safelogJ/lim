@@ -1,4 +1,4 @@
 package com.safelogj.lim.request;
 
-public record BlockChatRequest (String username, String password, Long chatId){
+public record BlockChatRequest (String username, String password, Integer chatId){
 }

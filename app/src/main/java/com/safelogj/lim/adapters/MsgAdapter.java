@@ -46,7 +46,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     private static final String TIME = "time";
     private static final String FILE_PATH = "file_path";
 
-    private final long userId;
+    private final int userId;
     private final int chatColor;
     private MediaPlayer mediaPlayer;
     private long playingMsgId = -1;
@@ -65,7 +65,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         }
     };
 
-    public MsgAdapter(long userId, int chatColor) {
+    public MsgAdapter(int userId, int chatColor) {
         super(new DiffCallback());
         this.userId = userId;
         this.chatColor = chatColor;
@@ -115,7 +115,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             this.binding = binding;
         }
 
-        private void bind(Message message, long currentUserId, int color, MsgAdapter adapter) {
+        private void bind(Message message, int currentUserId, int color, MsgAdapter adapter) {
             // Сбрасываем видимость перед установкой (важно для RecyclerView)
             binding.messageImage.setVisibility(View.GONE);
             binding.fileContainer.setVisibility(View.GONE);
@@ -199,12 +199,12 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             setListeners(message, currentUserId);
         }
 
-        private void setListeners(Message message, long currentUserId) {
+        private void setListeners(Message message, int currentUserId) {
             binding.messageImage.setOnClickListener(v -> openFile(message, currentUserId));
             binding.fileContainer.setOnClickListener(v -> openFile(message, currentUserId));
         }
 
-        private void openFile(Message msg, long userId) {
+        private void openFile(Message msg, int userId) {
             if (msg.filePath == null || msg.filePath.isEmpty()) {
                 return;
             }
@@ -242,7 +242,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             return name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".wav") || name.endsWith(".ogg");
         }
 
-        private void updateStatus(long status) {
+        private void updateStatus(int status) {
             if (status == Message.STATUS_SENT) {
                 binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.last_time));
             } else {

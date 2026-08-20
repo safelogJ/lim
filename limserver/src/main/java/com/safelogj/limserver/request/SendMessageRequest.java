@@ -1,9 +1,8 @@
 package com.safelogj.limserver.request;
 
 
-public record SendMessageRequest(String username, String password, Long userId, Long chatId,
-                                 String text, String type,
-                                 String filePath, String fileName, String chatName) {
+public record SendMessageRequest(String username, String password, Integer userId, Integer chatId, String text,
+                                 String type, String filePath, String fileName, String chatName) {
 
     public boolean isValidRequest() {
         return userId != null && userId > 0
@@ -15,7 +14,7 @@ public record SendMessageRequest(String username, String password, Long userId, 
                 && chatName != null && !chatName.isEmpty();
     }
 
-    public static boolean isValidHeaders(String username, String password, long userId, long chatId,
+    public static boolean isValidHeaders(String username, String password, int userId, int chatId,
                                          String text, String type, String fileName, String chatName) {
         return username != null && !username.isEmpty()
                 && password != null && !password.isEmpty()

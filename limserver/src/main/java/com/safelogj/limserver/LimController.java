@@ -29,8 +29,7 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -53,8 +52,10 @@ public class LimController {
     public static final int DATA_ERR = 65;
     public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
-    private static final Map<Long, Long> onlineUsers = new ConcurrentHashMap<>();
-    private static final Map<Long, String> ACTIVE_DOWNLOADS = new ConcurrentHashMap<>();
+    private static volatile long[] userOnlineStatus;
+    private static final Object ONLINE_USERS_LOCK = new Object();
+    private static volatile String[] activeDownloads;
+    private static final Object ACTIVE_DOWNLOADS_LOCK = new Object();
     private static int udpRelayPort;
     public static DatabaseManager dbManager;
     public static ServerConfig config;
@@ -79,6 +80,8 @@ public class LimController {
             calculateInitialMediaSize();
             HttpsServer server = initDbAndHttpsServer();
             closeAppListener(server);
+            userOnlineStatus = new long[Math.max(10, dbManager.getUsersCount())];
+            activeDownloads = new String[Math.max(10, dbManager.getUsersCount())];
             server.createContext("/register", new RegisterUserHandler());
             server.createContext("/user", new EditUserHandler());
             server.createContext("/chat/hide", new HideChatHandler());
@@ -90,7 +93,7 @@ public class LimController {
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
             server.start();
-            udpRelayServer = new UdpRelayServer(udpRelayPort);
+            udpRelayServer = new UdpRelayServer(udpRelayPort, dbManager);
             udpRelayServer.start();
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOfflineUsers, 10, 10, TimeUnit.SECONDS);
@@ -105,24 +108,57 @@ public class LimController {
         return udpRelayPort;
     }
 
-    public static void setOnline(long userId) {
-        onlineUsers.put(userId, System.currentTimeMillis());
+    public static void setOnlineStatus(int userId, long timestamp) {
+        synchronized (ONLINE_USERS_LOCK) {
+            long[] temp = userOnlineStatus;
+            if (userId > 0 && userId <= temp.length) {
+                temp[--userId] = timestamp;
+                userOnlineStatus = temp;
+            } else if (userId > temp.length) {
+                ensureUserOnlineStatusCapacity(temp);
+            }
+        }
     }
 
-    public static boolean getOnlineStatus(Long id) {
-       return onlineUsers.containsKey(id);
+    public static boolean getOnlineStatus(int userId) {
+        synchronized (ONLINE_USERS_LOCK) {
+            long[] temp = userOnlineStatus;
+            if (userId > 0 && userId <= temp.length) {
+                return temp[--userId] > 0;
+            } else if (userId > temp.length) {
+                ensureUserOnlineStatusCapacity(temp);
+            }
+            return false;
+        }
     }
 
-    public static void removeUserFromOnline(Long userId) {
-        onlineUsers.remove(userId);
+    public static String putFilePath(int userId, String path) {
+        synchronized (ACTIVE_DOWNLOADS_LOCK) {
+            String[] temp = activeDownloads;
+            if (userId > 0 && userId <= temp.length) {
+                if (temp[userId - 1] == null) {
+                    temp[userId - 1] = path;
+                    activeDownloads = temp;
+                    return null; // Успех, место было свободно
+                }
+                return temp[userId - 1]; // Занято другим путем
+            } else if (userId > temp.length) {
+                ensureActiveDownloadsCapacity(temp);
+            }
+        }
+        return path;
     }
 
-    public static String putFilePath(long userId, String path) {
-       return ACTIVE_DOWNLOADS.putIfAbsent(userId, path);
-    }
-
-    public static void removeFilePath(long userId) {
-       ACTIVE_DOWNLOADS.remove(userId);
+    public static void removeFilePath(int userId) {
+        synchronized (ACTIVE_DOWNLOADS_LOCK) {
+            String[] temp = activeDownloads;
+            if (userId > 0 && userId <= temp.length) {
+                temp[--userId] = null;
+                activeDownloads = temp;
+            } else if (userId > temp.length) {
+                ensureActiveDownloadsCapacity(temp);
+            }
+        }
     }
 
     private static HttpsServer initDbAndHttpsServer() throws KeyStoreException, NullPointerException, IOException, NoSuchAlgorithmException,
@@ -223,7 +259,15 @@ public class LimController {
                 for (File file : files) {
                     String absolutePath = file.getAbsolutePath();
                     if (file.isFile() && (now - file.lastModified() > MEDIA_DELETE_LIFETIME) && Files.deleteIfExists(file.toPath())) {
-                        ACTIVE_DOWNLOADS.values().removeIf(path -> path.equals(absolutePath));
+                        synchronized (ACTIVE_DOWNLOADS_LOCK) {
+                            String[] temp = activeDownloads;
+                            for (int i = 0; i < temp.length; i++) {
+                                if (absolutePath.equals(temp[i])) {
+                                    temp[i] = null;
+                                }
+                            }
+                            activeDownloads = temp;
+                        }
                         CURRENT_MEDIA_SIZE.addAndGet(-file.length());
                         log.info("File {} older than 31 days deleted successfully", file.getName());
                     }
@@ -237,8 +281,30 @@ public class LimController {
     }
 
     private static void removeOfflineUsers() {
-        long now = System.currentTimeMillis();
-        onlineUsers.entrySet().removeIf(entry -> (now - entry.getValue() > 12000));
+        synchronized (ONLINE_USERS_LOCK) {
+            long now = System.currentTimeMillis();
+            long [] temp = userOnlineStatus;
+            int users = temp.length;
+            for (int i = 0; i < users; i++) {
+                if (temp[i] > 0 && (now - temp[i] > 12000)) {
+                    temp[i] = 0;
+                }
+            }
+            userOnlineStatus = temp;
+        }
     }
 
+    private static void ensureUserOnlineStatusCapacity(long[] temp) {
+        int newSize = dbManager.getUsersCount();
+        if (temp.length < newSize) {
+            userOnlineStatus = Arrays.copyOf(temp, newSize);
+        }
+    }
+
+    private static void ensureActiveDownloadsCapacity(String[] temp) {
+        int newSize = dbManager.getUsersCount();
+        if (temp.length < newSize) {
+            activeDownloads = Arrays.copyOf(temp, newSize);
+        }
+    }
 }

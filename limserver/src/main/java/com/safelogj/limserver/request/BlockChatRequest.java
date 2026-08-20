@@ -1,6 +1,6 @@
 package com.safelogj.limserver.request;
 
-public record BlockChatRequest (String username, String password, Long chatId){
+public record BlockChatRequest (String username, String password, Integer chatId){
 
     public boolean isValidRequest() {
         return chatId != null

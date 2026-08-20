@@ -28,24 +28,24 @@ public class Message {
 
     public long id;
     public long localId;
-    public long chatId;
+    public int chatId;
     public String chatName;
     public String interlocutorPublicKey;
-    public long localChatId;
-    public long senderId;
-    public long receiverId;
+    public int localChatId;
+    public int senderId;
+    public int receiverId;
     public String text;
     @NonNull
     public String type = TYPE_TEXT;      // "TEXT", "FILE", "IMAGE", "SYSTEM"
     public long timestamp;
     public String filePath;  // Для файлов
     public String fileName;
-    public long sendStatus = STATUS_SENDING_OR_RECEIVE;
+    public int sendStatus = STATUS_SENDING_OR_RECEIVE;
     public int mediaStatus = MEDIA_STATUS_NO_MEDIA;
 
 
 
-    public int getMessageTypeByUserId(long userId) {
+    public int getMessageTypeByUserId(int userId) {
         if (senderId == SYSTEM_SENDER_ID) return TYPE_SYSTEM;
         return (senderId == userId) ? TYPE_OUTGOING : TYPE_INCOMING;
     }

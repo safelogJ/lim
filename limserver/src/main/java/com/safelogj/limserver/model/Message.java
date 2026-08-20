@@ -6,11 +6,11 @@ public class Message {
     public static final int INVALID_MSG_ID = -1;
 
     public long id;
-    public long chatId;
+    public int chatId;
     public String chatName;
     public String interlocutorPublicKey;
-    public long senderId;
-    public long receiverId;
+    public int senderId;
+    public int receiverId;
     public String text;
     public String type;      // "TEXT", "FILE", "IMAGE", "SYSTEM"
     public long timestamp;

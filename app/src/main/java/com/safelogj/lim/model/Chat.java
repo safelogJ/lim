@@ -3,16 +3,16 @@ package com.safelogj.lim.model;
 
 public class Chat {
 
-    public static final long INVALID_ID = -1;
+    public static final int INVALID_ID = -1;
 
 
-    public long localId;
-    public long id;
+    public int localId;
+    public int id;
     public String name;
     public boolean isGroup;
-    public long interlocutorId;
+    public int interlocutorId;
     public String lastMessage;
-    public long lastSendStatus;
+    public int lastSendStatus;
     public boolean isHidden;
     public int color;
     public boolean isBlocked;

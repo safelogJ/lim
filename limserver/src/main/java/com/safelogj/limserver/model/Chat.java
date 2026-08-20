@@ -2,13 +2,13 @@ package com.safelogj.limserver.model;
 
 public class Chat {
 
-    public long id;
+    public int id;
     public String name;
     public String lastMessage;
     public long lastTimestamp;
     public boolean isGroup;
     public boolean isHidden;
     public boolean isBlocked;
-    public long interlocutorId;
+    public int interlocutorId;
     public long createdAt;
 }

@@ -21,7 +21,7 @@ public class MessageWorker extends Worker {
     public Result doWork() {
         Log.d(AppController.LOG_TAG, "worker пришёл поработать " + Thread.currentThread().getName());
         AppController controller = (AppController) getApplicationContext();
-        if (controller.getUserId() > 0) {
+        if (controller.userId() > 0) {
             return startDownloadNewMsg(controller);
         }
         return Result.success();

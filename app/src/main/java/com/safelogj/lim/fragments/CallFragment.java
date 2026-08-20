@@ -25,7 +25,6 @@ import com.safelogj.lim.AppController;
 import com.safelogj.lim.CallService;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentCallBinding;
-import com.safelogj.lim.model.Chat;
 
 import java.util.Map;
 
@@ -47,17 +46,17 @@ public class CallFragment extends Fragment {
     private AppController controller;
     private CallService callService;
     private FragmentCallBinding mBinding;
-    private long interlocutorId;
+    private int interlocutorId;
     private String chatName;
     private boolean isOutgoing;
     private Boolean lastOnlineState = null;
     private PowerManager.WakeLock proximityWakeLock;
 
 
-    public static CallFragment newInstance(long interlocutorId, String chatName, boolean isOutgoing) {
+    public static CallFragment newInstance(int interlocutorId, String chatName, boolean isOutgoing) {
         CallFragment fragment = new CallFragment();
         Bundle args = new Bundle();
-        args.putLong(ARG_INTERLOCUTOR_ID, interlocutorId);
+        args.putInt(ARG_INTERLOCUTOR_ID, interlocutorId);
         args.putString(ARG_CHAT_NAME, chatName);
         args.putBoolean(ARG_IS_OUTGOING, isOutgoing);
         fragment.setArguments(args);
@@ -70,7 +69,7 @@ public class CallFragment extends Fragment {
         controller = (AppController) requireActivity().getApplication();
         callService = controller.getCallService();
         if (getArguments() != null) {
-            interlocutorId = getArguments().getLong(ARG_INTERLOCUTOR_ID);
+            interlocutorId = getArguments().getInt(ARG_INTERLOCUTOR_ID);
             chatName = getArguments().getString(ARG_CHAT_NAME);
             isOutgoing = getArguments().getBoolean(ARG_IS_OUTGOING);
         }
@@ -177,13 +176,12 @@ public class CallFragment extends Fragment {
 
     private void setObserveEndCall() {
         controller.getEndCallTrigger().observe(getViewLifecycleOwner(), id -> {
-                if (id == Chat.INVALID_ID) {
+                if (id == CallService.INVALID_ID) {
                     requireActivity().getSupportFragmentManager().popBackStack();
                     controller.notifyEndCallChanged(CallService.LINE_FREE);
                 } else if (!id.equals(CallService.LINE_FREE)) {
                     Toast.makeText(requireContext(), "Ошибка доступа к микрофону", Toast.LENGTH_LONG).show();
                 }
-
         });
     }
 
@@ -198,7 +196,7 @@ public class CallFragment extends Fragment {
     private void setObserveOnlineMap() {
         controller.getOnlineMapTrigger().observe(getViewLifecycleOwner(), onlineMap -> {
             boolean isOnline = false;
-            Map<Long, Boolean> chatStatus = onlineMap.get(interlocutorId);
+            Map<Integer, Boolean> chatStatus = onlineMap.get(interlocutorId);
             if (chatStatus != null) {
                 for (Boolean status : chatStatus.values()) {
                     if (Boolean.TRUE.equals(status)) {

@@ -13,10 +13,10 @@ public class BaseResponse {
     public String status;
     public String message;
     public Long messageId;
-    public Long userId;
+    public Integer userId;
     public String userName;
     public String displayName;
-    public Long chatId;
+    public Integer chatId;
     public Long timestamp;
     public String text;
     public String type;
@@ -26,6 +26,6 @@ public class BaseResponse {
     public String interlocutorPublicKey;
     public String privateHash;
     public List<Message> messages;
-    public Map<Long, Boolean> onlineStatuses;
+    public Map<Integer, Boolean> onlineStatuses;
     public Integer udpRelayPort;
 }

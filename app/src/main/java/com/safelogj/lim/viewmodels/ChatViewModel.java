@@ -76,7 +76,7 @@ public class ChatViewModel extends AndroidViewModel {
         selectedFileName = null;
     }
 
-    public void getDbPublicKey(long chatId) {
+    public void getDbPublicKey(int chatId) {
         controller.getDbHelper().getInterlocutorPublicKey(chatId, new ResultCallback<>() {
 
             @Override
@@ -124,7 +124,7 @@ public class ChatViewModel extends AndroidViewModel {
         }
     }
 
-    public void loadDbMessages(long chatId, int lastMsgListSize) {
+    public void loadDbMessages(int chatId, int lastMsgListSize) {
         controller.getDbHelper().loadChatMessages(chatId, lastMsgListSize, new ResultCallback<>() {
 
             @Override
@@ -140,7 +140,7 @@ public class ChatViewModel extends AndroidViewModel {
         });
     }
 
-    public void loadMoreMessages(long chatId) {
+    public void loadMoreMessages(int chatId) {
         List<Message> currentList = msgList.getValue();
         if (currentList == null || currentList.isEmpty() || isLoadingMore) return;
         isLoadingMore = true;
@@ -174,7 +174,7 @@ public class ChatViewModel extends AndroidViewModel {
         });
     }
 
-    public void searchInterlocutorOnServer(@Nullable String login, @Nullable Long chatId) {
+    public void searchInterlocutorOnServer(@Nullable String login, @Nullable Integer chatId) {
         controller.getUserExecutor().execute(() -> controller.getNetworkService().searchInterlocutor(
                 controller.getUsername(), controller.getPassword(), login, chatId, new ResultCallback<>() {
 

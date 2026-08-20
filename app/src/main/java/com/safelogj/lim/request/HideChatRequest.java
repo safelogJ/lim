@@ -1,4 +1,4 @@
 package com.safelogj.lim.request;
 
-public record HideChatRequest (String username, String password, Long chatId) {
+public record HideChatRequest (String username, String password, Integer chatId) {
 }

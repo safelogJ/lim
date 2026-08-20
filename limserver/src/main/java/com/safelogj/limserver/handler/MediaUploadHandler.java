@@ -37,8 +37,8 @@ public class MediaUploadHandler extends BaseHandler {
         }
         String username = exchange.getRequestHeaders().getFirst("X-Username");
         String password = exchange.getRequestHeaders().getFirst("X-Password");
-        long senderId = parsePositiveLong(exchange.getRequestHeaders().getFirst("X-Sender-Id"));
-        long chatId = parsePositiveLong(exchange.getRequestHeaders().getFirst("X-Chat-Id"));
+        int senderId = parsePositiveInt(exchange.getRequestHeaders().getFirst("X-Sender-Id"));
+        int chatId = parsePositiveInt(exchange.getRequestHeaders().getFirst("X-Chat-Id"));
         String text = decodeFromHeader(exchange.getRequestHeaders().getFirst("X-Message-Text"));
         String type = exchange.getRequestHeaders().getFirst("X-Message-Type");
         String fileName = decodeFromHeader(exchange.getRequestHeaders().getFirst("X-File-Name"));
@@ -129,7 +129,7 @@ public class MediaUploadHandler extends BaseHandler {
     }
 
     private void skipFileUpload(HttpExchange exchange, BaseResponse response,
-                                long chatId, String text, String type, String fileName, String chatName, User user) throws IOException {
+                                int chatId, String text, String type, String fileName, String chatName, User user) throws IOException {
         long timestamp = System.currentTimeMillis();
         String serverFileName = timestamp + "_" + UUID.randomUUID().toString().substring(0, 8); // Генерация уникального имени файла
         try {
@@ -184,6 +184,14 @@ public class MediaUploadHandler extends BaseHandler {
         if (sizeStr == null) return false;
         long size = parsePositiveLong(sizeStr);
         return size > 0 && size <= (DatabaseManager.FILE_SIZE_LIMIT + 1024);
+    }
+
+    private int parsePositiveInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private long parsePositiveLong(String value) {

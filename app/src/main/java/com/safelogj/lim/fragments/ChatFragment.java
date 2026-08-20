@@ -127,8 +127,8 @@ public class ChatFragment extends Fragment {
         }
     };
 
-    private long currentChatId = Chat.INVALID_ID;
-    private long currentChatLocalId = Chat.INVALID_ID;
+    private int currentChatId = Chat.INVALID_ID;
+    private int currentChatLocalId = Chat.INVALID_ID;
     private int chatColor;
     private String currentChatName = AppController.EMPTY_STRING;
     private String interlocutorPublicKey = AppController.EMPTY_STRING;
@@ -141,11 +141,11 @@ public class ChatFragment extends Fragment {
         // Required empty public constructor
     }
 
-    public static ChatFragment newInstance(long chatId, long chatLocalId, String chatName) {
+    public static ChatFragment newInstance(int chatId, int chatLocalId, String chatName) {
         ChatFragment fragment = new ChatFragment();
         Bundle args = new Bundle();
-        args.putLong(ARG_CHAT_ID, chatId);
-        args.putLong(ARG_CHAT_LOCAL_ID, chatLocalId);
+        args.putInt(ARG_CHAT_ID, chatId);
+        args.putInt(ARG_CHAT_LOCAL_ID, chatLocalId);
         args.putString(ARG_CHAT_NAME, chatName);
         fragment.setArguments(args);
         return fragment;
@@ -157,8 +157,8 @@ public class ChatFragment extends Fragment {
         super.onCreate(savedInstanceState);
         controller = (AppController) requireActivity().getApplication();
         if (getArguments() != null) {
-            currentChatId = getArguments().getLong(ARG_CHAT_ID, Chat.INVALID_ID);
-            currentChatLocalId = getArguments().getLong(ARG_CHAT_LOCAL_ID, Chat.INVALID_ID);
+            currentChatId = getArguments().getInt(ARG_CHAT_ID, Chat.INVALID_ID);
+            currentChatLocalId = getArguments().getInt(ARG_CHAT_LOCAL_ID, Chat.INVALID_ID);
             currentChatName = getArguments().getString(ARG_CHAT_NAME, AppController.EMPTY_STRING);
         }
     }
@@ -174,7 +174,7 @@ public class ChatFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         chatColor = AppController.getChatColor(currentChatId, chatColor);
-        adapter = new MsgAdapter(controller.getUserId(), chatColor);
+        adapter = new MsgAdapter(controller.userId(), chatColor);
         mBinding.messagesRecyclerView.setAdapter(adapter);
         setSendBtnListener();
         setAddFileBtnListener();
@@ -264,8 +264,9 @@ public class ChatFragment extends Fragment {
 
     private void setCallBtnListener() {
         mBinding.onlineContainer.setOnClickListener(v -> {
-            Long interlocutorId = controller.getOnlineInterlocutorId(currentChatId);
-            if (currentChatId != Chat.INVALID_ID && interlocutorId != null && controller.hasMic() && controller.hasAudioOut() && controller.hasVoiceCipher(interlocutorId)) {
+            Integer interlocutorId = controller.getOnlineInterlocutorId(currentChatId);
+            if (currentChatId != Chat.INVALID_ID && interlocutorId != null && !controller.getDbHelper().isInterlocutorBlocked(interlocutorId)
+                    && controller.hasMic() && controller.hasAudioOut() && controller.hasVoiceCipher(interlocutorId)) {
                 stopRecordAndPlay();
                 ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(interlocutorId, currentChatName, true));
             }
@@ -342,7 +343,7 @@ public class ChatFragment extends Fragment {
             if (currentChatId == Chat.INVALID_ID || mBinding == null) return;
             Boolean isOnline = false;
             // Ищем статус нашего текущего чата в глобальной карте
-            for (Map<Long, Boolean> chatMap : onlineMap.values()) {
+            for (Map<Integer, Boolean> chatMap : onlineMap.values()) {
                 if (chatMap.containsKey(currentChatId)) {
                     isOnline = chatMap.get(currentChatId);
                     break;
@@ -440,7 +441,7 @@ public class ChatFragment extends Fragment {
         Message msg = new Message();
         msg.chatId = currentChatId;
         msg.chatName = currentChatName;
-        msg.senderId = controller.getUserId();
+        msg.senderId = controller.userId();
         msg.localChatId = currentChatLocalId;
         msg.interlocutorPublicKey = interlocutorPublicKey;
         msg.text = inputText.isEmpty() ? fileName : inputText; // для синхронизации с другими устройствами
@@ -529,7 +530,7 @@ public class ChatFragment extends Fragment {
         NotificationManager manager = (NotificationManager) controller.getSystemService(Context.NOTIFICATION_SERVICE);
         for (StatusBarNotification sbn : manager.getActiveNotifications()) {
             if (sbn.getId() == NotificationHelper.NOTIFICATION_ID
-                    && sbn.getNotification().extras.getLong(NotificationHelper.EXTRA_CHAT_ID, -1) == currentChatId) {
+                    && sbn.getNotification().extras.getInt(NotificationHelper.EXTRA_CHAT_ID, -1) == currentChatId) {
                 manager.cancel(NotificationHelper.NOTIFICATION_ID);
             }
         }

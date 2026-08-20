@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
 
     private AppController controller;
     private ActivityMainBinding mBinding;
-    private long incomingInterlocutorId = Chat.INVALID_ID;
+    private int incomingInterlocutorId = CallService.INVALID_ID;
     private String incomingChatName;
     private int chatColor;
 
@@ -91,10 +91,10 @@ public class MainActivity extends AppCompatActivity {
                     .commit();
             handleIntent(getIntent());
         } else {
-            incomingInterlocutorId = savedInstanceState.getLong(STATE_INTERLOCUTOR_ID, Chat.INVALID_ID);
+            incomingInterlocutorId = savedInstanceState.getInt(STATE_INTERLOCUTOR_ID, CallService.INVALID_ID);
             incomingChatName = savedInstanceState.getString(STATE_CHAT_NAME);
             chatColor = savedInstanceState.getInt(STATE_CHAT_COLOR);
-            if (incomingInterlocutorId != Chat.INVALID_ID) {
+            if (incomingInterlocutorId != CallService.INVALID_ID) {
                 showIncomingCallBanner(chatColor);
             }
         }
@@ -111,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putLong(STATE_INTERLOCUTOR_ID, incomingInterlocutorId);
+        outState.putInt(STATE_INTERLOCUTOR_ID, incomingInterlocutorId);
         outState.putString(STATE_CHAT_NAME, incomingChatName);
         outState.putInt(STATE_CHAT_COLOR, chatColor);
     }
@@ -126,12 +126,12 @@ public class MainActivity extends AppCompatActivity {
     private void handleIntent(Intent intent) {
         if (intent == null) return;
 
-        long chatId = intent.getLongExtra(NotificationHelper.EXTRA_CHAT_ID, Chat.INVALID_ID);
+        int chatId = intent.getIntExtra(NotificationHelper.EXTRA_CHAT_ID, Chat.INVALID_ID);
         if (intent.hasExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST) || chatId != Chat.INVALID_ID) {
             getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }
         if (chatId != Chat.INVALID_ID) {
-            showFragment(ChatFragment.newInstance(chatId, intent.getLongExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, Chat.INVALID_ID),
+            showFragment(ChatFragment.newInstance(chatId, intent.getIntExtra(NotificationHelper.EXTRA_CHAT_LOCAL_ID, Chat.INVALID_ID),
                     intent.getStringExtra(NotificationHelper.EXTRA_CHAT_NAME)));
         }
         intent.removeExtra(NotificationHelper.EXTRA_CHAT_ID);
@@ -171,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void setObserveIncomingCall() {
         controller.getIncomingCallTrigger().observe(this, interlocutorId -> {
-            if (interlocutorId == Chat.INVALID_ID) {
+            if (interlocutorId == CallService.INVALID_ID) {
                 hideIncomingCallBanner();
                 return;
             }
@@ -212,18 +212,18 @@ public class MainActivity extends AppCompatActivity {
             if (getSupportFragmentManager().findFragmentById(R.id.main_container) instanceof ChatFragment fragment) {
                 fragment.stopRecordAndPlay();
             }
-            controller.notifyIncomingCallChanged(Chat.INVALID_ID);
+            controller.notifyIncomingCallChanged(CallService.INVALID_ID);
             showFragment(CallFragment.newInstance(incomingInterlocutorId, incomingChatName, false));
         });
 
         mBinding.btnRejectCall.setOnClickListener(v -> {
-            controller.notifyIncomingCallChanged(Chat.INVALID_ID);
+            controller.notifyIncomingCallChanged(CallService.INVALID_ID);
             controller.getCallService().rejectCall();
         });
     }
 
     private void hideIncomingCallBanner() {
-        incomingInterlocutorId = Chat.INVALID_ID;
+        incomingInterlocutorId = CallService.INVALID_ID;
         incomingChatName = null;
         mBinding.callBanner.setVisibility(View.GONE);
     }

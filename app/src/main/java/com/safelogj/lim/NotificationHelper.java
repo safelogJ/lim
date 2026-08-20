@@ -44,7 +44,7 @@ public class NotificationHelper {
             intent.putExtra(EXTRA_CHAT_ID, chat.id);
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
-            extras.putLong(EXTRA_CHAT_ID, chat.id);
+            extras.putInt(EXTRA_CHAT_ID, chat.id);
 
             intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
