@@ -125,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;
+        if (controller.getCallService() != null && controller.getCallService().lineBusy.get()) return;
 
         int chatId = intent.getIntExtra(NotificationHelper.EXTRA_CHAT_ID, Chat.INVALID_ID);
         if (intent.hasExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST) || chatId != Chat.INVALID_ID) {

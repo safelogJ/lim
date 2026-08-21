@@ -3,8 +3,11 @@ package com.safelogj.lim.fragments;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
-import android.os.PowerManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -50,7 +53,28 @@ public class CallFragment extends Fragment {
     private String chatName;
     private boolean isOutgoing;
     private Boolean lastOnlineState = null;
-    private PowerManager.WakeLock proximityWakeLock;
+    private SensorManager sensorManager;
+    private Sensor proximitySensor;
+    private final SensorEventListener proximityListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+                float distance = event.values[0];
+                boolean isNear = distance < (Math.min(proximitySensor.getMaximumRange(), 5f));
+                
+                // Скрываем/показываем кнопки, чтобы ухо ничего не нажало
+                if (mBinding != null) {
+                    float alpha = isNear ? 0.05f : 1.0f;
+                    mBinding.btnEndCall.setEnabled(!isNear);
+                    mBinding.btnSpeaker.setEnabled(!isNear);
+                    mBinding.getRoot().setAlpha(alpha);
+                }
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    };
 
 
     public static CallFragment newInstance(int interlocutorId, String chatName, boolean isOutgoing) {
@@ -82,10 +106,8 @@ public class CallFragment extends Fragment {
                 }
             }
         });
-        PowerManager powerManager = (PowerManager) requireActivity().getSystemService(Context.POWER_SERVICE);
-        if (powerManager.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
-            proximityWakeLock = powerManager.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "Lim:ProximityLock");
-        }
+        sensorManager = (SensorManager) requireActivity().getSystemService(Context.SENSOR_SERVICE);
+        proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
     }
 
     @Override
@@ -228,16 +250,16 @@ public class CallFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (proximityWakeLock != null && !proximityWakeLock.isHeld()) {
-            proximityWakeLock.acquire(1_800_000L); // 30мин
+        if (proximitySensor != null) {
+            sensorManager.registerListener(proximityListener, proximitySensor, SensorManager.SENSOR_DELAY_UI);
         }
     }
 
     @Override
     public void onPause() {
         super.onPause();
-        if (proximityWakeLock != null && proximityWakeLock.isHeld()) {
-            proximityWakeLock.release();
+        if (proximitySensor != null) {
+            sensorManager.unregisterListener(proximityListener);
         }
     }
 

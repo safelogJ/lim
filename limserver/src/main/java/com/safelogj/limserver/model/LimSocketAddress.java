@@ -6,6 +6,7 @@ public class LimSocketAddress {
     private InetSocketAddress address;
     private long lastCallToken;
     private long callStartTime;
+    private long lastKeepAlive;
 
 
     public LimSocketAddress(InetSocketAddress address) {
@@ -34,5 +35,13 @@ public class LimSocketAddress {
 
     public void setCallStartTime(long callStartTime) {
         this.callStartTime = callStartTime;
+    }
+
+    public void setLastKeepAliveTime(long lastKeepAlive) {
+        this.lastKeepAlive = lastKeepAlive;
+    }
+
+    public boolean isOldAddress (long now) {
+        return now - lastKeepAlive > 60000;
     }
 }

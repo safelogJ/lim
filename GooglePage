@@ -1,0 +1,33 @@
+Lim is an Android messenger designed for users who run their own server on MikroTik devices or CHR.
+
+The application works inside your private network and exchanges messages through your self-hosted server running in a container.
+
+Features:
+• Secure Real-Time Voice Calls (E2EE)
+• Personal 1-on-1 messaging
+• Voice messages & file transfer (up to 50 MB)
+• End-to-end encryption for messages, voice calls, and media
+• Automatic chat creation
+• Android client written in Java
+• Lightweight Java server running inside a MikroTik container
+• Secure HTTPS communication
+
+Multi-Architecture Support:
+The server container is lightweight and optimized for low memory usage. It supports both x86_64 and ARM64 architectures, allowing you to run it on MikroTik CHR (VPS/VM) or directly on hardware routers such as hAP ax², hAP ax³, Chateau, and other ARM64 MikroTik models with Container support.
+
+How conversations start:
+To start a conversation, simply send the username of the recipient in a new chat. If the chat does not already exist, the server creates it automatically.
+
+Encryption:
+Messages, file names, voice notes, voice calls, and transferred files are encrypted using the recipient's public key (E2EE). The server only acts as a relay for encrypted data and cannot decrypt user messages, media, or audio streams.
+
+No external services:
+Lim does not use Google Firebase (FCM) or any other third-party services. All communication takes place strictly through your own server.
+
+Because Android limits background network activity for applications without push services, the client checks the server for new messages approximately every 15 minutes while in the background. When the application is open, messages are delivered immediately.
+
+Requirements:
+• MikroTik CHR or ARM64 RouterOS device with Container package enabled.
+
+The server files for Docker containers and installation instructions can be found on the project page:
+https://github.com/safelogJ/lim

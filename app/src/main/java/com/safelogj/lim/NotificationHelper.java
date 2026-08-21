@@ -73,8 +73,6 @@ public class NotificationHelper {
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(pendingIntent)
                 .setVibrate(new long[]{0L})
-                .setSilent(false)
-                .setAutoCancel(true)
                 .setWhen(maxTimestamp)
                 .setShowWhen(maxTimestamp > 0)
                 .setNumber(unreadChats.size())

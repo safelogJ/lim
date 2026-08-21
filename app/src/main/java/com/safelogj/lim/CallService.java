@@ -203,7 +203,7 @@ public class CallService {
                 interlocutorId = targetUserId;
                 muteInterlocutor(3_100);
                 Log.d(AppController.LOG_TAG, "Outgoing call started to: " + interlocutorId);
-                currentCallToken = secureRandom.nextLong();
+                currentCallToken = Math.max(secureRandom.nextLong(), 1L);
                 sendVoiceCycle(lineBusy);
             });
         }

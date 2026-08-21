@@ -1,6 +1,6 @@
 Privacy Policy
 
-Last updated: July 24, 2026
+Last updated: August 20, 2026
 
 This Privacy Policy explains how the Lim application ("Application") and the LimServer server module process data.
 
@@ -127,6 +127,14 @@ Messages, transferred files, and file names are encrypted on the sender's device
 Only the intended recipient can decrypt this information using their private key.
 
 The server stores only encrypted content and cannot decrypt user messages or transferred files.
+
+Voice Calls
+
+Voice data is encrypted directly on the devices of the call participants using end-to-end encryption (E2EE).
+
+LimServer acts exclusively as a UDP packet relay and has no technical means to decrypt the audio stream or record the conversation.
+
+Voice data is not stored anywhere.
 
 5. No External Services
 

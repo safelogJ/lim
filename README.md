@@ -18,8 +18,9 @@ The server stores messages, transfers media files and manages user accounts. Com
 ## Features
 
 - Personal messaging
+- **Secure Voice Calls (E2EE)**
 - File transfer & Voice messages
-- End-to-end encryption of messages and media
+- End-to-end encryption of messages, media and voice
 - Automatic chat creation
 - User authentication
 - Android client (API 29+)
@@ -78,6 +79,17 @@ Usernames and chat names are stored unencrypted because they are required for ro
 
 ---
 
+## Voice Calls
+
+Lim provides high-quality voice communication using the **Opus** codec. 
+
+- **E2EE Privacy**: Voice data is encrypted directly on devices using AES-GCM. The server only sees encrypted UDP packets.
+- **Relay Architecture**: The server acts as a high-performance UDP relay, routing traffic between participants without storing or recording it.
+- **Low Latency**: Optimized for real-time communication in local networks and over VPN.
+- **Multi-device support**: Calls can be received on multiple devices simultaneously (the first one to answer wins the session).
+
+---
+
 ## Server certificate
 
 The Android client can import the HTTPS certificate used by the CHR server.
@@ -107,6 +119,7 @@ The server settings are stored in `db/server.properties`. You can tune them to f
 | `db.connect.size` | Maximum number of simultaneous SQLite connections. | `8` |
 | `server.media.quota.mb` | Software limit for the `media` folder size in Megabytes. | `50` |
 | `server.disk.safe_margin.mb` | Minimum free disk space required to accept new files. | `20` |
+| `udp.relay.port` | UDP port used for voice calls relay. | `41011` |
 
 ---
 
