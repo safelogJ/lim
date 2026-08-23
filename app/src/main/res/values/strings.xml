@@ -69,4 +69,6 @@
     <string name="cancel_call">Cancel</string>
     <string name="end_call">End call</string>
     <string name="calling">Calling</string>
+    <string name="accept_call">Accept call</string>
+    <string name="reject_call">Reject call</string>
 </resources>

@@ -173,7 +173,6 @@ public class AppController extends Application {
     private final MutableLiveData<Integer> messagesTrigger = new MutableLiveData<>(Chat.INVALID_ID);
     private final MutableLiveData<Integer> incomingCallTrigger = new MutableLiveData<>(CallService.INVALID_ID);
     private final MutableLiveData<Integer> endCallTrigger = new MutableLiveData<>(CallService.LINE_FREE);
-    private final MutableLiveData<Integer> startCallTrigger = new MutableLiveData<>(CallService.INVALID_ID);
     private final MutableLiveData<String> callDurationTrigger = new MutableLiveData<>();
 
 
@@ -245,10 +244,6 @@ public class AppController extends Application {
         endCallTrigger.postValue(chatId);
     }
 
-    public void notifyStartCallChanged(int chatId) {
-        startCallTrigger.postValue(chatId);
-    }
-
     public void notifyCallDurationChanged(String duration) {
         callDurationTrigger.postValue(duration);
     }
@@ -276,10 +271,6 @@ public class AppController extends Application {
 
     public LiveData<Integer> getEndCallTrigger() {
         return endCallTrigger;
-    }
-
-    public LiveData<Integer> getStartCallTrigger() {
-        return startCallTrigger;
     }
 
     public LiveData<String> getCallDurationTrigger() {
@@ -478,6 +469,10 @@ public class AppController extends Application {
         return callService;
     }
 
+    public boolean isLineBusy() {
+        return callService != null && callService.lineBusy.get();
+    }
+
     public boolean hasMic() {
         return hasMic;
     }
@@ -534,9 +529,9 @@ public class AppController extends Application {
     private void startSendingMsgList() {
         for (Message msg : dbHelper.getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
-                netStreams[Math.abs((int) (msg.localChatId % 3))].execute(() -> networkService.sendTextMessage(msg, null));
+                netStreams[Math.abs(msg.localChatId % 3)].execute(() -> networkService.sendTextMessage(msg, null));
             } else {
-                netStreams[Math.abs((int) (msg.localChatId % 3))].execute(() -> networkService.sendMediaMessage(msg, null));
+                netStreams[Math.abs(msg.localChatId % 3)].execute(() -> networkService.sendMediaMessage(msg, null));
             }
         }
     }

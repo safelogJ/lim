@@ -20,9 +20,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
+import com.safelogj.lim.model.Caller;
 import com.safelogj.lim.model.Mute;
 
 import java.net.DatagramPacket;
@@ -32,7 +34,6 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -73,23 +74,25 @@ public class CallService {
     private volatile Mute[] mutedUsers = new Mute[20];
     private final Handler callHandler = new Handler(Looper.getMainLooper());
     private final Runnable endCallRunnable = () -> {
+        muteInterlocutor(Caller.MUTE_END);
         toggleSpeakerphone(false); // Сбрасываем при выходе
         cancelCall();
+        renewOrStopEndCallRunnable(0);
     };
     private final Runnable ringingStopRunnable = () -> {
-        interlocutorId = INVALID_ID;
-        stopRinging();
-        lineBusy.set(false);
         appController.notifyIncomingCallChanged(CallService.INVALID_ID);
+        stopRinging();
+        renewOrStopRingRunnable(0);
+        interlocutorId = INVALID_ID;
+        lineBusy.set(false);
     };
     private long callStartTime = 0;
     private final Runnable durationRunnable = new Runnable() {
         @Override
         public void run() {
             if (isTalking.get()) {
-                long seconds = (System.currentTimeMillis() - callStartTime) / 1000;
-                String duration = String.format(Locale.getDefault(), "%02d:%02d", seconds / 60, seconds % 60);
-                appController.notifyCallDurationChanged(duration);
+                long totalSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
+                appController.notifyCallDurationChanged(getCallDurationTime(totalSeconds, (totalSeconds / 60) % 60, totalSeconds % 60));
                 callHandler.postDelayed(this, 1000);
             } else {
                 appController.notifyCallDurationChanged(null);
@@ -130,7 +133,7 @@ public class CallService {
 
     }
 
-    public void releaseToneGenerator() {
+    public void releaseToneGenerator() { // UserExecutor
         toneGenerator.release();
     }
 
@@ -144,7 +147,7 @@ public class CallService {
     }
 
     public void sendKeepAlive() {
-        if (!lineBusy.get() && !isTalking.get() && appController.hasMic() && appController.hasAudioOut()) {
+        if (!lineBusy.get() && appController.hasMic() && appController.hasAudioOut()) {
             appController.getNetStreams()[AppController.UDP_OUT].execute(() -> {
                 DatagramSocket socket = null;
                 try {
@@ -189,6 +192,7 @@ public class CallService {
             isTalking.set(true);
             callStartTime = System.currentTimeMillis();
             callingEndLastTimeout.set(callStartTime);
+            callHandler.postDelayed(endCallRunnable, Caller.END_AUTO);
             callHandler.post(durationRunnable);
             Log.d(AppController.LOG_TAG, "Call started with target: " + interlocutorId);
             sendVoiceCycle(isTalking);
@@ -201,7 +205,7 @@ public class CallService {
             appController.getNetStreams()[AppController.UDP_OUT].execute(() -> {
                 isOutputCall.set(true);
                 interlocutorId = targetUserId;
-                muteInterlocutor(3_100);
+                muteInterlocutor(Caller.MUTE_START);
                 Log.d(AppController.LOG_TAG, "Outgoing call started to: " + interlocutorId);
                 currentCallToken = Math.max(secureRandom.nextLong(), 1L);
                 sendVoiceCycle(lineBusy);
@@ -209,7 +213,7 @@ public class CallService {
         }
     }
 
-    private void sendVoiceCycle(AtomicBoolean lineStatus) {
+    private void sendVoiceCycle(AtomicBoolean lineStatus) { // UDP_OUT
         try {
             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
             initAudioPlayAndOpusDec();
@@ -242,8 +246,10 @@ public class CallService {
             }
         } catch (Exception e) {
             Log.e(AppController.LOG_TAG, "sendVoice error: " + e.getMessage());
-            appController.notifyEndCallChanged(interlocutorId);  // toast
-            endCall();
+            if (e instanceof SecurityException) {
+                appController.notifyEndCallChanged(interlocutorId);  // toast
+            }
+            endCall(Caller.MUTE_ERROR);
         } finally {
             stopAudioRecOpusEnc();
             stopAudioPlayOpusDec();
@@ -251,15 +257,17 @@ public class CallService {
         }
     }
 
-    public void rejectCall() {
-        muteInterlocutor(120_000);
-        interlocutorId = INVALID_ID;
+    public void rejectCall() { // UI нить про отклонение звонка
+        muteInterlocutor(Caller.MUTE_BAN);
         renewOrStopRingRunnable(0);
         stopRinging();
+        interlocutorId = INVALID_ID;
         lineBusy.set(false);
     }
 
-    public void cancelCall() {
+    public void cancelCall() { // UI нить из фрагмента отмена дозвона, хэндлер при автозакрытии,
+        // из endCall: UI нить из фрагмента конец разговора, UDP_OUT в исключении при отправке,
+        // из killCall: UI нить по кнопке назад, UI нить при уничтожении активити
         toneGenerator.stopTone();
         interlocutorId = INVALID_ID;
         isTalking.set(false);
@@ -272,22 +280,23 @@ public class CallService {
         }
     }
 
-    public void endCall() {
-        muteInterlocutor(4_000);
+    public void endCall(long muteTime) { // UI нить из фрагмента конец разговора, UDP_OUT в исключении при отправке,
+        //из killCall: UI нить по кнопке назад, UI нить при уничтожении активити в stopUdpTraffic
+        muteInterlocutor(muteTime);
         toggleSpeakerphone(false); // Сбрасываем при выходе
         renewOrStopEndCallRunnable(0);
         cancelCall();
     }
 
-    public void killCall() {
+    public void killCall() { //  UI нить по кнопке назад, UI нить при уничтожении активити в stopUdpTraffic
         if (isTalking.get()) {
-            endCall();
+            endCall(Caller.MUTE_END);
         } else if (lineBusy.get()) {
             cancelCall();
         }
     }
 
-    public boolean isSpeakerphoneOn() {
+    public boolean isSpeakerphoneOn() { // UI нить для отображения иконки
         if (audioManager == null) return false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             AudioDeviceInfo device = audioManager.getCommunicationDevice();
@@ -297,15 +306,14 @@ public class CallService {
         }
     }
 
-    public void toggleSpeakerphone(boolean on) {
+    public void toggleSpeakerphone(boolean on) { // UI нить при смене кнопкой, хэндлен при автозакрытии, из endCall
         if (audioManager == null) return;
         // 1. Гарантируем правильный режим
         if (audioManager.getMode() != AudioManager.MODE_IN_COMMUNICATION) {
             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // (Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // (Android 12+)
             if (on) {
                 AudioDeviceInfo speakerDevice = null;
                 List<AudioDeviceInfo> devices = audioManager.getAvailableCommunicationDevices();
@@ -316,7 +324,12 @@ public class CallService {
                     }
                 }
                 if (speakerDevice != null) {
-                    boolean result = audioManager.setCommunicationDevice(speakerDevice);
+                    boolean result = false;
+                    try {
+                        result = audioManager.setCommunicationDevice(speakerDevice);
+                    } catch (Exception e) {
+                        Log.d(AppController.LOG_TAG, "Error setting communication device: ", e);
+                    }
                     Log.d(AppController.LOG_TAG, "Set speakerphone result: " + result);
                 }
             } else {
@@ -332,10 +345,11 @@ public class CallService {
 
     private void handleIncomingPacket(DatagramPacket packet) {
         if (packet.getLength() >= HEADER_SIZE + 12) { // 16 (header) + 12 (iv)
-            ByteBuffer bb = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
-            int senderId = bb.getInt();
-            long tokenFromPacket = bb.getLong();
-            if (!stillMuted(senderId) && bb.getInt() == userId) {
+            byte[] data = packet.getData();
+            int senderId = readInt(data, 0);       // 0-4 байты
+            long tokenFromPacket = readLong(data); // 4-12 байты
+            int targetId = readInt(data, 12);     // 12-16 байты
+            if (!stillMuted(senderId) && targetId == userId) {
                 routeInputPacket(senderId, tokenFromPacket, packet);
             }
         }
@@ -350,26 +364,27 @@ public class CallService {
             currentCallToken = token;
             ringingStopLastTimeout.set(System.currentTimeMillis()); // входящий
             appController.notifyIncomingCallChanged(interlocutorId);
-            callHandler.postDelayed(ringingStopRunnable, 3000);
+            callHandler.postDelayed(ringingStopRunnable, Caller.END_AUTO);
             Log.d(AppController.LOG_TAG, "New incoming call from: " + senderId);
         } else if (senderId == interlocutorId) { // второй пакет при входящем или первый при исходящем
+            long now = System.currentTimeMillis();
             if (isOutputCall.get()) {
                 if (!isTalking.get()) {
                     isTalking.set(true);
                     toneGenerator.stopTone();
-                    callingEndLastTimeout.set(System.currentTimeMillis()); // исходящий
-                    appController.notifyStartCallChanged(senderId); // Пинаем фрагмент
-                    callStartTime = System.currentTimeMillis();
+                    callingEndLastTimeout.set(now); // исходящий
+                    callHandler.postDelayed(endCallRunnable, Caller.END_AUTO);
+                    callStartTime = now;
                     callHandler.post(durationRunnable);
                 }
                 playVoice(packet); // исходящий
-                renewOrStopEndCallRunnable(System.currentTimeMillis());
+                renewOrStopEndCallRunnable(now);
             } else {
                 if (isTalking.get()) {
                     playVoice(packet); // входящий
-                    renewOrStopEndCallRunnable(System.currentTimeMillis());
+                    renewOrStopEndCallRunnable(now);
                 } else {
-                    renewOrStopRingRunnable(System.currentTimeMillis()); // отложенная остановка не принятого
+                    renewOrStopRingRunnable(now); // отложенная остановка не принятого
                 }
             }
         }
@@ -430,38 +445,34 @@ public class CallService {
         } else if (timeout.get() != 0 && time - timeout.get() > 2000) {
             timeout.set(time);
             callHandler.removeCallbacks(runnable);
-            callHandler.postDelayed(runnable, 3000);
+            callHandler.postDelayed(runnable, Caller.END_AUTO);
         }
     }
 
-    private void initAudioPlayAndOpusDec() {
+    private void initAudioPlayAndOpusDec() throws OpusException { // UDP_OUT нить перед циклом в sendVoiceCycle
         if (audioTrack == null) {
-            try {
-                if (opusDecoder == null) {
-                    opusDecoder = new OpusDecoder(SAMPLE_RATE, 1);
-                }
-                audioTrack = new AudioTrack.Builder()
-                        .setAudioAttributes(new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build())
-                        .setAudioFormat(new AudioFormat.Builder()
-                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                .setSampleRate(SAMPLE_RATE)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                .build())
-                        .setBufferSizeInBytes(Math.max(AudioTrack.getMinBufferSize(
-                                SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), FRAME_SIZE * 4))
-                        .setTransferMode(AudioTrack.MODE_STREAM)
-                        .build();
-                audioTrack.play();
-            } catch (Exception e) {
-                Log.e(AppController.LOG_TAG, "AudioTrack init error: " + e.getMessage());
+            if (opusDecoder == null) {
+                opusDecoder = new OpusDecoder(SAMPLE_RATE, 1);
             }
+            audioTrack = new AudioTrack.Builder()
+                    .setAudioAttributes(new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build())
+                    .setAudioFormat(new AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build())
+                    .setBufferSizeInBytes(Math.max(AudioTrack.getMinBufferSize(
+                            SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT), FRAME_SIZE * 4))
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build();
+            audioTrack.play();
         }
     }
 
-    private void stopAudioPlayOpusDec() {
+    private void stopAudioPlayOpusDec() { // UDP_OUT нить в финали sendVoiceCycle
         if (audioTrack != null) {
             try {
                 audioTrack.stop();
@@ -554,7 +565,7 @@ public class CallService {
         return null;
     }
 
-    public void startRinging() {
+    public void startRinging() {  // UI при показе баннера
         if (currentRingtone == null) {
             currentRingtone = RingtoneManager.getRingtone(appController, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE));
             if (currentRingtone != null) {
@@ -564,7 +575,7 @@ public class CallService {
         }
     }
 
-    private void stopRinging() {
+    private void stopRinging() { // хэндлер при автосбросе, UDP_OUT при ответе на звонок, UI нить при сбросе кнопкой
         if (currentRingtone != null) {
             if (currentRingtone.isPlaying()) {
                 currentRingtone.stop();
@@ -599,12 +610,9 @@ public class CallService {
                 Mute[] localRef = mutedUsers;
                 int oldLen = localRef.length;
                 for (int i = 0; i < oldLen; i++) {
-                    if (localRef[i] == null) {
+                    if (localRef[i] == null || localRef[i].userId == interlocutorId) {
                         localRef[i] = new Mute(interlocutorId, System.currentTimeMillis() + millis);
-                        mutedUsers = localRef;
-                        return;
-                    } else if (localRef[i].userId == interlocutorId) {
-                        localRef[i].muteTime = (System.currentTimeMillis() + millis);
+                        Log.e(AppController.LOG_TAG, "замьючен собеседник ");
                         mutedUsers = localRef;
                         return;
                     }
@@ -614,6 +622,42 @@ public class CallService {
                 mutedUsers = newArr;
             }
         }
+    }
+
+    private int readInt(byte[] data, int offset) {
+        return ((data[offset] & 0xFF) << 24) |
+                ((data[offset + 1] & 0xFF) << 16) |
+                ((data[offset + 2] & 0xFF) << 8) |
+                (data[offset + 3] & 0xFF);
+    }
+
+    private long readLong(byte[] data) {
+        return ((long) (data[4] & 0xFF) << 56) |
+                ((long) (data[4 + 1] & 0xFF) << 48) |
+                ((long) (data[4 + 2] & 0xFF) << 40) |
+                ((long) (data[4 + 3] & 0xFF) << 32) |
+                ((long) (data[4 + 4] & 0xFF) << 24) |
+                ((long) (data[4 + 5] & 0xFF) << 16) |
+                ((long) (data[4 + 6] & 0xFF) << 8) |
+                (data[4 + 7] & 0xFF);
+    }
+
+
+    @NonNull
+    private static String getCallDurationTime(long totalSeconds, long m, long s) {
+        long h = (totalSeconds / 3600) % 24;
+        long d = totalSeconds / 86400;
+        StringBuilder sb = new StringBuilder();
+        if (d > 0) sb.append(d).append("d ");
+        if (h > 0 || d > 0) {
+            if (h < 10) sb.append('0');
+            sb.append(h).append(':');
+        }
+        if (m < 10) sb.append('0');
+        sb.append(m).append(':');
+        if (s < 10) sb.append('0');
+        sb.append(s);
+        return sb.toString();
     }
 }
 

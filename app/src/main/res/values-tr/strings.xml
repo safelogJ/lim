@@ -62,4 +62,6 @@
     <string name="cancel_call">İptal</string>
     <string name="end_call">Bitir</string>
     <string name="calling">Aranıyor…</string>
+    <string name="accept_call">Çağrıyı kabul et</string>
+    <string name="reject_call">Çağrıyı reddet</string>
 </resources>

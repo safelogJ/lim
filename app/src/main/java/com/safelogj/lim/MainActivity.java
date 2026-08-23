@@ -27,8 +27,8 @@ import com.safelogj.lim.databinding.ActivityMainBinding;
 import com.safelogj.lim.fragments.CallFragment;
 import com.safelogj.lim.fragments.ChatFragment;
 import com.safelogj.lim.fragments.ChatListFragment;
+import com.safelogj.lim.model.Caller;
 import com.safelogj.lim.model.Chat;
-import com.safelogj.lim.viewmodels.ResultCallback;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -43,9 +43,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String STATE_CHAT_COLOR = "incoming_color";
 
 
-
     public void showFragment(Fragment fragment) {
-       getSupportFragmentManager()
+        getSupportFragmentManager()
                 .beginTransaction()
                 .setReorderingAllowed(true)
                 .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
@@ -96,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
             chatColor = savedInstanceState.getInt(STATE_CHAT_COLOR);
             if (incomingInterlocutorId != CallService.INVALID_ID) {
                 showIncomingCallBanner(chatColor);
+                Log.e(AppController.LOG_TAG, "цвет сохранён " + chatColor);
             }
         }
 
@@ -103,7 +103,6 @@ public class MainActivity extends AppCompatActivity {
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
         }
-
         setObserveIncomingCall();
         setDarkStatusBar();
     }
@@ -125,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;
-        if (controller.getCallService() != null && controller.getCallService().lineBusy.get()) return;
+        if (controller.isLineBusy()) return; // скипаем уведомления
 
         int chatId = intent.getIntExtra(NotificationHelper.EXTRA_CHAT_ID, Chat.INVALID_ID);
         if (intent.hasExtra(NotificationHelper.EXTRA_OPEN_CHAT_LIST) || chatId != Chat.INVALID_ID) {
@@ -179,48 +178,52 @@ public class MainActivity extends AppCompatActivity {
             // Если ID тот же, что мы уже показываем (после поворота), ничего не делаем
             if (interlocutorId == incomingInterlocutorId) return;
 
-            controller.getDbHelper().getChatName(interlocutorId, new ResultCallback<>() {
-
-                @Override
-                public void onError(String errorMsg) {
-                    Log.d(AppController.LOG_TAG, errorMsg);
-                }
-
-                @Override
-                public void onSuccess(Chat chat) {
-                    runOnUiThread(() -> {
-                        incomingChatName = chat.name;
-                        incomingInterlocutorId = interlocutorId;
-                        showIncomingCallBanner(chat.color);
-                    });
-                }
-            });
+            Caller caller = controller.getDbHelper().getCaller(interlocutorId);
+            if (caller != null) {
+                incomingChatName = caller.getChatName();
+                incomingInterlocutorId = interlocutorId;
+                chatColor = caller.getColor();
+                Log.e(AppController.LOG_TAG, "цвет получен " + chatColor);
+                showIncomingCallBanner(chatColor);
+            } else {
+                Log.e(AppController.LOG_TAG, "Error getting chat name from DB");
+            }
         });
     }
 
     private void showIncomingCallBanner(int color) {
-        controller.getCallService().startRinging();
-        mBinding.tvIncomingCallerName.setText(incomingChatName);
-        switch (color) {
-            case 1 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_pink));
-            case 2 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_yellow));
-            case 3 -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_blue));
-            default -> mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_green));
+        CallService service = controller.getCallService();
+        if (service != null) {
+            controller.getCallService().startRinging();
         }
-        mBinding.callBanner.setVisibility(View.VISIBLE);
 
-        mBinding.btnAcceptCall.setOnClickListener(v -> {
+        mBinding.acceptCall.setOnClickListener(v -> {
             if (getSupportFragmentManager().findFragmentById(R.id.main_container) instanceof ChatFragment fragment) {
                 fragment.stopRecordAndPlay();
             }
-            controller.notifyIncomingCallChanged(CallService.INVALID_ID);
             showFragment(CallFragment.newInstance(incomingInterlocutorId, incomingChatName, false));
+            controller.notifyIncomingCallChanged(CallService.INVALID_ID);
         });
 
-        mBinding.btnRejectCall.setOnClickListener(v -> {
+        mBinding.rejectCall.setOnClickListener(v -> {
             controller.notifyIncomingCallChanged(CallService.INVALID_ID);
-            controller.getCallService().rejectCall();
+            if (service != null) {
+                service.rejectCall();
+            }
         });
+
+        mBinding.tvIncomingCallerName.setText(incomingChatName);
+        switch (color) {
+            case 1 ->
+                    mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_pink));
+            case 2 ->
+                    mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_yellow));
+            case 3 ->
+                    mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_blue));
+            default ->
+                    mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_green));
+        }
+        mBinding.callBanner.setVisibility(View.VISIBLE);
     }
 
     private void hideIncomingCallBanner() {

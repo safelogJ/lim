@@ -94,7 +94,7 @@ public class ChatViewModel extends AndroidViewModel {
     public void sendMessage(Message msg) {
         controller.getDbHelper().saveMsgBeforeSending(msg);
         if (Message.TYPE_TEXT.equals(msg.type)) {
-            controller.getNetStreams()[Math.abs((int) (msg.localChatId % 3))].execute(()->
+            controller.getNetStreams()[Math.abs(msg.localChatId % 3)].execute(()->
                     controller.getNetworkService().sendTextMessage(msg, new ResultCallback<>() {
 
                         @Override
@@ -108,7 +108,7 @@ public class ChatViewModel extends AndroidViewModel {
                         }
                     }));
         } else {
-            controller.getNetStreams()[Math.abs((int) (msg.localChatId % 3))].execute(()->
+            controller.getNetStreams()[Math.abs(msg.localChatId % 3)].execute(()->
                     controller.getNetworkService().sendMediaMessage(msg,  new ResultCallback<>() {
 
                         @Override

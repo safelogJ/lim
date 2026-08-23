@@ -76,19 +76,13 @@
 
     <TextView
         android:id="@+id/btnEndCall"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_marginBottom="32dp"
         android:background="@drawable/fielder_background_red"
-        android:paddingStart="48dp"
-        android:paddingTop="16dp"
-        android:paddingEnd="48dp"
-        android:paddingBottom="16dp"
-        android:textColor="@color/redA400"
-        android:textSize="24sp"
+        android:clickable="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="@+id/tvCallName"
-        app:layout_constraintStart_toStartOf="@+id/tvCallName"
-        tools:visibility="visible" />
+        app:layout_constraintStart_toStartOf="@+id/tvCallName" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

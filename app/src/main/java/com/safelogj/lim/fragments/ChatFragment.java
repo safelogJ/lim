@@ -266,7 +266,7 @@ public class ChatFragment extends Fragment {
         mBinding.onlineContainer.setOnClickListener(v -> {
             Integer interlocutorId = controller.getOnlineInterlocutorId(currentChatId);
             if (currentChatId != Chat.INVALID_ID && interlocutorId != null && !controller.getDbHelper().isInterlocutorBlocked(interlocutorId)
-                    && controller.hasMic() && controller.hasAudioOut() && controller.hasVoiceCipher(interlocutorId)) {
+                    && controller.hasMic() && controller.hasAudioOut() && !controller.isLineBusy() && controller.hasVoiceCipher(interlocutorId) ) {
                 stopRecordAndPlay();
                 ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(interlocutorId, currentChatName, true));
             }

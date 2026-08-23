@@ -62,4 +62,6 @@
     <string name="cancel_call">Отмена</string>
     <string name="end_call">Завершить</string>
     <string name="calling">Вызов…</string>
+    <string name="accept_call">Принять вызов</string>
+    <string name="reject_call">Отклонить вызов</string>
 </resources>

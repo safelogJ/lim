@@ -62,4 +62,6 @@
     <string name="cancel_call">Batal</string>
     <string name="end_call">Akhiri panggilan</string>
     <string name="calling">Memanggil…</string>
+    <string name="accept_call">Terima panggilan</string>
+    <string name="reject_call">Tolak panggilan</string>
 </resources>

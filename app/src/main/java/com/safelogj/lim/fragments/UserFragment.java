@@ -119,7 +119,6 @@ public class UserFragment extends Fragment {
                 if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                     controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
                     NotificationHelper.showNotification(controller, chatList);
-                    Log.w(AppController.LOG_TAG, "в user fragment есть уведомления для чата: " + chatList.get(0).id);
                 }
             }
         });

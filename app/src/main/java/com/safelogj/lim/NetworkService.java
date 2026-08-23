@@ -682,7 +682,7 @@ public class NetworkService {
                     maxTimestamp = chat.lastTimestamp;
                 }
             }
-            if (!controller.getCallService().lineBusy.get() && controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+            if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                 controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
                 NotificationHelper.showNotification(controller, allUnread);
             }

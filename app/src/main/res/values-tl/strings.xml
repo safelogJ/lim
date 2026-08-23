@@ -62,4 +62,6 @@
     <string name="cancel_call">Kanselahin</string>
     <string name="end_call">Tapusin ang tawag</string>
     <string name="calling">Tumatawag…</string>
+    <string name="accept_call">Sagutin ang tawag</string>
+    <string name="reject_call">Tanggihan ang tawag</string>
 </resources>

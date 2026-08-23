@@ -1,15 +1,42 @@
 package com.safelogj.lim.model;
 
+import com.safelogj.lim.AppController;
+
 public class Caller {
 
-    private final int userId;
-    private final String publicKey;
-    private boolean isBlocked;
+    public static final long END_AUTO = 3_000;
+    public static final long MUTE_END = 4_000;
+    public static final long MUTE_ERROR = 10_000;
+    public static final long MUTE_START = 3_100;
+    public static final long MUTE_BAN = 120_000;
 
-    public Caller(int userId, String publicKey) {
+    private final int userId;
+    private int chatId;
+    private String chatName = AppController.EMPTY_STRING;
+    private int color;
+    private boolean isBlocked;
+    private String publicKey;
+
+    public Caller(String chatName, int userId, int chatId) {
+        this.chatName = chatName;
         this.userId = userId;
+        this.chatId = chatId;
+    }
+
+    public Caller(int userId, String chatName, String publicKey) {
+        this.userId = userId;
+        this.chatName = chatName;
         this.publicKey = publicKey;
     }
+
+    public Caller(int chatId, int userId, String name, int color, boolean isBlocked) {
+        this.chatId = chatId;
+        this.userId = userId;
+        this.chatName = name;
+        this.color = color;
+        this.isBlocked = isBlocked;
+    }
+
 
     public int getUserId() {
         return userId;
@@ -25,5 +52,33 @@ public class Caller {
 
     public String getPublicKey() {
         return publicKey;
+    }
+
+    public void setPublicKey(String publicKey) {
+        this.publicKey = publicKey;
+    }
+
+    public int getColor() {
+        return color;
+    }
+
+    public void setColor(int color) {
+        this.color = color;
+    }
+
+    public String getChatName() {
+        return chatName;
+    }
+
+    public void setChatName(String chatName) {
+        this.chatName = chatName;
+    }
+
+    public int getChatId() {
+        return chatId;
+    }
+
+    public void setChatId(int chatId) {
+        this.chatId = chatId;
     }
 }

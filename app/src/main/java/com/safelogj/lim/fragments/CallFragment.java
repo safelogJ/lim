@@ -26,8 +26,11 @@ import androidx.fragment.app.Fragment;
 
 import com.safelogj.lim.AppController;
 import com.safelogj.lim.CallService;
+import com.safelogj.lim.NotificationHelper;
 import com.safelogj.lim.R;
 import com.safelogj.lim.databinding.FragmentCallBinding;
+import com.safelogj.lim.model.Caller;
+import com.safelogj.lim.model.Chat;
 
 import java.util.Map;
 
@@ -120,33 +123,18 @@ public class CallFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         mBinding.tvCallName.setText(chatName);
-        setBtnText();
         setSpeakerIcon();
         setBtnListener();
         setSpeakerBtnListener();
         setObserveEndCall();
-        setObserveStartCall();
         setObserveOnlineMap();
         setObserveCallDuration();
+        setObserveUnreadChats();
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             requestCallPermit.launch(Manifest.permission.RECORD_AUDIO);
         } else {
             call();
-        }
-    }
-
-    private void setBtnText() {
-        if (isOutgoing) {
-            if (callService != null) {
-                if (callService.isTalking.get()) {
-                    mBinding.btnEndCall.setText(R.string.end_call);
-                } else {
-                    mBinding.btnEndCall.setText(R.string.cancel_call);
-                }
-            }
-        } else {
-            mBinding.btnEndCall.setText(R.string.end_call);
         }
     }
 
@@ -162,7 +150,7 @@ public class CallFragment extends Fragment {
         mBinding.btnEndCall.setOnClickListener(v -> {
             if (callService != null) {
                 if (callService.isTalking.get()) {
-                    callService.endCall(); // заканчиваем разговор
+                    callService.endCall(Caller.MUTE_END); // заканчиваем разговор
                 } else {
                     callService.cancelCall(); // прекращаем дозваниваться
                 }
@@ -186,7 +174,7 @@ public class CallFragment extends Fragment {
 
     private void call() {
         if (callService != null) {
-            if (isOutgoing && !callService.lineBusy.get()) { // исходящий
+            if (isOutgoing && !controller.isLineBusy()) { // исходящий
                 Log.d(AppController.LOG_TAG, "исходящий звонок");
                 callService.startOutgoingCall(interlocutorId);
             } else if (!isOutgoing && !callService.isTalking.get()) { // входящий
@@ -201,17 +189,10 @@ public class CallFragment extends Fragment {
                 if (id == CallService.INVALID_ID) {
                     requireActivity().getSupportFragmentManager().popBackStack();
                     controller.notifyEndCallChanged(CallService.LINE_FREE);
+                    Log.d(AppController.LOG_TAG, "фрагмент закрыт по тригеру");
                 } else if (!id.equals(CallService.LINE_FREE)) {
                     Toast.makeText(requireContext(), "Ошибка доступа к микрофону", Toast.LENGTH_LONG).show();
                 }
-        });
-    }
-
-    private void setObserveStartCall() {
-        controller.getStartCallTrigger().observe(getViewLifecycleOwner(), id -> {
-            if (callService != null && id == interlocutorId && mBinding != null) {
-                mBinding.btnEndCall.setText(R.string.end_call);
-            }
         });
     }
 
@@ -243,6 +224,23 @@ public class CallFragment extends Fragment {
                 mBinding.tvCallStatus.setText(duration);
             } else {
                 mBinding.tvCallStatus.setText(R.string.calling);
+            }
+        });
+    }
+
+    private void setObserveUnreadChats() {
+        controller.getUnreadChatTrigger().observe(getViewLifecycleOwner(), unreadChatList -> {
+            if (!unreadChatList.isEmpty()) {
+                long maxTimestamp = 0;
+                for (Chat chat : unreadChatList) {
+                    if (chat.lastTimestamp > maxTimestamp) {
+                        maxTimestamp = chat.lastTimestamp;
+                    }
+                }
+                if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
+                    controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+                    NotificationHelper.showNotification(controller, unreadChatList);
+                }
             }
         });
     }

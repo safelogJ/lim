@@ -62,4 +62,6 @@
     <string name="cancel_call">إلغاء</string>
     <string name="end_call">إنهاء المكالمة</string>
     <string name="calling">جاري الاتصال…</string>
+    <string name="accept_call">رد على المكالمة</string>
+    <string name="reject_call">رفض المكالمة</string>
 </resources>
