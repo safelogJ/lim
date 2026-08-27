@@ -9,6 +9,7 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import com.safelogj.lim.model.Caller;
 import com.safelogj.lim.model.Chat;
 
 import java.util.List;
@@ -16,18 +17,21 @@ import java.util.List;
 public class NotificationHelper {
 
     private NotificationHelper() {  }
-    public static final int NOTIFICATION_ID = 1;
+    public static final int MSG_NOTIFICATION_ID = 1;
+    public static final int CALL_NOTIFICATION_ID = 2;
     public static final String EXTRA_CHAT_ID = "extra_chat_id";
     public static final String EXTRA_CHAT_LOCAL_ID = "extra_chat_local_id";
     public static final String EXTRA_CHAT_NAME = "extra_chat_name";
     public static final String EXTRA_OPEN_CHAT_LIST = "extra_open_chat_list";
+    public static final String EXTRA_CALL_CHAT = "extra_call_chat";
+    private static final String NOTIFICATIONS_DISABLED_MESSAGE = "Notifications are disabled by the user in the system settings!";
 
-    public static void showNotification(Context context, List<Chat> unreadChats) {
+    public static void showMsgNotification(Context context, List<Chat> unreadChats) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
 
         if (!manager.areNotificationsEnabled()) {
-            Log.w(AppController.LOG_TAG, "Notifications are disabled by the user in the system settings!");
+            Log.w(AppController.LOG_TAG, NOTIFICATIONS_DISABLED_MESSAGE);
             return;
         }
 
@@ -45,21 +49,11 @@ public class NotificationHelper {
             intent.putExtra(EXTRA_CHAT_LOCAL_ID, chat.localId);
             intent.putExtra(EXTRA_CHAT_NAME, chat.name);
             extras.putInt(EXTRA_CHAT_ID, chat.id);
-
-            intent.removeExtra(EXTRA_OPEN_CHAT_LIST);
         } else {
             title = context.getString(R.string.new_msgs);
             text = context.getString(R.string.unread_chats) + " (" + unreadChats.size() + ")";
             intent.putExtra(EXTRA_OPEN_CHAT_LIST, true);
-
-            intent.removeExtra(EXTRA_CHAT_ID);
-            intent.removeExtra(EXTRA_CHAT_LOCAL_ID);
-            intent.removeExtra(EXTRA_CHAT_NAME);
         }
-
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         long maxTimestamp = 0;
         for (Chat c : unreadChats) {
@@ -71,19 +65,74 @@ public class NotificationHelper {
                 .setContentTitle(title)
                 .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(pendingIntent)
+                .setContentIntent(PendingIntent.getActivity(context, 0, intent,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
                 .setVibrate(new long[]{0L})
                 .setWhen(maxTimestamp)
                 .setShowWhen(maxTimestamp > 0)
                 .setNumber(unreadChats.size())
                 .setExtras(extras);
-        manager.notify(NOTIFICATION_ID, builder.build());
+        manager.notify(MSG_NOTIFICATION_ID, builder.build());
     }
 
-    public static void clearNotification(Context context) {
+    public static void showCallNotification(AppController appController, int interlocutorId, long timestamp) {
+        NotificationManager manager = appController.getSystemService(NotificationManager.class);
+        if (manager == null) return;
+
+        if (!manager.areNotificationsEnabled()) {
+            Log.w(AppController.LOG_TAG, NOTIFICATIONS_DISABLED_MESSAGE);
+            return;
+        }
+
+        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId)
+                .setContentTitle(appController.getString(R.string.incoming_call))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setOngoing(true)
+                .setWhen(timestamp)
+                .setShowWhen(timestamp > 0)
+                .setAutoCancel(false);
+
+        manager.notify(CALL_NOTIFICATION_ID, builder.build());
+    }
+
+    public static void showMissedCallNotification(AppController appController, int interlocutorId, long timestamp) {
+        NotificationManager manager = appController.getSystemService(NotificationManager.class);
+        if (manager == null) return;
+
+        if (!manager.areNotificationsEnabled()) {
+            Log.w(AppController.LOG_TAG, NOTIFICATIONS_DISABLED_MESSAGE);
+            return;
+        }
+
+        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId)
+                .setContentTitle(appController.getString(R.string.missing_call))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setOngoing(false)
+                .setWhen(timestamp)
+                .setShowWhen(timestamp > 0)
+                .setAutoCancel(true);
+        manager.notify(CALL_NOTIFICATION_ID, builder.build());
+    }
+
+    public static void clearNotification(Context context, int notificationId) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager != null) {
-            manager.cancel(NOTIFICATION_ID);
+            manager.cancel(notificationId);
         }
+    }
+
+    private static NotificationCompat.Builder getCallNotificationBuilder(AppController appController, int interlocutorId) {
+        Intent intent = new Intent(appController, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra(EXTRA_CALL_CHAT, true);
+
+        Caller caller = appController.getDbHelper().getCaller(interlocutorId);
+        return new NotificationCompat.Builder(appController, AppController.CALL_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_name)
+                .setContentText(caller == null ? AppController.EMPTY_STRING : caller.getChatName())
+                .setContentIntent(PendingIntent.getActivity(appController, 1, intent,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
+                .setSound(null)
+                .setVibrate(new long[]{0L});
     }
 }

@@ -6,6 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/main_background"
+    android:keepScreenOn="true"
     tools:context=".MainActivity">
 
     <androidx.fragment.app.FragmentContainerView
@@ -48,6 +49,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
+            android:importantForAccessibility="noHideDescendants"
             android:background="@drawable/call_banner_green"
             android:padding="8dp"
             app:layout_constraintEnd_toStartOf="@+id/callBannerGuideline"
@@ -110,6 +112,7 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:clickable="true"
+            android:focusable="true"
             android:contentDescription="@string/reject_call"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@id/callBannerGuideline40"
@@ -123,6 +126,7 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:clickable="true"
+            android:focusable="true"
             android:contentDescription="@string/accept_call"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@id/callBannerGuideline"

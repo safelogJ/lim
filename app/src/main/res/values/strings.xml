@@ -45,9 +45,8 @@
     <string name="reinstall">reinstall the app or remove account for a new login or new server.</string>
     <string name="chat_icon_desc">chat icon</string>
     <string name="user_icon_desc">user icon</string>
-    <string name="add_file_btn_text">add file</string>
+    <string name="add_file_btn_text">add file or record voice</string>
     <string name="remove_file_btn_text">remove file</string>
-    <string name="send_icon_desc">send icon</string>
     <string name="user_fields">user fields</string>
     <string name="new_chat">new chat</string>
     <string name="find_user">create</string>
@@ -56,6 +55,8 @@
     <string name="select_file_error">no file selected for sending</string>
     <string name="send_login_hint">send your interlocutor\'s login to start a chat</string>
     <string name="msg_notification_channel_name">Messages</string>
+    <string name="call_notification_channel_name">Incoming calls</string>
+    <string name="missing_call">Missing call from</string>
     <string name="new_msg">New message</string>
     <string name="new_msgs">New messages</string>
     <string name="new_msg_from">From:</string>
@@ -71,4 +72,20 @@
     <string name="calling">Calling</string>
     <string name="accept_call">Accept call</string>
     <string name="reject_call">Reject call</string>
+    <string name="switch_speaker">Switch speaker</string>
+    <string name="choose_green">Choose green</string>
+    <string name="choose_pink">Choose pink</string>
+    <string name="choose_blue">Choose blue</string>
+    <string name="choose_yellow">Choose yellow</string>
+    <string name="exit">Exit</string>
+    <string name="chat_name">Chat name</string>
+    <string name="file_name">File name</string>
+    <string name="last_msg">Last message</string>
+    <string name="time_msg">Time message</string>
+    <string name="msg_text">Message</string>
+    <string name="player_time">Player time</string>
+    <string name="you">You</string>
+    <string name="interlocutor">Interlocutor</string>
+    <string name="voice_message">Voice message</string>
+
 </resources>

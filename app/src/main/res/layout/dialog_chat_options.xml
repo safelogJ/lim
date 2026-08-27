@@ -38,31 +38,43 @@
 
         <View
             android:id="@+id/colorGreen"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_margin="4dp"
-            android:background="@drawable/interlocutor_background_green" />
+            android:background="@drawable/interlocutor_background_green"
+            android:clickable="true"
+            android:contentDescription="@string/choose_green"
+            android:focusable="true" />
 
         <View
             android:id="@+id/colorPink"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_margin="4dp"
-            android:background="@drawable/interlocutor_background_pink" />
+            android:background="@drawable/interlocutor_background_pink"
+            android:clickable="true"
+            android:contentDescription="@string/choose_pink"
+            android:focusable="true" />
 
         <View
             android:id="@+id/colorYellow"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_margin="4dp"
-            android:background="@drawable/interlocutor_background_yellow" />
+            android:background="@drawable/interlocutor_background_yellow"
+            android:clickable="true"
+            android:contentDescription="@string/choose_yellow"
+            android:focusable="true" />
 
         <View
             android:id="@+id/colorBlue"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_margin="4dp"
-            android:background="@drawable/interlocutor_background_blue" />
+            android:background="@drawable/interlocutor_background_blue"
+            android:clickable="true"
+            android:contentDescription="@string/choose_blue"
+            android:focusable="true" />
 
     </LinearLayout>
 
@@ -104,6 +116,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:backgroundTint="@color/main_background"
+            android:contentDescription="@string/rename_chat_btn"
             android:text="@string/rename_chat_btn"
             android:textColor="@color/white"
             android:textSize="16sp" />
@@ -121,6 +134,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:contentDescription="@string/hide_chat"
                 android:text="@string/hide_chat"
                 android:textColor="@color/gray700" />
 
@@ -130,6 +144,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:contentDescription="@string/block_chat"
                 android:text="@string/block_chat"
                 android:textColor="@color/redA400" />
         </LinearLayout>

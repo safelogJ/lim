@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -70,9 +71,9 @@ public abstract class BaseHandler implements HttpHandler {
         sendResponse(exchange, 203, response);
     }
 
-    protected void sendUserNotFoundError(HttpExchange exchange, BaseResponse response) throws IOException {
+    protected void sendUserNotFoundError(HttpExchange exchange, BaseResponse response, @Nullable String interlocutorName) throws IOException {
         response.status = BaseResponse.ERROR;
-        response.message = "user not found";
+        response.message = "user " + (interlocutorName == null ? LimController.EMPTY_STRING : interlocutorName) + " not found";
         sendResponse(exchange, 404, response);
     }
 

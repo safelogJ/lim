@@ -191,7 +191,7 @@ public class ChatListFragment extends Fragment {
     @Override
     public void onStart() {
         super.onStart();
-        NotificationHelper.clearNotification(controller);
+        NotificationHelper.clearNotification(controller, NotificationHelper.MSG_NOTIFICATION_ID);
     }
 
     @Override

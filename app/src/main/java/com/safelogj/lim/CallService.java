@@ -72,6 +72,8 @@ public class CallService {
     private final DatagramPacket packetIn = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
     private final Object muteLock = new Object();
     private volatile Mute[] mutedUsers = new Mute[20];
+
+    private long ringingStartTimestamp = 0;
     private final Handler callHandler = new Handler(Looper.getMainLooper());
     private final Runnable endCallRunnable = () -> {
         muteInterlocutor(Caller.MUTE_END);
@@ -83,6 +85,9 @@ public class CallService {
         appController.notifyIncomingCallChanged(CallService.INVALID_ID);
         stopRinging();
         renewOrStopRingRunnable(0);
+        if (appController.startedActivities.get() == 0) {
+            NotificationHelper.showMissedCallNotification(appController, interlocutorId, ringingStartTimestamp);
+        }
         interlocutorId = INVALID_ID;
         lineBusy.set(false);
     };
@@ -137,15 +142,6 @@ public class CallService {
         toneGenerator.release();
     }
 
-    public void stopUdpTraffic() {
-        if (!isTalking.get()) {
-            isListeningUdp.set(false);
-            killCall();
-            closeUdpSocket(udpSocket);
-            udpSocket = null;
-        }
-    }
-
     public void sendKeepAlive() {
         if (!lineBusy.get() && appController.hasMic() && appController.hasAudioOut()) {
             appController.getNetStreams()[AppController.UDP_OUT].execute(() -> {
@@ -154,6 +150,7 @@ public class CallService {
                     if (packetOut != null && hasSocket()) {
                         socket = udpSocket;
                         socket.send(packetOut);
+                        Log.i(AppController.LOG_TAG, "Keep-alive sent: ");
                     }
                 } catch (Exception e) {
                     closeUdpSocket(socket);
@@ -181,6 +178,7 @@ public class CallService {
                     }
                 }
                 Log.d(AppController.LOG_TAG, "UDP Listener stopped");
+                isListeningUdp.set(false);
             });
         }
     }
@@ -274,10 +272,6 @@ public class CallService {
         lineBusy.set(false);
         isOutputCall.set(false);
         appController.notifyEndCallChanged(CallService.INVALID_ID);  // закрыть фрагмент
-        if (appController.startedActivities.get() == 0) {
-            closeUdpSocket(udpSocket);
-            udpSocket = null;
-        }
     }
 
     public void endCall(long muteTime) { // UI нить из фрагмента конец разговора, UDP_OUT в исключении при отправке,
@@ -336,8 +330,7 @@ public class CallService {
                 audioManager.clearCommunicationDevice();
                 Log.d(AppController.LOG_TAG, "Cleared communication device (back to earpiece)");
             }
-        } else {
-            // (до Android 12)
+        } else {  // (до Android 12)
             audioManager.setSpeakerphoneOn(on);
         }
         Log.d(AppController.LOG_TAG, "Loudspeaker is now: " + on);
@@ -362,8 +355,13 @@ public class CallService {
             lineBusy.set(true);
             isOutputCall.set(false);
             currentCallToken = token;
-            ringingStopLastTimeout.set(System.currentTimeMillis()); // входящий
+            ringingStartTimestamp = System.currentTimeMillis();
+            ringingStopLastTimeout.set(ringingStartTimestamp); // входящий
             appController.notifyIncomingCallChanged(interlocutorId);
+            if (appController.startedActivities.get() == 0) {
+                NotificationHelper.showCallNotification(appController, interlocutorId, ringingStartTimestamp);
+            }
+            startRinging();
             callHandler.postDelayed(ringingStopRunnable, Caller.END_AUTO);
             Log.d(AppController.LOG_TAG, "New incoming call from: " + senderId);
         } else if (senderId == interlocutorId) { // второй пакет при входящем или первый при исходящем
@@ -526,6 +524,14 @@ public class CallService {
             audioRecord = null;
         }
         opusEncoder = null;
+    }
+
+    public void closeUdpSocket() {
+        synchronized (socketLock) {
+            if (udpSocket != null && !udpSocket.isClosed()) {
+                udpSocket.close();
+            }
+        }
     }
 
     private void closeUdpSocket(DatagramSocket socket) {

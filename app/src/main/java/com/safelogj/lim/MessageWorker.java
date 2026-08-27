@@ -28,17 +28,18 @@ public class MessageWorker extends Worker {
     }
 
     private Result startDownloadNewMsg(AppController controller) {
-        Log.d(AppController.LOG_TAG, "MessageWorker.startDownloadNewMsg()");
+        Log.i(AppController.LOG_TAG, "MessageWorker.startDownloadNewMsg()");
         if (controller.startedActivities.get() == 0 && controller.activeDownloadsCount.get() == 0) {
             controller.activeDownloadsCount.incrementAndGet();
             controller.getNetworkService().getNewMessages(controller.getDbHelper().getLastDbMessageId(),
-                    null, new MediaLatch(true));
+                    null, new MediaLatch(true, false));
         }
+        controller.tickUdp();
         return startSendingMsgList(controller);
     }
 
     private Result startSendingMsgList(AppController controller) {
-        Log.d(AppController.LOG_TAG, "MessageWorker.startSendingMsgList()");
+        Log.i(AppController.LOG_TAG, "MessageWorker.startSendingMsgList()");
         for (Message msg : controller.getDbHelper().getPendingMessages()) {
             if (msg.type.equals(Message.TYPE_TEXT)) {
                 controller.getNetworkService().sendTextMessage(msg, null);
@@ -47,10 +48,5 @@ public class MessageWorker extends Worker {
             }
         }
         return Result.success();
-    }
-    @Override
-    public void onStopped() {
-        super.onStopped();
-        Log.w(AppController.LOG_TAG, "MessageWorker был принудительно остановлен системой!");
     }
 }

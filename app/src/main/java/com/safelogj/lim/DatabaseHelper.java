@@ -192,7 +192,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 cachedLastMsgServerId.set(0);
                 unreadChatsSynchronizedTask(unreadChatsCache::clear);
                 controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
-                NotificationHelper.clearNotification(controller);
                 synchronized (pendingMessagesCache) {
                     pendingMessagesCache.clear();
                 }
@@ -758,7 +757,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             c.name = msg.chatName;
                             c.lastTimestamp = msg.timestamp;
                             unreadChatsSynchronizedTask(() -> unreadChatsCache.put(c.id, c));
-                            Log.d(AppController.LOG_TAG, "в кэш непрочитанных чатов добавлено сообщение" + msg.chatName);
+                            Log.d(AppController.LOG_TAG, "в кэш непрочитанных чатов добавлено сообщение от " + msg.chatName);
                         }
                     }
                     newMsgChatIds.forEach(controller::notifyMessagesChanged);

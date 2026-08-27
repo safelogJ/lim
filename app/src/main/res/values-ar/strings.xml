@@ -38,9 +38,8 @@
     <string name="reinstall">أعد تثبيت التطبيق أو احذف الحساب لتسجيل دخول جديد أو خادم جديد.</string>
     <string name="chat_icon_desc">أيقونة الدردشة</string>
     <string name="user_icon_desc">أيقونة المستخدم</string>
-    <string name="add_file_btn_text">إضافة ملف</string>
+    <string name="add_file_btn_text">إضافة ملف أو تسجيل صوت</string>
     <string name="remove_file_btn_text">إزالة الملف</string>
-    <string name="send_icon_desc">أيقونة الإرسال</string>
     <string name="user_fields">حقول المستخدم</string>
     <string name="new_chat">دردشة جديدة</string>
     <string name="find_user">إنشاء</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">لم يتم اختيار ملف للإرسال</string>
     <string name="send_login_hint">أرسل اسم مستخدم الطرف الآخر لبدء الدردشة</string>
     <string name="msg_notification_channel_name">الرسائل</string>
+    <string name="call_notification_channel_name">المكالمات الواردة</string>
+    <string name="missing_call">مكالمة فائتة من</string>
     <string name="new_msg">رسالة جديدة</string>
     <string name="new_msgs">رسائل جديدة</string>
     <string name="new_msg_from">من:</string>
@@ -64,4 +65,19 @@
     <string name="calling">جاري الاتصال…</string>
     <string name="accept_call">رد على المكالمة</string>
     <string name="reject_call">رفض المكالمة</string>
+    <string name="switch_speaker">تبديل مكبر الصوت</string>
+    <string name="choose_green">اختر الأخضر</string>
+    <string name="choose_pink">اختر الوردي</string>
+    <string name="choose_blue">اختر الأزرق</string>
+    <string name="choose_yellow">اختر الأصفر</string>
+    <string name="exit">خروج</string>
+    <string name="chat_name">اسم الدردشة</string>
+    <string name="file_name">اسم الملف</string>
+    <string name="last_msg">آخر رسالة</string>
+    <string name="time_msg">وقت الرسالة</string>
+    <string name="msg_text">رسالة</string>
+    <string name="player_time">وقت المشغل</string>
+    <string name="you">أنت</string>
+    <string name="interlocutor">المحاور</string>
+    <string name="voice_message">رسالة صوتية</string>
 </resources>

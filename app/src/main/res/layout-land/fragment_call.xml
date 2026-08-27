@@ -44,8 +44,8 @@
         android:id="@+id/onlineStatus"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:importantForAccessibility="no"
         android:background="@drawable/cloud_48px"
+        android:importantForAccessibility="no"
         app:layout_constraintBottom_toBottomOf="@+id/tvCallName"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/tvCallName" />
@@ -54,8 +54,8 @@
         android:id="@+id/onlineStatusHolder"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:importantForAccessibility="no"
         android:background="@drawable/cloud_48px"
+        android:importantForAccessibility="no"
         android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="@+id/tvCallName"
         app:layout_constraintEnd_toEndOf="parent"
@@ -67,14 +67,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/phone_in_talk_48px"
+        android:clickable="true"
+        android:contentDescription="@string/switch_speaker"
+        android:focusable="true"
         android:textColor="@color/white"
         android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true"
-        android:contentDescription="@string/switch_speaker"
-        app:layout_constraintBottom_toTopOf="@+id/btnEndCall"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="@+id/tvCallName"
         app:layout_constraintTop_toBottomOf="@+id/tvCallName"
         tools:visibility="visible" />
 
@@ -82,13 +81,12 @@
         android:id="@+id/btnEndCall"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:layout_marginBottom="32dp"
         android:background="@drawable/fielder_background_red"
         android:clickable="true"
         android:contentDescription="@string/end_call"
         android:focusable="true"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="@+id/tvCallName"
-        app:layout_constraintStart_toStartOf="@+id/tvCallName" />
+        app:layout_constraintStart_toStartOf="@+id/tvCallName"
+        app:layout_constraintTop_toBottomOf="@+id/tvCallName" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -66,13 +66,15 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             for (Object payload : payloads) {
                 if (payload instanceof Bundle diff) {
                     if (diff.containsKey(HAS_NEW)) holder.updateNewMsgStatus(chat.hasNewMsg);
-                    if (diff.containsKey(TIME)) holder.binding.timeText.setText(AppController.formatSmartTime(holder.itemView.getContext(), chat.lastTimestamp));
+                    if (diff.containsKey(TIME))
+                        holder.binding.timeText.setText(AppController.formatSmartTime(holder.itemView.getContext(), chat.lastTimestamp));
                     if (diff.containsKey(BLOCK)) holder.updateBlockStatus(chat);
                     if (diff.containsKey(SEND)) holder.updateSendStatus(chat);
                     if (diff.containsKey(COLOR)) chat.color = diff.getInt(COLOR);
                     if (diff.containsKey(NAME)) holder.binding.chatName.setText(chat.name);
                     if (diff.containsKey(MSG)) holder.binding.lastMessage.setText(chat.lastMessage);
                     if (diff.containsKey(ONLINE)) holder.updateOnlineStatus(chat);
+                    holder.updateContentDescription(chat);
                 }
             }
             holder.setListeners(chat, listener);
@@ -105,7 +107,23 @@ public class ChatListAdapter extends ListAdapter<Chat, ChatListAdapter.ChatViewH
             updateBlockStatus(chat);
             updateSendStatus(chat);
             updateOnlineStatus(chat);
+            updateContentDescription(chat);
             setListeners(chat, listener);
+        }
+
+        private void updateContentDescription(Chat chat) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(chat.name).append(". ");
+            if (chat.hasNewMsg) {
+                sb.append(itemView.getContext().getString(R.string.new_msg)).append(". ");
+            }
+            if (chat.lastMessage != null && !chat.lastMessage.isEmpty()) {
+                sb.append(chat.lastMessage).append(". ");
+            }
+            if (chat.lastTimestamp > 0) {
+                sb.append(AppController.formatSmartTime(itemView.getContext(), chat.lastTimestamp));
+            }
+            itemView.setContentDescription(sb.toString());
         }
 
         public void setListeners(Chat chat, OnChatClickListener listener) {

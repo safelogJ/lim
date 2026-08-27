@@ -9,6 +9,7 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.os.Bundle;
 import android.os.Handler;
@@ -31,6 +32,7 @@ import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.WorkRequest;
 
+import com.bumptech.glide.Glide;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.MediaLatch;
 import com.safelogj.lim.model.Message;
@@ -111,6 +113,7 @@ public class AppController extends Application {
     public static final int UDP_IN = 5;
     public static final int UDP_OUT = 6;
     public static final String NOTIFICATION_CHANNEL = "lim_messages";
+    public static final String CALL_CHANNEL = "lim_calls";
     public static final String LIM_SYNC = "LimSync";
     private static final String USER_DATA = "userdata";
     private static final String USER_DATA_JSON = "userdata.txt";
@@ -403,6 +406,8 @@ public class AppController extends Application {
             callService.releaseToneGenerator();
         }
         callService = null;
+        NotificationHelper.clearNotification(this, NotificationHelper.MSG_NOTIFICATION_ID);
+        NotificationHelper.clearNotification(this, NotificationHelper.CALL_NOTIFICATION_ID);
     }
 
     public void setServerUrl(@NonNull String serverIp) {
@@ -490,7 +495,7 @@ public class AppController extends Application {
     }
 
     public boolean hasVoiceCipher(int interlocutorId) {
-       return callService.initCallEncryption(interlocutorId);
+        return callService.initCallEncryption(interlocutorId);
     }
 
     @Override
@@ -499,7 +504,6 @@ public class AppController extends Application {
         mExternalFileDir = getExternalFilesDir(null);
         setupDayFormatters();
         regActivityListener();
-        registerNetworkCallback();
         readRoutersListAndSettingsEncrypted();
         initOkHttpClient();
         dbHelper = new DatabaseHelper(this);
@@ -515,15 +519,34 @@ public class AppController extends Application {
         checkEarpiece();
         checkSpeaker();
         checkAnyAudioOut();
+        registerNetworkCallback();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+
+        // Когда приложение уходит в фоновый режим или системе не хватает RAM:
+        if (level >= TRIM_MEMORY_BACKGROUND) {
+            // Очищаем кэш в оперативке (вызывается строго в UI-потоке)
+            Glide.get(this).clearMemory();
+        }
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        // При критической нехватке памяти на устройстве
+        Glide.get(this).clearMemory();
     }
 
     public void writeSettingsToFile() {
         userExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
 
-    private void startDownloadNewMsg() {
+    private void startDownloadNewMsg(boolean isPseudoWorker) {
         netStreams[GET_MSG].execute(() ->
-                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false)));
+                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false, isPseudoWorker)));
     }
 
     private void startSendingMsgList() {
@@ -536,7 +559,7 @@ public class AppController extends Application {
         }
     }
 
-    private void startUdpSending() {
+    public void tickUdp() {
         if (callService == null) {
             callService = new CallService(this);
         }
@@ -823,10 +846,10 @@ public class AppController extends Application {
                         if (userId > 0 && isNetworkActive.get()) {
                             if (activeDownloadsCount.get() == 0) {
                                 activeDownloadsCount.incrementAndGet();
-                                startDownloadNewMsg();
+                                startDownloadNewMsg(false);
                             }
                             startSendingMsgList();
-                            startUdpSending();
+                            tickUdp();
                         }
                     }, 0, 4, TimeUnit.SECONDS);
                 }
@@ -844,13 +867,8 @@ public class AppController extends Application {
 
             @Override
             public void onActivityStopped(@NonNull Activity activity) {
-                if (startedActivities.decrementAndGet() == 0) {
-                    if (syncTask != null && !syncTask.isCancelled()) {
-                        syncTask.cancel(false);
-                    }
-                    if (!activity.isChangingConfigurations()) {
-                        callService.stopUdpTraffic();
-                    }
+                if (startedActivities.decrementAndGet() == 0 && syncTask != null && !syncTask.isCancelled()) {
+                    syncTask.cancel(false);
                 }
             }
 
@@ -885,7 +903,6 @@ public class AppController extends Application {
         if (msgDate.getYear() == today.getYear()) {
             return controller.dayMonthFormatter.format(msgTime);
         }
-
         return controller.dateFormatter.format(msgTime);
     }
 
@@ -897,14 +914,21 @@ public class AppController extends Application {
     }
 
     private void createNotificationChannel() {
-        NotificationChannel channel = new NotificationChannel(
-                NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
-        channel.enableVibration(false); // ОТКЛЮЧАЕМ вибрацию для канала
-        channel.setVibrationPattern(new long[]{0}); // На всякий случай зануляем паттерн
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) {
-            manager.createNotificationChannel(channel);
-        }
+        if (manager == null) return;
+
+        NotificationChannel msgChannel = new NotificationChannel(
+                NOTIFICATION_CHANNEL, getString(R.string.msg_notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT);
+        msgChannel.enableVibration(false);
+        msgChannel.setVibrationPattern(new long[]{0});
+        manager.createNotificationChannel(msgChannel);
+
+        NotificationChannel callChannel = new NotificationChannel(
+                CALL_CHANNEL, getString(R.string.call_notification_channel_name), NotificationManager.IMPORTANCE_HIGH);
+        callChannel.setSound(null, null); // Без звука в канале
+        callChannel.enableVibration(false);
+        callChannel.setVibrationPattern(new long[]{0});
+        manager.createNotificationChannel(callChannel);
     }
 
     private void registerNetworkCallback() {
@@ -914,8 +938,29 @@ public class AppController extends Application {
                 @Override
                 public void onAvailable(@NonNull Network network) {
                     isNetworkActive.set(true);
+                    if (userId > 0) {
+                        tickUdp();
+                        if (activeDownloadsCount.get() == 0) {
+                            activeDownloadsCount.incrementAndGet();
+                            startDownloadNewMsg(true);
+                            Log.w(LOG_TAG, "псевдо воркер запущен ");
+                        }
+                    }
                     offlineHandler.removeCallbacks(resetStatusesRunnable);
-                    Log.d(LOG_TAG, "Network is back. Offline reset canceled.");
+                    Log.d(LOG_TAG, "Network: WiFi Connected. " + network);
+                }
+
+                @Override
+                public void onLinkPropertiesChanged(@NonNull Network network, @NonNull LinkProperties linkProperties) {
+                    Log.d(LOG_TAG, "LINK CHANGED DNS=" + linkProperties.getDnsServers());
+                    if (userId > 0 && isNetworkActive.get()) {
+                        tickUdp();
+                        if (activeDownloadsCount.get() == 0) {
+                            activeDownloadsCount.incrementAndGet();
+                            startDownloadNewMsg(true);
+                            Log.w(LOG_TAG, "псевдо воркер запущен ");
+                        }
+                    }
                 }
 
                 @Override
@@ -923,7 +968,6 @@ public class AppController extends Application {
                     isNetworkActive.set(false);
                     offlineHandler.postDelayed(resetStatusesRunnable, 15000);
                     Log.d(LOG_TAG, "Network lost. Scheduled offline reset in 15s...");
-
                 }
             });
         }

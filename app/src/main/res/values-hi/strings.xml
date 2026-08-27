@@ -38,9 +38,8 @@
     <string name="reinstall">नए लॉगिन या नए सर्वर के लिए ऐप को पुन: इंस्टॉल करें या खाता हटा दें।</string>
     <string name="chat_icon_desc">चैट आइकन</string>
     <string name="user_icon_desc">उपयोगकर्ता आइकन</string>
-    <string name="add_file_btn_text">फ़ाइल जोड़ें</string>
+    <string name="add_file_btn_text">फ़ाइल जोड़ें या आवाज़ रिकॉर्ड करें</string>
     <string name="remove_file_btn_text">फ़ाइल हटाएँ</string>
-    <string name="send_icon_desc">भेजें आइकन</string>
     <string name="user_fields">उपयोगकर्ता फ़ील्ड</string>
     <string name="new_chat">नई चैट</string>
     <string name="find_user">बनाएं</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">भेजने के लिए कोई फ़ाइल नहीं चुनी गई</string>
     <string name="send_login_hint">चैट शुरू करने के लिए अपने वार्ताकार का लॉगिन भेजें</string>
     <string name="msg_notification_channel_name">संदेश</string>
+    <string name="call_notification_channel_name">आने वाली कॉल</string>
+    <string name="missing_call">मिस्ड कॉल: </string>
     <string name="new_msg">नया संदेश</string>
     <string name="new_msgs">नए संदेश</string>
     <string name="new_msg_from">से:</string>
@@ -64,4 +65,19 @@
     <string name="calling">कॉल हो रही है…</string>
     <string name="accept_call">कॉल स्वीकार करें</string>
     <string name="reject_call">कॉल अस्वीकार करें</string>
+    <string name="switch_speaker">स्पीकर बदलें</string>
+    <string name="choose_green">हरा चुनें</string>
+    <string name="choose_pink">गुलाबी चुनें</string>
+    <string name="choose_blue">नीला चुनें</string>
+    <string name="choose_yellow">पीला चुनें</string>
+    <string name="exit">बाहर निकलें</string>
+    <string name="chat_name">चैट का नाम</string>
+    <string name="file_name">फ़ाइल का नाम</string>
+    <string name="last_msg">आखिरी संदेश</string>
+    <string name="time_msg">संदेश का समय</string>
+    <string name="msg_text">संदेश</string>
+    <string name="player_time">प्लेयर का समय</string>
+    <string name="you">आप</string>
+    <string name="interlocutor">वार्ताकार</string>
+    <string name="voice_message">वॉयс मैसेज</string>
 </resources>

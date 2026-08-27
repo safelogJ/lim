@@ -102,6 +102,14 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     }
 
     @Override
+    public void onViewRecycled(@NonNull MessageViewHolder holder) {
+        super.onViewRecycled(holder);
+        if (playingBinding != null && holder.binding == playingBinding) {
+            playingBinding = null;
+        }
+    }
+
+    @Override
     public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
         stopPlaying();
         super.onDetachedFromRecyclerView(recyclerView);
@@ -136,7 +144,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                         .override(800, 800) // Ограничиваем размер превью, это ОЧЕНЬ ускорит прокрутку
                         .centerInside()
                         .placeholder(R.drawable.fielder_background_tr) // Занимаем место до загрузки
-                        .diskCacheStrategy(DiskCacheStrategy.ALL) // Кешируем все версии
+                        //   .diskCacheStrategy(DiskCacheStrategy.ALL) // Кешируем все версии
+                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                         .into(binding.messageImage);
 
             } else if (isAudioFile(message.fileName) && message.isLocalFile()) {
@@ -196,7 +205,35 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
             binding.messageTime.setText(com.safelogj.lim.AppController.formatSmartTime(itemView.getContext(), message.timestamp));
             constraintSet.applyTo((ConstraintLayout) itemView);
+            updateContentDescription(message, currentUserId);
             setListeners(message, currentUserId);
+        }
+
+        private void updateContentDescription(Message message, int currentUserId) {
+            StringBuilder sb = new StringBuilder();
+            Context context = itemView.getContext();
+
+            int type = message.getMessageTypeByUserId(currentUserId);
+            if (type == Message.TYPE_OUTGOING) {
+                sb.append(context.getString(R.string.you)).append(": ");
+            } else if (type == Message.TYPE_INCOMING) {
+                sb.append(context.getString(R.string.interlocutor)).append(": ");
+            }
+
+            if (message.text != null && !message.text.isEmpty()) {
+                sb.append(message.text).append(". ");
+            }
+
+            if (Message.TYPE_IMAGE.equals(message.type)) {
+                sb.append(context.getString(R.string.image)).append(". ");
+            } else if (isAudioFile(message.fileName)) {
+                sb.append(context.getString(R.string.voice_message)).append(". ");
+            } else if (Message.TYPE_FILE.equals(message.type)) {
+                sb.append(context.getString(R.string.file_name)).append(": ").append(message.fileName).append(". ");
+            }
+
+            sb.append(AppController.formatSmartTime(context, message.timestamp));
+            binding.messageBubble.setContentDescription(sb.toString());
         }
 
         private void setListeners(Message message, int currentUserId) {
@@ -260,6 +297,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     private static class DiffCallback extends DiffUtil.ItemCallback<Message> {
         @Override
         public boolean areItemsTheSame(@NonNull Message oldItem, @NonNull Message newItem) {
+            if (oldItem.senderId == Message.SYSTEM_SENDER_ID && newItem.senderId == Message.SYSTEM_SENDER_ID) {
+                return Objects.equals(oldItem.text, newItem.text);
+            }
             // Проверяем, что это физически то же самое сообщение (по локальному ID)
             return oldItem.localId == newItem.localId;
         }

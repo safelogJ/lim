@@ -38,9 +38,8 @@
     <string name="reinstall">i-reinstall ang app o alisin ang account para sa bagong login o bagong server.</string>
     <string name="chat_icon_desc">icon ng chat</string>
     <string name="user_icon_desc">icon ng user</string>
-    <string name="add_file_btn_text">magdagdag ng file</string>
+    <string name="add_file_btn_text">magdagdag ng file o mag-record ng boses</string>
     <string name="remove_file_btn_text">alisin ang file</string>
-    <string name="send_icon_desc">icon ng pagpapadala</string>
     <string name="user_fields">user fields</string>
     <string name="new_chat">bagong chat</string>
     <string name="find_user">lumikha</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">walang file na napili para ipadala</string>
     <string name="send_login_hint">ipadala ang login ng iyong kausap para magsimula ng chat</string>
     <string name="msg_notification_channel_name">Mga Mensahe</string>
+    <string name="call_notification_channel_name">Mga papasok na tawag</string>
+    <string name="missing_call">Missed call mula kay</string>
     <string name="new_msg">Bagong mensahe</string>
     <string name="new_msgs">Mga bagong mensahe</string>
     <string name="new_msg_from">Mula kay:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Tumatawag…</string>
     <string name="accept_call">Sagutin ang tawag</string>
     <string name="reject_call">Tanggihan ang tawag</string>
+    <string name="switch_speaker">I-switch ang speaker</string>
+    <string name="choose_green">Pilihin ang berde</string>
+    <string name="choose_pink">Pilihin ang rosas</string>
+    <string name="choose_blue">Pilihin ang asul</string>
+    <string name="choose_yellow">Pilihin ang dilaw</string>
+    <string name="exit">Labas</string>
+    <string name="chat_name">Pangalan ng chat</string>
+    <string name="file_name">Pangalan ng file</string>
+    <string name="last_msg">Huling mensahe</string>
+    <string name="time_msg">Oras ng mensahe</string>
+    <string name="msg_text">Mensahe</string>
+    <string name="player_time">Oras ng player</string>
+    <string name="you">Ikaw</string>
+    <string name="interlocutor">Kausap</string>
+    <string name="voice_message">Voice message</string>
 </resources>

@@ -38,9 +38,8 @@
     <string name="reinstall">instal ulang aplikasi atau hapus akun untuk login baru atau server baru.</string>
     <string name="chat_icon_desc">ikon obrolan</string>
     <string name="user_icon_desc">ikon pengguna</string>
-    <string name="add_file_btn_text">tambah file</string>
+    <string name="add_file_btn_text">tambah file atau rekam suara</string>
     <string name="remove_file_btn_text">hapus file</string>
-    <string name="send_icon_desc">ikon kirim</string>
     <string name="user_fields">bidang pengguna</string>
     <string name="new_chat">obrolan baru</string>
     <string name="find_user">buat</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">tidak ada file yang dipilih untuk dikirim</string>
     <string name="send_login_hint">kirim login lawan bicara Anda untuk memulai obrolan</string>
     <string name="msg_notification_channel_name">Pesan</string>
+    <string name="call_notification_channel_name">Panggilan masuk</string>
+    <string name="missing_call">Panggilan tak terjawab dari</string>
     <string name="new_msg">Pesan baru</string>
     <string name="new_msgs">Pesan-pesan baru</string>
     <string name="new_msg_from">Dari:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Memanggil…</string>
     <string name="accept_call">Terima panggilan</string>
     <string name="reject_call">Tolak panggilan</string>
+    <string name="switch_speaker">Ganti speaker</string>
+    <string name="choose_green">Pilih hijau</string>
+    <string name="choose_pink">Pilih merah muda</string>
+    <string name="choose_blue">Pilih biru</string>
+    <string name="choose_yellow">Pilih kuning</string>
+    <string name="exit">Keluar</string>
+    <string name="chat_name">Nama obrolan</string>
+    <string name="file_name">Nama file</string>
+    <string name="last_msg">Pesan terakhir</string>
+    <string name="time_msg">Waktu pesan</string>
+    <string name="msg_text">Pesan</string>
+    <string name="player_time">Waktu pemutar</string>
+    <string name="you">Anda</string>
+    <string name="interlocutor">Lawan bicara</string>
+    <string name="voice_message">Pesan suara</string>
 </resources>

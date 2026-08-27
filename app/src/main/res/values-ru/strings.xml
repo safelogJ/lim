@@ -38,9 +38,8 @@
     <string name="reinstall">переустановите приложение или удалите аккаунт для нового входа или сервера.</string>
     <string name="chat_icon_desc">иконка чата</string>
     <string name="user_icon_desc">иконка пользователя</string>
-    <string name="add_file_btn_text">добавить файл</string>
+    <string name="add_file_btn_text">добавить файл или запись голоса</string>
     <string name="remove_file_btn_text">удалить файл</string>
-    <string name="send_icon_desc">иконка отправки</string>
     <string name="user_fields">поля пользователя</string>
     <string name="new_chat">новый чат</string>
     <string name="find_user">создать</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">файл для отправки не выбран</string>
     <string name="send_login_hint">отправьте логин собеседника, чтобы начать чат</string>
     <string name="msg_notification_channel_name">Сообщения</string>
+    <string name="call_notification_channel_name">Входящие вызовы</string>
+    <string name="missing_call">Пропущенный звонок от</string>
     <string name="new_msg">Новое сообщение</string>
     <string name="new_msgs">Новые сообщения</string>
     <string name="new_msg_from">От:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Вызов…</string>
     <string name="accept_call">Принять вызов</string>
     <string name="reject_call">Отклонить вызов</string>
+    <string name="switch_speaker">Переключить динамик</string>
+    <string name="choose_green">Выбрать зеленый</string>
+    <string name="choose_pink">Выбрать розовый</string>
+    <string name="choose_blue">Выбрать синий</string>
+    <string name="choose_yellow">Выбрать желтый</string>
+    <string name="exit">Выход</string>
+    <string name="chat_name">Имя чата</string>
+    <string name="file_name">Имя файла</string>
+    <string name="last_msg">Последнее сообщение</string>
+    <string name="time_msg">Время сообщения</string>
+    <string name="msg_text">Сообщение</string>
+    <string name="player_time">Время плеера</string>
+    <string name="you">Вы</string>
+    <string name="interlocutor">Собеседник</string>
+    <string name="voice_message">Голосовое сообщение</string>
 </resources>

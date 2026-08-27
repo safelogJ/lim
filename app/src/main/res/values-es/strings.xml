@@ -38,9 +38,8 @@
     <string name="reinstall">reinstale la aplicación o elimine la cuenta para un nuevo inicio de sesión o servidor.</string>
     <string name="chat_icon_desc">icono de chat</string>
     <string name="user_icon_desc">icono de usuario</string>
-    <string name="add_file_btn_text">añadir archivo</string>
+    <string name="add_file_btn_text">añadir archivo o grabar voz</string>
     <string name="remove_file_btn_text">eliminar archivo</string>
-    <string name="send_icon_desc">icono de envío</string>
     <string name="user_fields">campos de usuario</string>
     <string name="new_chat">nuevo chat</string>
     <string name="find_user">crear</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">no se ha seleccionado ningún archivo para enviar</string>
     <string name="send_login_hint">envíe el usuario de su interlocutor para iniciar un chat</string>
     <string name="msg_notification_channel_name">Mensajes</string>
+    <string name="call_notification_channel_name">Llamadas entrantes</string>
+    <string name="missing_call">Llamada perdida de</string>
     <string name="new_msg">Nuevo mensaje</string>
     <string name="new_msgs">Nuevos mensajes</string>
     <string name="new_msg_from">De:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Llamando…</string>
     <string name="accept_call">Aceptar llamada</string>
     <string name="reject_call">Rechazar llamada</string>
+    <string name="switch_speaker">Cambiar altavoz</string>
+    <string name="choose_green">Elegir verde</string>
+    <string name="choose_pink">Elegir rosa</string>
+    <string name="choose_blue">Elegir azul</string>
+    <string name="choose_yellow">Elegir amarillo</string>
+    <string name="exit">Salir</string>
+    <string name="chat_name">Nombre del chat</string>
+    <string name="file_name">Nombre del archivo</string>
+    <string name="last_msg">Último mensaje</string>
+    <string name="time_msg">Hora del mensaje</string>
+    <string name="msg_text">Mensaje</string>
+    <string name="player_time">Tiempo del reproductor</string>
+    <string name="you">Tú</string>
+    <string name="interlocutor">Interlocutor</string>
+    <string name="voice_message">Mensaje de voz</string>
 </resources>

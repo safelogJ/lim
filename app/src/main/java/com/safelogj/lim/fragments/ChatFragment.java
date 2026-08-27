@@ -193,6 +193,7 @@ public class ChatFragment extends Fragment {
         setObserveErrorStatus();
         setKeyboardPadding();
         updateBottomPanel();
+        mBinding.onlineContainer.setContentDescription(getString(R.string.calling) + " " + currentChatName);
 
         if (currentChatId == Chat.INVALID_ID) {
             addSystemMessageToList(getString(R.string.send_login_hint));
@@ -332,7 +333,7 @@ public class ChatFragment extends Fragment {
                 }
                 if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                     controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
-                    NotificationHelper.showNotification(controller, unreadChatList);
+                    NotificationHelper.showMsgNotification(controller, unreadChatList);
                 }
             }
         });
@@ -420,6 +421,7 @@ public class ChatFragment extends Fragment {
     @Override
     public void onDestroyView() {
         stopRecordAndPlay();
+        recordingHandler.removeCallbacksAndMessages(recordingTimerRunnable); // Добавляем это!
         lastOnlineState = null;
         super.onDestroyView();
         mBinding = null;
@@ -456,11 +458,11 @@ public class ChatFragment extends Fragment {
     private void addSystemMessageToList(String text) {
         Message msg = new Message();
         msg.text = text;
-        Log.d(AppController.LOG_TAG, "Добавляем системное сообщение: " + text);
         msg.senderId = Message.SYSTEM_SENDER_ID;
         if (currentChatId == Chat.INVALID_ID) {
             messages.clear();
         }
+        Log.d(AppController.LOG_TAG, "Добавляем системное сообщение: " + text);
         messages.add(0, msg);
         adapter.submitList(new ArrayList<>(messages), () -> mBinding.messagesRecyclerView.scrollToPosition(0));
     }
@@ -529,9 +531,9 @@ public class ChatFragment extends Fragment {
         if (currentChatId == Chat.INVALID_ID) return;
         NotificationManager manager = (NotificationManager) controller.getSystemService(Context.NOTIFICATION_SERVICE);
         for (StatusBarNotification sbn : manager.getActiveNotifications()) {
-            if (sbn.getId() == NotificationHelper.NOTIFICATION_ID
+            if (sbn.getId() == NotificationHelper.MSG_NOTIFICATION_ID
                     && sbn.getNotification().extras.getInt(NotificationHelper.EXTRA_CHAT_ID, -1) == currentChatId) {
-                manager.cancel(NotificationHelper.NOTIFICATION_ID);
+                manager.cancel(NotificationHelper.MSG_NOTIFICATION_ID);
             }
         }
     }

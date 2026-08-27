@@ -42,6 +42,37 @@ The minimum polling interval available while the application is in the backgroun
 
 This limitation is imposed by the Android operating system for applications that do not rely on push notification services.
 
+---
+
+## Real-time notifications (MikroTik trick)
+
+To receive messages faster than every 15 minutes while in the background, you can use a trick with your MikroTik router.
+
+### How it works
+Android OS monitors network properties. When the DNS server list changes in your Wi-Fi network, Android triggers a system event `onLinkPropertiesChanged`. Lim listens for this event and performs a quick check for new messages.
+
+### MikroTik Script (DNS Toggling)
+You can create a script on your MikroTik router that toggles between two sets of DNS servers. This is a "soft" trigger that works well when the device is not in deep sleep.
+
+```routeros
+:local netId [/ip dhcp-server network find address="192.168.88.0/24"];
+:local currentDns [/ip dhcp-server network get $netId dns-server];
+:if ($currentDns = "192.168.88.1,8.8.8.8") do={
+    /ip dhcp-server network set $netId dns-server="192.168.88.1,8.8.4.4";
+} else={
+    /ip dhcp-server network set $netId dns-server="192.168.88.1,8.8.8.8";
+}
+```
+### Setup Instructions
+1. **Scheduler**: Add script to `/system scheduler` to run at your desired interval (e.g., every 5 minutes).
+2. **DHCP Lease Time**: If using the DNS trick, set your DHCP server's `Lease Time` to **double the script interval** (e.g., 6 minutes for a 3-minute script).
+3. **Battery Optimization**: **Crucial!** Disable battery optimization for the Lim app in Android settings. Without this, Android will ignore most network events during Doze mode.
+
+
+This method allows your phone to "wake up" and check for messages as often as the script runs, bypassing the standard 15-minute background limitation.
+
+---
+
 When the application is open, messages are exchanged immediately.
 
 ---

@@ -239,7 +239,7 @@ public class CallFragment extends Fragment {
                 }
                 if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                     controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
-                    NotificationHelper.showNotification(controller, unreadChatList);
+                    NotificationHelper.showMsgNotification(controller, unreadChatList);
                 }
             }
         });

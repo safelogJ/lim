@@ -38,9 +38,8 @@
     <string name="reinstall">zainstaluj aplikację ponownie lub usuń konto, aby użyć nowego loginu lub serwera.</string>
     <string name="chat_icon_desc">ikona czatu</string>
     <string name="user_icon_desc">ikona użytkownika</string>
-    <string name="add_file_btn_text">dodaj plik</string>
+    <string name="add_file_btn_text">dodaj plik lub nagraj głos</string>
     <string name="remove_file_btn_text">usuń plik</string>
-    <string name="send_icon_desc">ikona wysyłania</string>
     <string name="user_fields">pola użytkownika</string>
     <string name="new_chat">nowy czat</string>
     <string name="find_user">utwórz</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">nie wybrano pliku do wysłania</string>
     <string name="send_login_hint">wyślij login rozmówcy, aby rozpocząć czat</string>
     <string name="msg_notification_channel_name">Wiadomości</string>
+    <string name="call_notification_channel_name">Połączenia przychodzące</string>
+    <string name="missing_call">Nieodebrane połączenie od</string>
     <string name="new_msg">Nowa wiadomość</string>
     <string name="new_msgs">Nowe wiadomości</string>
     <string name="new_msg_from">Od:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Dzwonienie…</string>
     <string name="accept_call">Odbierz połączenie</string>
     <string name="reject_call">Odrzuć połączenie</string>
+    <string name="switch_speaker">Przełącz głośnik</string>
+    <string name="choose_green">Wybiert zielony</string>
+    <string name="choose_pink">Wybiert różowy</string>
+    <string name="choose_blue">Wybiert niebieski</string>
+    <string name="choose_yellow">Wybiert żółty</string>
+    <string name="exit">Wyjście</string>
+    <string name="chat_name">Nazwa czatu</string>
+    <string name="file_name">Nazwa pliku</string>
+    <string name="last_msg">Ostatnia wiadomość</string>
+    <string name="time_msg">Czas wiadomości</string>
+    <string name="msg_text">Wiadomość</string>
+    <string name="player_time">Czas odtwarzacza</string>
+    <string name="you">Ty</string>
+    <string name="interlocutor">Rozmówca</string>
+    <string name="voice_message">Wiadomość głosowa</string>
 </resources>

@@ -118,7 +118,7 @@ public class UserFragment extends Fragment {
                 }
                 if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                     controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
-                    NotificationHelper.showNotification(controller, chatList);
+                    NotificationHelper.showMsgNotification(controller, chatList);
                 }
             }
         });

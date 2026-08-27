@@ -252,7 +252,8 @@ public class NetworkService {
             return;
         }
         try (Response response = client.newCall(request).execute()) {
-            Log.i(AppController.LOG_TAG, response.message());
+            BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+            Log.i(AppController.LOG_TAG, res.message());
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, NETWORK_SERVICE_ERROR + e.getMessage());
         }
@@ -516,6 +517,9 @@ public class NetworkService {
                 downloadMedia(msg);
             }
         } else {
+            if (mediaLatch.isPseudoWorker()) {
+                workerShowNotification();
+            }
             for (Message msg : dbHelper.getMediaList()) {
                 Log.d(AppController.LOG_TAG, "пнули загрузку в нити 4 сообщение " + msg.id);
                 controller.getNetStreams()[AppController.GET_MEDIA].execute(() -> downloadMedia(msg));
@@ -583,8 +587,9 @@ public class NetworkService {
             return;
         }
         try (Response response = client.newCall(request).execute()) {
-            if (response.isSuccessful()) {
-                Log.i(AppController.LOG_TAG, response.message() + msg.fileName);
+            BaseResponse res = gson.fromJson(response.body().string(), BaseResponse.class);
+            if (response.isSuccessful() && BaseResponse.SUCCESS.equals(res.status())) {
+                Log.i(AppController.LOG_TAG, res.message() + msg.fileName);
             } else {
                 Log.w(AppController.LOG_TAG, SERVER_RETURNED_ERROR + response.code());
             }
@@ -673,7 +678,7 @@ public class NetworkService {
     }
 
     private void workerShowNotification() {
-        Log.d(AppController.LOG_TAG, "workerShowNotification");
+        Log.d(AppController.LOG_TAG, "ShowNotification");
         List<Chat> allUnread = controller.getDbHelper().getUnreadChats();
         if (!allUnread.isEmpty()) {
             long maxTimestamp = 0;
@@ -684,7 +689,7 @@ public class NetworkService {
             }
             if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
                 controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
-                NotificationHelper.showNotification(controller, allUnread);
+                NotificationHelper.showMsgNotification(controller, allUnread);
             }
         }
     }

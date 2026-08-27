@@ -12,6 +12,8 @@
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:background="@color/main_background_50"
+        android:clickable="true"
+        android:focusable="true"
         app:layout_constraintBottom_toTopOf="@+id/messagesRecyclerView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/chatNameTextScroll">
@@ -195,7 +197,7 @@
             android:layout_height="0dp"
             android:layout_marginEnd="4dp"
             android:clickable="true"
-            android:contentDescription="@string/send_icon_desc"
+            android:contentDescription="@string/send_msg"
             android:focusable="true"
             android:gravity="center_horizontal|center_vertical"
             android:textColor="@color/green_400"

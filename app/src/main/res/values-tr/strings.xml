@@ -38,9 +38,8 @@
     <string name="reinstall">yeni bir giriş veya yeni sunucu için uygulamayı yeniden yükleyin veya hesabı kaldırın.</string>
     <string name="chat_icon_desc">sohbet simgesi</string>
     <string name="user_icon_desc">kullanıcı simgesi</string>
-    <string name="add_file_btn_text">dosya ekle</string>
+    <string name="add_file_btn_text">dosya ekle veya ses kaydet</string>
     <string name="remove_file_btn_text">dosyayı kaldır</string>
-    <string name="send_icon_desc">gönder simgesi</string>
     <string name="user_fields">kullanıcı alanları</string>
     <string name="new_chat">yeni sohbet</string>
     <string name="find_user">oluştur</string>
@@ -49,6 +48,8 @@
     <string name="select_file_error">gönderilecek dosya seçilmedi</string>
     <string name="send_login_hint">sohbet başlatmak için muhatabınızın kullanıcı adını gönderin</string>
     <string name="msg_notification_channel_name">Mesajlar</string>
+    <string name="call_notification_channel_name">Gelen aramalar</string>
+    <string name="missing_call">Cevapsız arama: </string>
     <string name="new_msg">Yeni mesaj</string>
     <string name="new_msgs">Yeni mesajlar</string>
     <string name="new_msg_from">Gönderen:</string>
@@ -64,4 +65,19 @@
     <string name="calling">Aranıyor…</string>
     <string name="accept_call">Çağrıyı kabul et</string>
     <string name="reject_call">Çağrıyı reddet</string>
+    <string name="switch_speaker">Hoparlörü değiştir</string>
+    <string name="choose_green">Yeşili seç</string>
+    <string name="choose_pink">Pembeyi seç</string>
+    <string name="choose_blue">Maviyi seç</string>
+    <string name="choose_yellow">Sarıyı seç</string>
+    <string name="exit">Çıkış</string>
+    <string name="chat_name">Sohbet adı</string>
+    <string name="file_name">Dosya adı</string>
+    <string name="last_msg">Son mesaj</string>
+    <string name="time_msg">Mesaj zamanı</string>
+    <string name="msg_text">Mesaj</string>
+    <string name="player_time">Oynatıcı süresi</string>
+    <string name="you">Siz</string>
+    <string name="interlocutor">Muhatap</string>
+    <string name="voice_message">Sesli mesaj</string>
 </resources>
