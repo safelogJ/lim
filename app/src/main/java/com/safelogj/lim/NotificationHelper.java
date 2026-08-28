@@ -83,9 +83,9 @@ public class NotificationHelper {
             return;
         }
 
-        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId)
+        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId, true)
                 .setContentTitle(appController.getString(R.string.incoming_call))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setOngoing(true)
                 .setWhen(timestamp)
@@ -104,7 +104,7 @@ public class NotificationHelper {
             return;
         }
 
-        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId)
+        NotificationCompat.Builder builder = getCallNotificationBuilder(appController, interlocutorId, false)
                 .setContentTitle(appController.getString(R.string.missing_call))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -122,17 +122,23 @@ public class NotificationHelper {
         }
     }
 
-    private static NotificationCompat.Builder getCallNotificationBuilder(AppController appController, int interlocutorId) {
+    private static NotificationCompat.Builder getCallNotificationBuilder(AppController appController, int interlocutorId, boolean isCall) {
         Intent intent = new Intent(appController, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         intent.putExtra(EXTRA_CALL_CHAT, true);
+        PendingIntent callPendingIntent = PendingIntent.getActivity(appController, 1, intent,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Caller caller = appController.getDbHelper().getCaller(interlocutorId);
-        return new NotificationCompat.Builder(appController, AppController.CALL_CHANNEL)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(appController, AppController.CALL_CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_name)
                 .setContentText(caller == null ? AppController.EMPTY_STRING : caller.getChatName())
-                .setContentIntent(PendingIntent.getActivity(appController, 1, intent,PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
+                .setContentIntent(callPendingIntent)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setSound(null)
                 .setVibrate(new long[]{0L});
+        if (isCall) {
+            builder.setFullScreenIntent(callPendingIntent, true);
+        }
+        return builder;
     }
 }

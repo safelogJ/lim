@@ -22,7 +22,7 @@
         android:id="@+id/callBanner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/fielder_background_tr"
+        android:background="@color/transparent"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -34,14 +34,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            app:layout_constraintGuide_percent="0.43" />
-
-        <androidx.constraintlayout.widget.Guideline
-            android:id="@+id/callBannerGuideline"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            app:layout_constraintGuide_percent="0.81" />
+            app:layout_constraintGuide_percent="0.5" />
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/incomingCallBanner"
@@ -49,10 +42,10 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:layout_marginTop="8dp"
-            android:importantForAccessibility="noHideDescendants"
+            android:layout_marginEnd="16dp"
             android:background="@drawable/call_banner_green"
-            android:padding="8dp"
-            app:layout_constraintEnd_toStartOf="@+id/callBannerGuideline"
+            android:importantForAccessibility="noHideDescendants"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
@@ -60,7 +53,8 @@
                 android:id="@+id/tvIncomingCallerName"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="32dp"
+                android:layout_marginTop="8dp"
                 android:layout_marginEnd="16dp"
                 android:ellipsize="end"
                 android:maxLines="1"
@@ -76,12 +70,14 @@
                 android:id="@+id/tvIncomingCallStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="32dp"
+                android:layout_marginBottom="8dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text="@string/incoming_call"
                 android:textColor="@color/black2"
-                android:textSize="12sp"
+                android:textSize="14sp"
+                app:layout_constraintBottom_toTopOf="@id/bottomTooth"
                 app:layout_constraintStart_toEndOf="@+id/btnRejectCall"
                 app:layout_constraintTop_toBottomOf="@id/tvIncomingCallerName" />
 
@@ -89,7 +85,7 @@
                 android:id="@+id/btnRejectCall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="24dp"
                 android:background="@drawable/phone_disabled_24px"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -99,11 +95,342 @@
                 android:id="@+id/btnAcceptCall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="24dp"
                 android:background="@drawable/phone_enabled_24px"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline10"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.10" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline15"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.15" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.20" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline25"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.25" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline30"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.30" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline35"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.35" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline40"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.40" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline45"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.45" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline50"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.50" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline55"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.55" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline60"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.60" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline65"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.65" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline70"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.70" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline75"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.75" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline80"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.80" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline85"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.85" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuideline90"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.90" />
+
+            <!-- Top Teeth (shifted right of guideline) -->
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="6dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline10"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline15"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline25"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="7dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline30"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="8dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline40"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline45"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="7dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline55"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline60"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="6dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline70"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="8dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline75"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline85"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toEndOf="@id/toothGuideline90"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Bottom Teeth (shifted left of guideline) -->
+
+
+            <View
+                android:id="@+id/bottomTooth"
+                android:layout_width="2dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline10" />
+
+            <View
+                android:layout_width="4dp"
+                android:layout_height="7dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline15" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline20" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="8dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline25" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline35" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="7dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline40" />
+
+            <View
+                android:layout_width="4dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline45" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="8dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline50" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline55" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="7dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline65" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline70" />
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline80" />
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="6dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline85" />
+
+            <View
+                android:layout_width="4dp"
+                android:layout_height="5dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/toothGuideline90" />
+
+            <!-- Horizontal Guideline for side teeth -->
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/toothGuidelineHorizontal50"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                app:layout_constraintGuide_percent="0.5" />
+
+            <!-- Left side tooth (shifted down of guideline) -->
+            <View
+                android:layout_width="6dp"
+                android:layout_height="3dp"
+                android:background="@color/main_background"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="@id/toothGuidelineHorizontal50" />
+
+            <!-- Right side tooth (shifted up of guideline) -->
+            <View
+                android:layout_width="5dp"
+                android:layout_height="4dp"
+                android:background="@color/main_background"
+                app:layout_constraintBottom_toBottomOf="@id/toothGuidelineHorizontal50"
+                app:layout_constraintEnd_toEndOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -112,8 +439,8 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:clickable="true"
-            android:focusable="true"
             android:contentDescription="@string/reject_call"
+            android:focusable="true"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@id/callBannerGuideline40"
             app:layout_constraintStart_toStartOf="parent"
@@ -126,10 +453,10 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:clickable="true"
-            android:focusable="true"
             android:contentDescription="@string/accept_call"
+            android:focusable="true"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/callBannerGuideline"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@id/callBannerGuideline40"
             app:layout_constraintTop_toTopOf="parent">
 

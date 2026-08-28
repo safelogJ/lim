@@ -367,7 +367,7 @@ public class ChatFragment extends Fragment {
                 super.onScrolled(recyclerView, dx, dy);
                 if (dy < 0) { // dy < 0 означает, что пользователь скроллит ВВЕРХ
                     LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-                    if (layoutManager != null && layoutManager.findLastVisibleItemPosition() >= layoutManager.getItemCount() - 5) {
+                    if (layoutManager != null && layoutManager.findLastVisibleItemPosition() >= layoutManager.getItemCount() - 15) {
                         chatViewModel.loadMoreMessages(currentChatId);
                     }
                 }

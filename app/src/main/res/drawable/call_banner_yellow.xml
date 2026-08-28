@@ -3,10 +3,10 @@
 
     <solid android:color="@color/interlocutor_bubble_yellow" />
 
-    <corners android:radius="4dp" />
+    <corners android:radius="42dp" />
 
     <stroke
-        android:width="3dp"
-        android:color="@color/pink200" />
+        android:width="2dp"
+        android:color="@color/main_background" />
 
 </shape>

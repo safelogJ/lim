@@ -168,7 +168,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageBubble.setBackgroundResource(R.drawable.fielder_background_tr);
                     binding.messageTime.setVisibility(View.GONE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
-                    binding.messageBubble.setGravity(Gravity.CENTER);
+                    binding.messageBubbleContent.setGravity(Gravity.CENTER);
                     binding.messageText.setGravity(Gravity.CENTER);
                     break;
 
@@ -178,7 +178,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.white));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
-                    binding.messageBubble.setGravity(Gravity.END);
+                    binding.messageBubbleContent.setGravity(Gravity.END);
                     binding.messageText.setGravity(Gravity.END);
                     LinearLayout.LayoutParams fileParamsOut = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
                     fileParamsOut.gravity = Gravity.END;
@@ -191,7 +191,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageTime.setVisibility(View.VISIBLE);
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.main_background));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.main_background));
-                    binding.messageBubble.setGravity(Gravity.START);
+                    binding.messageBubbleContent.setGravity(Gravity.START);
                     binding.messageText.setGravity(Gravity.START);
                     LinearLayout.LayoutParams fileParamsIn = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
                     fileParamsIn.gravity = Gravity.START;
