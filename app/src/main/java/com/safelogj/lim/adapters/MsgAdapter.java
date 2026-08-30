@@ -128,23 +128,22 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             binding.messageImage.setVisibility(View.GONE);
             binding.fileContainer.setVisibility(View.GONE);
             binding.audioPlayer.audioPlayerContainer.setVisibility(View.GONE);
-            binding.messageText.setVisibility(View.VISIBLE);
 
             // 1. Контент: Текст
             if (message.text == null || message.text.isEmpty()) {
-                binding.messageText.setVisibility(View.GONE);
+                binding.textWrapper.setVisibility(View.GONE);
             } else {
                 binding.messageText.setText(message.text);
+                binding.textWrapper.setVisibility(View.VISIBLE);
             }
             // 2. Контент: Картинка или Файл
             if (Message.TYPE_IMAGE.equals(message.type) && message.isLocalFile()) {
                 binding.messageImage.setVisibility(View.VISIBLE);
                 Glide.with(itemView.getContext())
                         .load(Uri.parse(message.filePath))
-                        .override(800, 800) // Ограничиваем размер превью, это ОЧЕНЬ ускорит прокрутку
+                        .override(800, 800) // Ограничиваем размер превью
                         .centerInside()
                         .placeholder(R.drawable.fielder_background_tr) // Занимаем место до загрузки
-                        //   .diskCacheStrategy(DiskCacheStrategy.ALL) // Кешируем все версии
                         .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                         .into(binding.messageImage);
 
@@ -162,6 +161,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             ConstraintSet constraintSet = new ConstraintSet();
             constraintSet.clone((ConstraintLayout) itemView);
 
+            LinearLayout.LayoutParams wrapperParams = (LinearLayout.LayoutParams) binding.textWrapper.getLayoutParams();
             switch (type) {
                 case Message.TYPE_SYSTEM:
                     constraintSet.setHorizontalBias(binding.messageBubble.getId(), 0.5f);
@@ -170,6 +170,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.light_gray_aaa));
                     binding.messageBubbleContent.setGravity(Gravity.CENTER);
                     binding.messageText.setGravity(Gravity.CENTER);
+                    wrapperParams.gravity = Gravity.CENTER;
+                    binding.textWrapper.setLayoutParams(wrapperParams);
                     break;
 
                 case Message.TYPE_OUTGOING:
@@ -179,7 +181,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.white));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.light_gray));
                     binding.messageBubbleContent.setGravity(Gravity.END);
-                    binding.messageText.setGravity(Gravity.END);
+                    wrapperParams.gravity = Gravity.END;
+                    binding.textWrapper.setLayoutParams(wrapperParams);
                     LinearLayout.LayoutParams fileParamsOut = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
                     fileParamsOut.gravity = Gravity.END;
                     binding.fileContainer.setLayoutParams(fileParamsOut);
@@ -192,7 +195,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.messageText.setTextColor(itemView.getContext().getColor(R.color.main_background));
                     binding.messageTime.setTextColor(itemView.getContext().getColor(R.color.main_background));
                     binding.messageBubbleContent.setGravity(Gravity.START);
-                    binding.messageText.setGravity(Gravity.START);
+                    wrapperParams.gravity = Gravity.START;
+                    binding.textWrapper.setLayoutParams(wrapperParams);
                     LinearLayout.LayoutParams fileParamsIn = (LinearLayout.LayoutParams) binding.fileContainer.getLayoutParams();
                     fileParamsIn.gravity = Gravity.START;
                     binding.fileContainer.setLayoutParams(fileParamsIn);

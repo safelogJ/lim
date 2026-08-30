@@ -5,9 +5,11 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
-import android.view.WindowManager;
+import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
@@ -31,17 +33,39 @@ import com.safelogj.lim.fragments.ChatListFragment;
 import com.safelogj.lim.model.Caller;
 import com.safelogj.lim.model.Chat;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity {
+
+    private static final String STATE_INTERLOCUTOR_ID = "incoming_id";
+    private static final String STATE_CHAT_NAME = "incoming_name";
+    private static final String STATE_CHAT_COLOR = "incoming_color";
 
     private AppController controller;
     private ActivityMainBinding mBinding;
     private int incomingInterlocutorId = CallService.INVALID_ID;
     private String incomingChatName;
     private int chatColor;
+    private float density;
 
-    private static final String STATE_INTERLOCUTOR_ID = "incoming_id";
-    private static final String STATE_CHAT_NAME = "incoming_name";
-    private static final String STATE_CHAT_COLOR = "incoming_color";
+    private final List<View> teethList = new ArrayList<>();
+    private final Handler shakeHandler = new Handler(Looper.getMainLooper());
+    private boolean isShaking = false;
+
+    private final Runnable shakeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isShaking) return;
+            for (View tooth : teethList) {
+                float dx = (float) (Math.random() * 3 - 1) * density;
+                float dy = (float) (Math.random() * 3 - 1) * density;
+                tooth.setTranslationX(dx);
+                tooth.setTranslationY(dy);
+            }
+            shakeHandler.postDelayed(this, 110); // Скорость дрожания
+        }
+    };
 
 
     public void showFragment(Fragment fragment) {
@@ -109,12 +133,22 @@ public class MainActivity extends AppCompatActivity {
         setRejectListener();
         setObserveIncomingCall();
         setDarkStatusBar();
+        density = getResources().getDisplayMetrics().density;
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         NotificationHelper.clearNotification(this, NotificationHelper.CALL_NOTIFICATION_ID);
+        if (incomingInterlocutorId != CallService.INVALID_ID && !isShaking) {
+            startTeethShake();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        stopTeethShake();
+        super.onStop();
     }
 
     @Override
@@ -239,11 +273,37 @@ public class MainActivity extends AppCompatActivity {
                     mBinding.incomingCallBanner.setBackground(AppCompatResources.getDrawable(this, R.drawable.call_banner_green));
         }
         mBinding.callBanner.setVisibility(View.VISIBLE);
+        startTeethShake();
     }
 
     private void hideIncomingCallBanner() {
+        stopTeethShake();
         incomingInterlocutorId = CallService.INVALID_ID;
         incomingChatName = null;
         mBinding.callBanner.setVisibility(View.GONE);
+    }
+
+    private void startTeethShake() {
+        if (isShaking) return;
+        teethList.clear();
+        ViewGroup banner = mBinding.incomingCallBanner;
+        for (int i = 0; i < banner.getChildCount(); i++) {
+            View child = banner.getChildAt(i);
+            // Выбираем только зубы (у них нет ID или они не TextView)
+            if (!(child instanceof TextView) && child.getId() == View.NO_ID) {
+                teethList.add(child);
+            }
+        }
+        isShaking = true;
+        shakeHandler.post(shakeRunnable);
+    }
+
+    private void stopTeethShake() {
+        isShaking = false;
+        shakeHandler.removeCallbacks(shakeRunnable);
+        for (View tooth : teethList) {
+            tooth.setTranslationX(0);
+            tooth.setTranslationY(0);
+        }
     }
 }

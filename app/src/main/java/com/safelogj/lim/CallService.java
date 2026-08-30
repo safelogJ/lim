@@ -32,10 +32,10 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
@@ -71,8 +71,7 @@ public class CallService {
     private final DatagramPacket packetOut;
     private final DatagramPacket packetIn = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
     private final Object muteLock = new Object();
-    private volatile Mute[] mutedUsers = new Mute[20];
-
+    private volatile AtomicReferenceArray<Mute> mutedUsers = new AtomicReferenceArray<>(20);
     private long ringingStartTimestamp = 0;
     private final Handler callHandler = new Handler(Looper.getMainLooper());
     private final Runnable endCallRunnable = () -> {
@@ -275,7 +274,7 @@ public class CallService {
     }
 
     public void endCall(long muteTime) { // UI нить из фрагмента конец разговора, UDP_OUT в исключении при отправке,
-        //из killCall: UI нить по кнопке назад, UI нить при уничтожении активити в stopUdpTraffic
+        //из killCall: UI нить по кнопке назад
         muteInterlocutor(muteTime);
         toggleSpeakerphone(false); // Сбрасываем при выходе
         renewOrStopEndCallRunnable(0);
@@ -337,7 +336,8 @@ public class CallService {
     }
 
     private void handleIncomingPacket(DatagramPacket packet) {
-        if (packet.getLength() >= HEADER_SIZE + 12) { // 16 (header) + 12 (iv)
+        int len = packet.getLength();
+        if (len >= HEADER_SIZE + 12) { // 16 (header) + 12 (iv)
             byte[] data = packet.getData();
             int senderId = readInt(data, 0);       // 0-4 байты
             long tokenFromPacket = readLong(data); // 4-12 байты
@@ -345,6 +345,9 @@ public class CallService {
             if (!stillMuted(senderId) && targetId == userId) {
                 routeInputPacket(senderId, tokenFromPacket, packet);
             }
+        } else if (len == 4 && readInt(packet.getData(), 0) == userId) {
+            Log.i(AppController.LOG_TAG, "UDP Msg Ping received");
+            appController.startDownloadNewMsg(true);
         }
     }
 
@@ -526,14 +529,6 @@ public class CallService {
         opusEncoder = null;
     }
 
-    public void closeUdpSocket() {
-        synchronized (socketLock) {
-            if (udpSocket != null && !udpSocket.isClosed()) {
-                udpSocket.close();
-            }
-        }
-    }
-
     private void closeUdpSocket(DatagramSocket socket) {
         synchronized (socketLock) {
             if (socket != null && !socket.isClosed()) {
@@ -591,8 +586,9 @@ public class CallService {
     }
 
     private boolean stillMuted(int interlocutorId) {
-        Mute[] localRef = mutedUsers;
-        for (Mute m : localRef) {
+        AtomicReferenceArray<Mute> muted = mutedUsers;
+        for (int i = 0; i < muted.length(); i++) {
+            Mute m = muted.get(i);
             if (m == null) break;
             if (m.userId == interlocutorId) {
                 return m.muteTime > System.currentTimeMillis();
@@ -601,31 +597,32 @@ public class CallService {
         return false;
     }
 
-    private void ensureMuted() {
-        Mute[] temp = mutedUsers;
-        if (temp[temp.length - 1] != null) {
-            synchronized (muteLock) {
-                mutedUsers = Arrays.copyOf(temp, temp.length + 10);
+    private AtomicReferenceArray<Mute> ensureMuted() {
+        synchronized (muteLock) {
+            AtomicReferenceArray<Mute> current = mutedUsers;
+            if (current.get(current.length() - 1) != null) {
+                int oldLen = current.length();
+                AtomicReferenceArray<Mute> next = new AtomicReferenceArray<>(oldLen + 10);
+                for (int i = 0; i < oldLen; i++) {
+                    next.set(i, current.get(i));
+                }
+                mutedUsers = next;
             }
         }
+        return mutedUsers;
     }
 
     private void muteInterlocutor(long millis) {
         if (interlocutorId != INVALID_ID) {
             synchronized (muteLock) {
-                Mute[] localRef = mutedUsers;
-                int oldLen = localRef.length;
-                for (int i = 0; i < oldLen; i++) {
-                    if (localRef[i] == null || localRef[i].userId == interlocutorId) {
-                        localRef[i] = new Mute(interlocutorId, System.currentTimeMillis() + millis);
-                        Log.e(AppController.LOG_TAG, "замьючен собеседник ");
-                        mutedUsers = localRef;
+                AtomicReferenceArray<Mute> current = ensureMuted();
+                for (int i = 0; i < current.length(); i++) {
+                    Mute m = current.get(i);
+                    if (m == null || m.userId == interlocutorId) {
+                        current.set(i, new Mute(interlocutorId, System.currentTimeMillis() + millis));
                         return;
                     }
                 }
-                Mute[] newArr = Arrays.copyOf(localRef, localRef.length + 10);
-                newArr[oldLen] = new Mute(interlocutorId, System.currentTimeMillis() + millis);
-                mutedUsers = newArr;
             }
         }
     }

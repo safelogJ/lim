@@ -23,13 +23,14 @@ import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 public class DatabaseManager {
 
@@ -74,8 +75,9 @@ public class DatabaseManager {
     private static final String GET_MAX_MSG_ID_SQL_PER_USER = "SELECT cm.user_id, MAX(m.id) FROM chat_members cm JOIN messages m ON cm.chat_id = m.chat_id GROUP BY cm.user_id";
 
     private final Object msgIdLock = new Object();
-    private volatile long[] usersMaxMsgIdArray;
-    private volatile int[][] chatMembersArray;
+    private final Object chatMembersLock = new Object();
+    private volatile AtomicLongArray usersMaxMsgIdArray;
+    private volatile AtomicIntegerArray chatMembersArray;
     private final Map<String, UserCacheEntry> authCache = new ConcurrentHashMap<>();
     private final AtomicInteger usersCount = new AtomicInteger(0);
     private final AtomicInteger chatsCount = new AtomicInteger(0);
@@ -89,6 +91,7 @@ public class DatabaseManager {
 
     private final HikariDataSource dataSource;
     private final HikariPoolMXBean poolProxy;
+    private UdpRelayServer udpRelayServer;
 
     DatabaseManager(String dbFolderPath, int poolSize) {
         HikariConfig config = getHikariConfig(dbFolderPath, poolSize);
@@ -98,6 +101,10 @@ public class DatabaseManager {
         config.addDataSourceProperty("cache_size", "-16000");
         dataSource = new HikariDataSource(config);
         poolProxy = dataSource.getHikariPoolMXBean();
+    }
+
+    public void setUdpRelayServer(UdpRelayServer udpRelayServer) {
+        this.udpRelayServer = udpRelayServer;
     }
 
     @NotNull
@@ -178,24 +185,20 @@ public class DatabaseManager {
                 if (rs.next()) {
                     chatsCount.set(rs.getInt(1));
                 }
-                chatMembersArray = new int[Math.max(10, chatsCount.get())][2];
+                chatMembersArray = new AtomicIntegerArray(Math.max(10, chatsCount.get() * 2));
             }
 
             // 1. Загружаем участников всех чатов
             try (ResultSet rs = stmt.executeQuery(GET_CHAT_MEMBERS_FOR_CACHE_SQL)) {
-                int[][] temp = chatMembersArray;
                 while (rs.next()) {
-                    int chatIdx = rs.getInt(1) - 1;
+                    int chatIdx = (rs.getInt(1) - 1) * 2;
                     int userId = rs.getInt(2);
-                    if (chatIdx >= 0 && chatIdx < temp.length) {
-                        if (temp[chatIdx][0] == 0) {
-                            temp[chatIdx][0] = userId;
-                        } else {
-                            temp[chatIdx][1] = userId;
-                        }
+                    if (chatMembersArray.get(chatIdx) == 0) {
+                        chatMembersArray.set(chatIdx, userId);
+                    } else {
+                        chatMembersArray.set(chatIdx + 1, userId);
                     }
                 }
-                chatMembersArray = temp;
             }
 
             // 2. Получаем максимальный ID пользователя для UDP-сервиса
@@ -203,16 +206,14 @@ public class DatabaseManager {
                 if (rs.next()) {
                     usersCount.set(rs.getInt(1));
                 }
-                usersMaxMsgIdArray = new long[Math.max(10, usersCount.get())];
+                usersMaxMsgIdArray = new AtomicLongArray(Math.max(10, usersCount.get()));
             }
 
             // 3. Инициализируем персональные кэши (самый большой ID, который юзер может видеть)
             try (ResultSet rs = stmt.executeQuery(GET_MAX_MSG_ID_SQL_PER_USER)) {
-                long[] temp = usersMaxMsgIdArray;
                 while (rs.next()) {
-                    temp[rs.getInt(1) - 1] = rs.getLong(2);
+                    usersMaxMsgIdArray.set(rs.getInt(1) - 1, rs.getLong(2));
                 }
-                usersMaxMsgIdArray = temp;
             }
         } catch (Exception e) {
             LimController.log.error("critical error while initializing database: ", e);
@@ -273,7 +274,7 @@ public class DatabaseManager {
                 user.id = userId;
                 user.displayName = displayName;
                 usersCount.set(userId);
-                ensureUserMaxMsgIdCapacity(usersMaxMsgIdArray);
+                ensureUserMaxMsgIdCapacity();
                 return user;
 
             } catch (SQLException e) {
@@ -391,7 +392,7 @@ public class DatabaseManager {
                         unblockStmt.executeUpdate();
                     }
                 } else { // --- СЦЕНАРИЙ Б: СОЗДАЕМ НОВЫЙ ЧАТ ---
-                    if (chatsCount.get() == Integer.MAX_VALUE) {
+                    if (chatsCount.get() == (Integer.MAX_VALUE / 2)) {
                         LimController.log.error("Database full. Cannot create a personal chat.");
                         return null;
                     }
@@ -421,13 +422,10 @@ public class DatabaseManager {
                         memberStmt.setLong(3, now);
                         memberStmt.addBatch();
                         memberStmt.executeBatch();
-                        if (chatId > 0 && chatId <= chatMembersArray.length) {
-                            synchronized (msgIdLock) {
-                                chatMembersArray[chatId - 1][0] = senderId;
-                                chatMembersArray[chatId - 1][1] = receiverId;
-                            }
-                        }
                     }
+                    int chatIdx = (chatId - 1) * 2;
+                    chatMembersArray.set(chatIdx, senderId);
+                    chatMembersArray.set(chatIdx + 1, receiverId);
                 }
                 conn.commit();
                 Chat chat = new Chat();
@@ -578,16 +576,19 @@ public class DatabaseManager {
                 updateBlock.setInt(2, senderId);
                 updateBlock.executeUpdate();
                 conn.commit();
-                synchronized (msgIdLock) {
-                    if (serverId != Message.INVALID_MSG_ID) {
-                        long[] userTemp = usersMaxMsgIdArray;
-                        int[][] chatTemp = chatMembersArray;
-                        userTemp[chatTemp[req.chatId() - 1][0] - 1] = Math.max(userTemp[chatTemp[req.chatId() - 1][0] - 1], serverId);
-                        userTemp[chatTemp[req.chatId() - 1][1] - 1] = Math.max(userTemp[chatTemp[req.chatId() - 1][1] - 1], serverId);
-                        usersMaxMsgIdArray = userTemp;
-                        chatMembersArray = chatTemp;
+                if (serverId != Message.INVALID_MSG_ID) {
+                    AtomicLongArray msgMaxId = usersMaxMsgIdArray;
+                    AtomicIntegerArray chatMembers = chatMembersArray;
+                    int chatIdx = (req.chatId() - 1) * 2;
+                    int u1 = chatMembers.get(chatIdx);
+                    int u2 = chatMembers.get(chatIdx + 1);
+                    msgMaxId.accumulateAndGet(u1 - 1, serverId, Math::max);
+                    msgMaxId.accumulateAndGet(u2 - 1, serverId, Math::max);
+                    if (udpRelayServer != null) {
+                        udpRelayServer.pingInterlocutor(u1 == senderId ? u2 : u1);
                     }
                 }
+
                 return serverId;
             } catch (SQLException e) {
                 conn.rollback();
@@ -603,11 +604,11 @@ public class DatabaseManager {
 
     @NotNull
     public List<Message> getNewMessages(int userId, long lastMessageId) {
-        long[] temp = usersMaxMsgIdArray;
-        if (userId > 0 && userId <= temp.length && lastMessageId >= temp[userId - 1]) {
+        AtomicLongArray current = usersMaxMsgIdArray;
+        if (userId > 0 && userId <= current.length() && lastMessageId >= current.get(userId - 1)) {
             return Collections.emptyList();
-        } else if (userId > temp.length) {
-            ensureUserMaxMsgIdCapacity(temp);
+        } else if (userId > current.length()) {
+            ensureUserMaxMsgIdCapacity();
             return Collections.emptyList();
         }
 
@@ -699,24 +700,30 @@ public class DatabaseManager {
         return new String(hexChars);
     }
 
-    private void ensureUserMaxMsgIdCapacity(long[] temp) {
+    private void ensureUserMaxMsgIdCapacity() {
         synchronized (msgIdLock) {
-            if (temp.length < usersCount.get()) {
-                usersMaxMsgIdArray = Arrays.copyOf(temp, usersCount.get());
+            int newSize = usersCount.get();
+            AtomicLongArray current = usersMaxMsgIdArray;
+            if (current.length() < newSize) {
+                AtomicLongArray next = new AtomicLongArray(newSize);
+                for (int i = 0; i < current.length(); i++) {
+                    next.set(i, current.get(i));
+                }
+                usersMaxMsgIdArray = next;
             }
         }
     }
 
     private void ensureChatMembersCapacity() {
-        synchronized (msgIdLock) {
-            int [][] temp = chatMembersArray;
-            int oldSize = temp.length;
-            if (oldSize < chatsCount.get()) {
-                temp = Arrays.copyOf(temp, chatsCount.get());
-                for (int i = oldSize; i < temp.length; i++) {
-                    temp[i] = new int[2];
+        synchronized (chatMembersLock) {
+            int newSize = chatsCount.get() * 2;
+            AtomicIntegerArray current = chatMembersArray;
+            if (current.length() < newSize) {
+                AtomicIntegerArray next = new AtomicIntegerArray(newSize);
+                for (int i = 0; i < current.length(); i++) {
+                    next.set(i, current.get(i));
                 }
-                chatMembersArray = temp;
+                chatMembersArray = next;
             }
         }
     }

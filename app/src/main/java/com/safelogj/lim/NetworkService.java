@@ -449,7 +449,7 @@ public class NetworkService {
             request = new Request.Builder().url(controller.getServerUrl() + "/messages/get").post(body).build();
         } catch (Exception e) {
             Log.d(AppController.LOG_TAG, REQUEST_BUILD_ERROR + e.getMessage());
-            controller.activeDownloadsCount.decrementAndGet();
+            controller.isMsgLoading.set(false);
             mediaLatch.countDown();
             return;
         }
@@ -476,7 +476,7 @@ public class NetworkService {
             controller.offlineHandler.postDelayed(controller.resetStatusesRunnable, 15000);
             mediaLatch.countDown();
         } finally {
-            controller.activeDownloadsCount.decrementAndGet();
+            controller.isMsgLoading.set(false);
         }
         checkMediaThread(mediaLatch);
     }
@@ -687,8 +687,7 @@ public class NetworkService {
                     maxTimestamp = chat.lastTimestamp;
                 }
             }
-            if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.get()) {
-                controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+            if (controller.startedActivities.get() == 0 && maxTimestamp > controller.lastNotifiedTimestamp.getAndAccumulate(maxTimestamp, Math::max)) {
                 NotificationHelper.showMsgNotification(controller, allUnread);
             }
         }

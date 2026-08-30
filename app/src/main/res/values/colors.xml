@@ -28,8 +28,11 @@
     <color name="green_a700">#00695C</color>
     <color name="transparent">#00FFFFFF</color>
     <color name="chat_name">#629BFB</color>
+    <color name="call_name">#2372F8</color>
     <color name="main_backgroundo">#01457A</color>
     <color name="main_background">#16131B</color>
     <color name="main_background_50">#D116131B</color>
     <color name="main_background_hard">#00335B</color>
+    <color name="call_accept">#2E7D32</color>
+    <color name="call_reject">#DD2C00</color>
 </resources>

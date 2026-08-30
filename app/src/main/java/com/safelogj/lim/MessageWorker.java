@@ -29,10 +29,10 @@ public class MessageWorker extends Worker {
 
     private Result startDownloadNewMsg(AppController controller) {
         Log.i(AppController.LOG_TAG, "MessageWorker.startDownloadNewMsg()");
-        if (controller.startedActivities.get() == 0 && controller.activeDownloadsCount.get() == 0) {
-            controller.activeDownloadsCount.incrementAndGet();
+        if (controller.startedActivities.get() == 0 && controller.isMsgLoading.compareAndSet(false, true)) {
             controller.getNetworkService().getNewMessages(controller.getDbHelper().getLastDbMessageId(),
                     null, new MediaLatch(true, false));
+
         }
         controller.tickUdp();
         return startSendingMsgList(controller);

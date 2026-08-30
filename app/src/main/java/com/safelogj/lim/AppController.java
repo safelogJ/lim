@@ -153,7 +153,7 @@ public class AppController extends Application {
     private static final KeyFactory EC_KEY_FACTORY;
     private static final Map<Integer, Integer> CHAT_COLORS = new ConcurrentHashMap<>();
     private final Map<Integer, Map<Integer, Boolean>> onlineUsersChats = new ConcurrentHashMap<>();
-    public final AtomicInteger activeDownloadsCount = new AtomicInteger(0);
+    public final AtomicBoolean isMsgLoading = new AtomicBoolean(false);
     public final AtomicInteger startedActivities = new AtomicInteger(0);
     public final Handler offlineHandler = new Handler(Looper.getMainLooper());
     public final Runnable resetStatusesRunnable = () -> {
@@ -544,9 +544,14 @@ public class AppController extends Application {
         userExecutor.execute(this::writeRoutersListAndSettingsEncrypted);
     }
 
-    private void startDownloadNewMsg(boolean isPseudoWorker) {
-        netStreams[GET_MSG].execute(() ->
-                networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false, isPseudoWorker)));
+    public void startDownloadNewMsg(boolean isPseudoWorker) {
+        if (isMsgLoading.compareAndSet(false, true)) {
+            netStreams[GET_MSG].execute(() ->
+                    networkService.getNewMessages(dbHelper.getLastDbMessageId(), new ArrayList<>(onlineUsersChats.keySet()), new MediaLatch(false, isPseudoWorker)));
+            if (isPseudoWorker) {
+                Log.w(LOG_TAG, "псевдо воркер запущен ");
+            }
+        }
     }
 
     private void startSendingMsgList() {
@@ -844,10 +849,7 @@ public class AppController extends Application {
                 if (startedActivities.incrementAndGet() == 1) {
                     syncTask = syncExecutor.scheduleWithFixedDelay(() -> {
                         if (userId > 0 && isNetworkActive.get()) {
-                            if (activeDownloadsCount.get() == 0) {
-                                activeDownloadsCount.incrementAndGet();
-                                startDownloadNewMsg(false);
-                            }
+                            startDownloadNewMsg(false);
                             startSendingMsgList();
                             tickUdp();
                         }
@@ -940,11 +942,7 @@ public class AppController extends Application {
                     isNetworkActive.set(true);
                     if (userId > 0) {
                         tickUdp();
-                        if (activeDownloadsCount.get() == 0) {
-                            activeDownloadsCount.incrementAndGet();
-                            startDownloadNewMsg(true);
-                            Log.w(LOG_TAG, "псевдо воркер запущен ");
-                        }
+                        startDownloadNewMsg(true);
                     }
                     offlineHandler.removeCallbacks(resetStatusesRunnable);
                     Log.d(LOG_TAG, "Network: WiFi Connected. " + network);
@@ -955,11 +953,7 @@ public class AppController extends Application {
                     Log.d(LOG_TAG, "LINK CHANGED DNS=" + linkProperties.getDnsServers());
                     if (userId > 0 && isNetworkActive.get()) {
                         tickUdp();
-                        if (activeDownloadsCount.get() == 0) {
-                            activeDownloadsCount.incrementAndGet();
-                            startDownloadNewMsg(true);
-                            Log.w(LOG_TAG, "псевдо воркер запущен ");
-                        }
+                        startDownloadNewMsg(true);
                     }
                 }
 

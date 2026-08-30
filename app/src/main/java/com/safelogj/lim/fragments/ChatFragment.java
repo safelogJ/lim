@@ -331,8 +331,7 @@ public class ChatFragment extends Fragment {
                         maxTimestamp = chat.lastTimestamp;
                     }
                 }
-                if (maxTimestamp > controller.lastNotifiedTimestamp.get()) {
-                    controller.lastNotifiedTimestamp.accumulateAndGet(maxTimestamp, Math::max);
+                if (maxTimestamp > controller.lastNotifiedTimestamp.getAndAccumulate(maxTimestamp, Math::max)) {
                     NotificationHelper.showMsgNotification(controller, unreadChatList);
                 }
             }

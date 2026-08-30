@@ -19,7 +19,6 @@ import com.safelogj.lim.model.User;
 import com.safelogj.lim.viewmodels.ResultCallback;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -27,8 +26,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "lim.db";
@@ -81,15 +82,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String GET_ALL_USER_KEYS_SQL = "SELECT id, public_key FROM users";
 
     private final AtomicLong cachedLastMsgServerId = new AtomicLong(0);
-    private final Map<Integer, Chat> unreadChatsCache = new HashMap<>();
+    private final Map<Integer, Chat> unreadChatsCache = new ConcurrentHashMap<>();
     private final Map<Long, Message> pendingMessagesCache = new HashMap<>();
     private final Map<Long, Message> pendingMediaCache = new HashMap<>();
     private final Map<Integer, List<Message>> chatMessagesCache = new HashMap<>(); // только БД нить
     private final List<Chat> cachedChatList = new ArrayList<>(); // только БД нить
-    private volatile Caller[] callers; // при звонках
     private SQLiteDatabase database;
     private final AppController controller;
     private final ExecutorService dbExecutor;
+    private volatile AtomicReferenceArray<Caller> callers; // при звонках
 
     public DatabaseHelper(AppController controller) {
         super(controller, DB_NAME, null, DB_VERSION);
@@ -187,10 +188,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 database.delete(USERS, null, null);
                 database.setTransactionSuccessful();
                 controller.clearOnlineStatuses();
-                callers = new Caller[10];
+                callers = new AtomicReferenceArray<>(10);
                 AppController.clearChatColors();
                 cachedLastMsgServerId.set(0);
-                unreadChatsSynchronizedTask(unreadChatsCache::clear);
+                unreadChatsCache.clear();
                 controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
                 synchronized (pendingMessagesCache) {
                     pendingMessagesCache.clear();
@@ -432,7 +433,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 if (database.update(CHATS, values, ID_ANCHOR, new String[]{String.valueOf(chat.id)}) > 0) {
                     cachedChatList.removeIf(c -> c.id == chat.id);
                     notifyChatsList();
-                    unreadChatsSynchronizedTask(() -> unreadChatsCache.remove(chat.id));
+                    unreadChatsCache.remove(chat.id);
                     chatMessagesCache.remove(chat.id);
                     controller.clearInterlocutorOnlineStatus(chat.interlocutorId);
                 } else {
@@ -471,8 +472,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public boolean isInterlocutorBlocked(int interlocutorId) {
-        Caller[] temp = callers;
-        for (Caller caller : temp) {
+        AtomicReferenceArray<Caller> temp = callers;
+        for (int i = 0; i < temp.length(); i++) {
+            Caller caller = temp.get(i);
             if (caller == null) return false;
             if (caller.getUserId() == interlocutorId && caller.isBlocked()) {
                 return true;
@@ -484,8 +486,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Nullable
     public String getUserPublicKey(int userId) {
-        Caller[] temp = callers;
-        for (Caller caller : temp) {
+        AtomicReferenceArray<Caller> temp = callers;
+        for (int i = 0; i < temp.length(); i++) {
+            Caller caller = temp.get(i);
             if (caller == null) return null;
             if (caller.getUserId() == userId) {
                 return caller.getPublicKey();
@@ -525,16 +528,18 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Nullable
     public Caller getCaller(int interlocutorId) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getUserId() == interlocutorId) {
-                return temp[i];
+        AtomicReferenceArray<Caller> temp = callers;
+        for (int i = 0; i < temp.length(); i++) {
+            Caller caller = temp.get(i);
+            if (caller == null) return null;
+            if (caller.getUserId() == interlocutorId) {
+                return caller;
             }
         }
         return null;
     }
 
-    public List<Chat> getUnreadChats() {
+    public List<Chat> getUnreadChats() { // оба воркера после лока
         return new ArrayList<>(unreadChatsCache.values());
     }
 
@@ -606,11 +611,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void markChatAsRead(int chatId) {
-        Chat unreadChat;
-        synchronized (unreadChatsCache) {
-            unreadChat = unreadChatsCache.remove(chatId);
-        }
-        if (unreadChat != null) {
+        if (unreadChatsCache.remove(chatId) != null) {
             controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
             dbExecutor.execute(() -> {
                 try {
@@ -690,6 +691,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void saveIncomingMsgList(List<Message> messages, @NonNull MediaLatch mediaLatch) {
         if (messages != null && !messages.isEmpty()) {
             dbExecutor.execute(() -> {
+                if (controller.userId() == 0) return;
                 database.beginTransaction();
                 try {
                     Set<Integer> newMsgChatIds = new HashSet<>();
@@ -756,7 +758,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             c.id = msg.chatId;
                             c.name = msg.chatName;
                             c.lastTimestamp = msg.timestamp;
-                            unreadChatsSynchronizedTask(() -> unreadChatsCache.put(c.id, c));
+                            unreadChatsCache.put(c.id, c);
                             Log.d(AppController.LOG_TAG, "в кэш непрочитанных чатов добавлено сообщение от " + msg.chatName);
                         }
                     }
@@ -1057,7 +1059,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 chat.localId = cursor.getInt(0);
                 chat.id = cursor.getInt(1);
                 chat.name = cursor.getString(2);
-                unreadChatsSynchronizedTask(() -> unreadChatsCache.put(chat.id, chat));
+                unreadChatsCache.put(chat.id, chat);
             }
             controller.notifyUnreadChatChanged(new ArrayList<>(unreadChatsCache.values()));
         }
@@ -1137,9 +1139,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 }
             }
         }
-        Caller[] temp = new Caller[Math.max(10, callersList.size())];
+        AtomicReferenceArray<Caller> temp = new AtomicReferenceArray<>(Math.max(10, callersList.size()));
         for (int i = 0; i < callersList.size(); i++) {
-            temp[i] = callersList.get(i);
+            temp.set(i, callersList.get(i));
         }
         callers = temp;
     }
@@ -1186,91 +1188,63 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return null;
     }
 
-    private void addCaller(Caller caller) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length; i++) {
-            if (temp[i] == null) {
-                temp[i] = caller;
-                callers = temp;
+    private void addCaller(Caller caller) { // БД нить
+        AtomicReferenceArray<Caller> temp = callers;
+        int size = temp.length();
+        for (int i = 0; i < size; i++) {
+            if (temp.get(i) == null) {
+                temp.set(i, caller);
                 return;
             }
         }
-        int size = temp.length;
-        temp = Arrays.copyOf(temp, size + 10);
-        temp[size] = caller;
-        callers = temp;
+        AtomicReferenceArray<Caller> newTemp = new AtomicReferenceArray<>(size + 10);
+        for (int i = 0; i < size; i++) {
+            newTemp.set(i, temp.get(i));
+        }
+        newTemp.set(size, caller);
+        callers = newTemp;
+    }
+
+    private interface CallerAction {
+        void apply(Caller c);
+    }
+
+    private void updateCaller(boolean byChatId, int id, CallerAction update) {
+        AtomicReferenceArray<Caller> temp = callers;
+        for (int i = 0; i < temp.length(); i++) {
+            Caller c = temp.get(i);
+            if (c == null) return;
+            int currentId = byChatId ? c.getChatId() : c.getUserId();
+            if (currentId == id) {
+                Caller updated = new Caller(c);
+                update.apply(updated);
+                temp.set(i, updated);
+                return;
+            }
+        }
     }
 
     private void setCallerBlockStatus(int userId, boolean status) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getUserId() == userId) {
-                temp[i].setBlocked(status);
-                callers = temp;
-                return;
-            }
-        }
+        updateCaller(false, userId, c -> c.setBlocked(status));
     }
 
     private void setCallerBlockStatus(int chatId) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getChatId() == chatId) {
-                temp[i].setBlocked(false);
-                callers = temp;
-                return;
-            }
-        }
+        updateCaller(true, chatId, c -> c.setBlocked(false));
     }
 
     private void setCallerPublicKey(int userId, String publicKey) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getUserId() == userId) {
-                temp[i].setPublicKey(publicKey);
-                callers = temp;
-                return;
-            }
-        }
+        updateCaller(false, userId, c -> c.setPublicKey(publicKey));
     }
 
     private void setCallerName(int userId, String chatName) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getUserId() == userId) {
-                temp[i].setChatName(chatName);
-                callers = temp;
-                return;
-            }
-        }
+        updateCaller(false, userId, c -> c.setChatName(chatName));
     }
 
     private void setCallerColor(int chatId, int color) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getChatId() == chatId) {
-                temp[i].setColor(color);
-                Log.d(AppController.LOG_TAG, "set color success " + color);
-                callers = temp;
-                return;
-            }
-        }
+        updateCaller(true, chatId, c -> c.setColor(color));
     }
 
     private void setCallerChatId(int userId, int chatId) {
-        Caller[] temp = callers;
-        for (int i = 0; i < temp.length && temp[i] != null; i++) {
-            if (temp[i].getUserId() == userId) {
-                temp[i].setChatId(chatId);
-                callers = temp;
-                return;
-            }
-        }
-    }
-
-    private void unreadChatsSynchronizedTask(Runnable unreadChatTask) {
-        synchronized (unreadChatsCache) {
-            unreadChatTask.run();
-        }
+        updateCaller(false, userId, c -> c.setChatId(chatId));
     }
 }

@@ -1,7 +1,5 @@
 package com.safelogj.lim.model;
 
-import com.safelogj.lim.AppController;
-
 public class Caller {
 
     public static final long END_AUTO = 3_000;
@@ -12,7 +10,7 @@ public class Caller {
 
     private final int userId;
     private int chatId;
-    private String chatName = AppController.EMPTY_STRING;
+    private String chatName;
     private int color;
     private boolean isBlocked;
     private String publicKey;
@@ -37,6 +35,14 @@ public class Caller {
         this.isBlocked = isBlocked;
     }
 
+    public Caller (Caller old) {
+        this.userId = old.userId;
+        this.chatId = old.chatId;
+        this.chatName = old.chatName;
+        this.color = old.color;
+        this.isBlocked = old.isBlocked;
+        this.publicKey = old.publicKey;
+    }
 
     public int getUserId() {
         return userId;

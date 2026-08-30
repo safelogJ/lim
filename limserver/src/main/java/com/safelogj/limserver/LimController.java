@@ -29,13 +29,14 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
-import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -52,11 +53,12 @@ public class LimController {
     public static final int DATA_ERR = 65;
     public static final long MEDIA_DOWNLOAD_LIFETIME = TimeUnit.DAYS.toMillis(30);
     private static final long MEDIA_DELETE_LIFETIME = TimeUnit.DAYS.toMillis(31);
-    private static volatile long[] userOnlineStatus;
+    private static volatile AtomicLongArray userOnlineStatus;
     private static final Object ONLINE_USERS_LOCK = new Object();
-    private static volatile String[] activeDownloads;
+    private static volatile AtomicReferenceArray<String> activeDownloads;
     private static final Object ACTIVE_DOWNLOADS_LOCK = new Object();
     private static int udpRelayPort;
+    private static int executorPoolSize;
     public static DatabaseManager dbManager;
     public static ServerConfig config;
     private static UdpRelayServer udpRelayServer;
@@ -80,8 +82,8 @@ public class LimController {
             calculateInitialMediaSize();
             HttpsServer server = initDbAndHttpsServer();
             closeAppListener(server);
-            userOnlineStatus = new long[Math.max(10, dbManager.getUsersCount())];
-            activeDownloads = new String[Math.max(10, dbManager.getUsersCount())];
+            userOnlineStatus = new AtomicLongArray(Math.max(10, dbManager.getUsersCount()));
+            activeDownloads = new AtomicReferenceArray<>(Math.max(10, dbManager.getUsersCount()));
             server.createContext("/register", new RegisterUserHandler());
             server.createContext("/user", new EditUserHandler());
             server.createContext("/chat/hide", new HideChatHandler());
@@ -93,8 +95,9 @@ public class LimController {
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
             server.start();
-            udpRelayServer = new UdpRelayServer(udpRelayPort, dbManager);
+            udpRelayServer = new UdpRelayServer(udpRelayPort, dbManager, executorPoolSize);
             udpRelayServer.start();
+            dbManager.setUdpRelayServer(udpRelayServer);
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOldMedia, 24, 24, TimeUnit.HOURS);
             CLEANUP_SCHEDULER.scheduleWithFixedDelay(LimController::removeOfflineUsers, 10, 10, TimeUnit.SECONDS);
         } catch (Exception e) {
@@ -109,55 +112,44 @@ public class LimController {
     }
 
     public static void setOnlineStatus(int userId, long timestamp) {
-        synchronized (ONLINE_USERS_LOCK) {
-            long[] temp = userOnlineStatus;
-            if (userId > 0 && userId <= temp.length) {
-                temp[--userId] = timestamp;
-                userOnlineStatus = temp;
-            } else if (userId > temp.length) {
-                ensureUserOnlineStatusCapacity(temp);
-            }
+        AtomicLongArray current = userOnlineStatus;
+        if (userId > 0 && userId <= current.length()) {
+            current.set(--userId, timestamp);
+        } else if (userId > current.length()) {
+            ensureUserOnlineStatusCapacity();
         }
     }
 
     public static boolean getOnlineStatus(int userId) {
-        synchronized (ONLINE_USERS_LOCK) {
-            long[] temp = userOnlineStatus;
-            if (userId > 0 && userId <= temp.length) {
-                return temp[--userId] > 0;
-            } else if (userId > temp.length) {
-                ensureUserOnlineStatusCapacity(temp);
-            }
-            return false;
+        AtomicLongArray current = userOnlineStatus;
+        if (userId > 0 && userId <= current.length()) {
+            return current.get(--userId) > 0;
+        } else if (userId > current.length()) {
+            ensureUserOnlineStatusCapacity();
         }
+        return false;
     }
 
     public static String putFilePath(int userId, String path) {
-        synchronized (ACTIVE_DOWNLOADS_LOCK) {
-            String[] temp = activeDownloads;
-            if (userId > 0 && userId <= temp.length) {
-                if (temp[userId - 1] == null) {
-                    temp[userId - 1] = path;
-                    activeDownloads = temp;
-                    return null; // Успех, место было свободно
-                }
-                return temp[userId - 1]; // Занято другим путем
-            } else if (userId > temp.length) {
-                ensureActiveDownloadsCapacity(temp);
+        AtomicReferenceArray<String> current = activeDownloads;
+        int index = userId - 1;
+        if (userId > 0 && userId <= current.length()) {
+            if (current.compareAndSet(index, null, path)) {
+                return null;
             }
+            return current.get(index);
+        } else if (userId > current.length()) {
+            ensureActiveDownloadsCapacity();
         }
         return path;
     }
 
     public static void removeFilePath(int userId) {
-        synchronized (ACTIVE_DOWNLOADS_LOCK) {
-            String[] temp = activeDownloads;
-            if (userId > 0 && userId <= temp.length) {
-                temp[--userId] = null;
-                activeDownloads = temp;
-            } else if (userId > temp.length) {
-                ensureActiveDownloadsCapacity(temp);
-            }
+        AtomicReferenceArray<String> current = activeDownloads;
+        if (userId > 0 && userId <= current.length()) {
+            current.set(--userId, null);
+        } else if (userId > current.length()) {
+            ensureActiveDownloadsCapacity();
         }
     }
 
@@ -193,7 +185,8 @@ public class LimController {
             }
         });
         udpRelayPort = config.getUdpRelayPort();
-        EXECUTOR_POOL = ServerThreadPool.createPool(config.getServerPoolSize(), config.getServerQueueSize());
+        executorPoolSize = config.getServerPoolSize();
+        EXECUTOR_POOL = ServerThreadPool.createPool(executorPoolSize, config.getServerQueueSize());
         server.setExecutor(EXECUTOR_POOL);
         return server;
     }
@@ -203,11 +196,11 @@ public class LimController {
             log.info("📥 The signal to stop the container has been received. We are beginning a smooth shutdown....");
             server.stop(1);
             log.info("HttpServer has stopped. New requests are not accepted..");
+            EXECUTOR_POOL.shutdown();
+            CLEANUP_SCHEDULER.shutdown();
             if (udpRelayServer != null) {
                 udpRelayServer.stop();
             }
-            EXECUTOR_POOL.shutdown();
-            CLEANUP_SCHEDULER.shutdown();
             log.info("⏳ Waiting for active tasks in the thread pool to complete...");
             try {
                 if (!EXECUTOR_POOL.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -259,14 +252,12 @@ public class LimController {
                 for (File file : files) {
                     String absolutePath = file.getAbsolutePath();
                     if (file.isFile() && (now - file.lastModified() > MEDIA_DELETE_LIFETIME) && Files.deleteIfExists(file.toPath())) {
-                        synchronized (ACTIVE_DOWNLOADS_LOCK) {
-                            String[] temp = activeDownloads;
-                            for (int i = 0; i < temp.length; i++) {
-                                if (absolutePath.equals(temp[i])) {
-                                    temp[i] = null;
-                                }
+                        AtomicReferenceArray<String> current = activeDownloads;
+                        for (int i = 0; i < current.length(); i++) {
+                            String existingLink = current.get(i);
+                            if (existingLink != null && existingLink.equals(absolutePath)) {
+                                current.compareAndSet(i, existingLink, null);
                             }
-                            activeDownloads = temp;
                         }
                         CURRENT_MEDIA_SIZE.addAndGet(-file.length());
                         log.info("File {} older than 31 days deleted successfully", file.getName());
@@ -281,30 +272,42 @@ public class LimController {
     }
 
     private static void removeOfflineUsers() {
-        synchronized (ONLINE_USERS_LOCK) {
-            long now = System.currentTimeMillis();
-            long [] temp = userOnlineStatus;
-            int users = temp.length;
-            for (int i = 0; i < users; i++) {
-                if (temp[i] > 0 && (now - temp[i] > 12000)) {
-                    temp[i] = 0;
-                }
+        long now = System.currentTimeMillis();
+        AtomicLongArray current = userOnlineStatus;
+        int users = current.length();
+        for (int i = 0; i < users; i++) {
+            long val = current.get(i);
+            if (val > 0 && (now - val > 12000)) {
+                current.compareAndSet(i, val, 0);
             }
-            userOnlineStatus = temp;
         }
     }
 
-    private static void ensureUserOnlineStatusCapacity(long[] temp) {
-        int newSize = dbManager.getUsersCount();
-        if (temp.length < newSize) {
-            userOnlineStatus = Arrays.copyOf(temp, newSize);
+    private static void ensureUserOnlineStatusCapacity() {
+        synchronized (ONLINE_USERS_LOCK) {
+            int newSize = dbManager.getUsersCount();
+            AtomicLongArray current = userOnlineStatus;
+            if (current.length() < newSize) {
+                AtomicLongArray next = new AtomicLongArray(newSize);
+                for (int i = 0; i < current.length(); i++) {
+                    next.set(i, current.get(i));
+                }
+                userOnlineStatus = next;
+            }
         }
     }
 
-    private static void ensureActiveDownloadsCapacity(String[] temp) {
-        int newSize = dbManager.getUsersCount();
-        if (temp.length < newSize) {
-            activeDownloads = Arrays.copyOf(temp, newSize);
+    private static void ensureActiveDownloadsCapacity() {
+        synchronized (ACTIVE_DOWNLOADS_LOCK) {
+            int newSize = dbManager.getUsersCount();
+            AtomicReferenceArray<String> current = activeDownloads;
+            if (current.length() < newSize) {
+                AtomicReferenceArray<String> next = new AtomicReferenceArray<>(newSize);
+                for (int i = 0; i < current.length(); i++) {
+                    next.set(i, current.get(i));
+                }
+                activeDownloads = next;
+            }
         }
     }
 }

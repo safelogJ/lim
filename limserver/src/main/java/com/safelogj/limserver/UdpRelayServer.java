@@ -8,6 +8,10 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
 public class UdpRelayServer {
     private static final int BUFFER_SIZE = 2048;
@@ -18,18 +22,24 @@ public class UdpRelayServer {
     private final byte[] outBuffer = new byte[BUFFER_SIZE];
     private final int[] tokensIdxs = new int[MAX_ADDRESSES_PER_USER];
     private final int[] portsIdxs = new int[MAX_ADDRESSES_PER_USER];
+    private final byte[] pingMsgData = new byte[]{0, 0, 0, 0};
+    private final DatagramPacket pingPacket = new DatagramPacket(pingMsgData, pingMsgData.length);
     private final DatagramPacket inPacket = new DatagramPacket(inBuffer, BUFFER_SIZE);
     private final DatagramPacket outPacket = new DatagramPacket(outBuffer, BUFFER_SIZE);
     private final ByteBuffer headerReader = ByteBuffer.wrap(inBuffer);
     private final int port;
+    private final ExecutorService pingExecutor = Executors.newSingleThreadExecutor();
+    private final Runnable pingRunnable = this::sendMsgPing;
+    private final AtomicIntegerArray pingQueue;
     private volatile boolean running;
     private DatagramSocket socket;
     private LimSocketAddress[][] usersAddresses;
     private LimSocketAddress portAddress;
 
-    public UdpRelayServer(int port, DatabaseManager dbManager) {
+    public UdpRelayServer(int port, DatabaseManager dbManager, int executorPoolSize) {
         this.port = port;
         this.dbManager = dbManager;
+        pingQueue = new AtomicIntegerArray(executorPoolSize);
     }
 
     public void start() {
@@ -40,8 +50,55 @@ public class UdpRelayServer {
 
     public void stop() {
         running = false;
+        try {
+            pingExecutor.shutdown();
+            if (!pingExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
+                pingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            pingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        } catch (SecurityException e) {
+            LimController.log.error("Security error during shutdown pingExecutor: {}", e.getMessage());
+        }
         if (socket != null) {
             socket.close();
+        }
+    }
+
+    public void pingInterlocutor(int interlocutorId) {
+        for (int i = 0; i < pingQueue.length(); i++) {
+            if (pingQueue.compareAndSet(i, 0, interlocutorId)) {
+                pingExecutor.execute(pingRunnable);
+                return;
+            }
+        }
+    }
+
+    private void sendMsgPing() {
+        for (int i = 0; i < pingQueue.length(); i++) {
+            int targetId = pingQueue.getAndSet(i, 0);
+            if (targetId > 0 && targetId <= usersAddresses.length) {
+                LimSocketAddress[] targetAddresses = usersAddresses[targetId - 1];
+                if (targetAddresses == null) {
+                    continue;
+                }
+
+                pingMsgData[0] = (byte) (targetId >> 24);
+                pingMsgData[1] = (byte) (targetId >> 16);
+                pingMsgData[2] = (byte) (targetId >> 8);
+                pingMsgData[3] = (byte) targetId;
+                for (int j = 0; j < MAX_ADDRESSES_PER_USER; j++) {
+                    LimSocketAddress lsa = targetAddresses[j];
+                    if (lsa == null) continue;
+                    try {
+                        pingPacket.setSocketAddress(lsa.getAddress());
+                        socket.send(pingPacket);
+                    } catch (IOException e) {
+                        LimController.log.warn("Error sending MSG tick to {}: {}", targetId, e.getMessage());
+                    }
+                }
+            }
         }
     }
 
@@ -130,7 +187,8 @@ public class UdpRelayServer {
         int tokenIdx = 0; // указатель по массиву индексов tokensIdxs
         int portIdx = 0; // указатель по массиву индексов portsIdxs
         for (int i = 0; i < MAX_ADDRESSES_PER_USER; i++) {
-            if (tokensIdxs[tokenIdx] == MAX_ADDRESSES_PER_USER && portsIdxs[portIdx] == MAX_ADDRESSES_PER_USER) break; // отсортировали
+            if (tokensIdxs[tokenIdx] == MAX_ADDRESSES_PER_USER && portsIdxs[portIdx] == MAX_ADDRESSES_PER_USER)
+                break; // отсортировали
             if (senderAddresses[i] == null) {
                 if (tokensIdxs[tokenIdx] < MAX_ADDRESSES_PER_USER) { // указывает на индекс в senderAddresses с адресом с токеном
                     senderAddresses[i] = senderAddresses[tokensIdxs[tokenIdx]];

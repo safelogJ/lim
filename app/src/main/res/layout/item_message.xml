@@ -48,15 +48,25 @@
                 tools:visibility="visible" />
 
             <!-- Контейнер для файла -->
-            <TextView
-                android:id="@+id/messageText"
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/textWrapper"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:textColor="@color/white"
-                android:textSize="18sp"
-                tools:text="Привет! Как дела?"
-                tools:visibility="visible" />
+                android:layout_height="match_parent">
+
+                <TextView
+                    android:id="@+id/messageText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="start"
+                    android:textColor="@color/white"
+                    android:textSize="18sp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    tools:text="Привет! Как дела?"
+                    tools:visibility="visible" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <LinearLayout
                 android:id="@+id/fileContainer"
