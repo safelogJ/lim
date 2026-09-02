@@ -772,7 +772,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 } finally {
                     database.endTransaction();
                     mediaLatch.countDown();
-
                 }
             });
         } else {
@@ -1236,8 +1235,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         updateCaller(false, userId, c -> c.setPublicKey(publicKey));
     }
 
-    private void setCallerName(int userId, String chatName) {
-        updateCaller(false, userId, c -> c.setChatName(chatName));
+    private void setCallerName(int chatId, String chatName) {
+        updateCaller(true, chatId, c -> c.setChatName(chatName));
     }
 
     private void setCallerColor(int chatId, int color) {

@@ -80,4 +80,5 @@
     <string name="you">Anda</string>
     <string name="interlocutor">Lawan bicara</string>
     <string name="voice_message">Pesan suara</string>
+    <string name="text_copied">Teks disalin</string>
 </resources>

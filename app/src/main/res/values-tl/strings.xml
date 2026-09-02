@@ -80,4 +80,5 @@
     <string name="you">Ikaw</string>
     <string name="interlocutor">Kausap</string>
     <string name="voice_message">Voice message</string>
+    <string name="text_copied">Nakopya ang teksto</string>
 </resources>

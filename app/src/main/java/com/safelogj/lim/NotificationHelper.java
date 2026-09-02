@@ -133,7 +133,6 @@ public class NotificationHelper {
                 .setSmallIcon(R.drawable.ic_stat_name)
                 .setContentText(caller == null ? AppController.EMPTY_STRING : caller.getChatName())
                 .setContentIntent(callPendingIntent)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setSound(null)
                 .setVibrate(new long[]{0L});
         if (isCall) {

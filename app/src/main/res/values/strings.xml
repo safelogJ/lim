@@ -2,7 +2,7 @@
     <string name="app_name" translatable="false">Lim</string>
     <string name="server_ip" translatable="false">192.168.10.10</string>
     <string name="login" translatable="false">user</string>
-    <string name="password" translatable="false">yv45IuniNiH6nInIniiOIn</string>
+    <string name="password" translatable="false">yv4Example6nInIniOIn</string>
     <string name="display_name" translatable="false">^-^</string>
     <string name="zero_time" translatable="false">00:00</string>
 
@@ -87,5 +87,6 @@
     <string name="you">You</string>
     <string name="interlocutor">Interlocutor</string>
     <string name="voice_message">Voice message</string>
+    <string name="text_copied">Text copied</string>
 
 </resources>

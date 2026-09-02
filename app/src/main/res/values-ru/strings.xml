@@ -80,4 +80,5 @@
     <string name="you">Вы</string>
     <string name="interlocutor">Собеседник</string>
     <string name="voice_message">Голосовое сообщение</string>
+    <string name="text_copied">Текст скопирован</string>
 </resources>

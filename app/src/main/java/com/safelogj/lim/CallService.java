@@ -84,9 +84,7 @@ public class CallService {
         appController.notifyIncomingCallChanged(CallService.INVALID_ID);
         stopRinging();
         renewOrStopRingRunnable(0);
-        if (appController.startedActivities.get() == 0) {
-            NotificationHelper.showMissedCallNotification(appController, interlocutorId, ringingStartTimestamp);
-        }
+        NotificationHelper.showMissedCallNotification(appController, interlocutorId, ringingStartTimestamp);
         interlocutorId = INVALID_ID;
         lineBusy.set(false);
     };
@@ -299,7 +297,7 @@ public class CallService {
         }
     }
 
-    public void toggleSpeakerphone(boolean on) { // UI нить при смене кнопкой, хэндлен при автозакрытии, из endCall
+    public void toggleSpeakerphone(boolean on) { // UI нить при смене кнопкой, хэндлер при авто закрытии, из endCall
         if (audioManager == null) return;
         // 1. Гарантируем правильный режим
         if (audioManager.getMode() != AudioManager.MODE_IN_COMMUNICATION) {

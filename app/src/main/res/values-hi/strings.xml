@@ -80,4 +80,5 @@
     <string name="you">आप</string>
     <string name="interlocutor">वार्ताकार</string>
     <string name="voice_message">वॉयс मैसेज</string>
+    <string name="text_copied">टेक्स्ट कॉपी किया गया</string>
 </resources>

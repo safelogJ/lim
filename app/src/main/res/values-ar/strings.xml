@@ -80,4 +80,5 @@
     <string name="you">أنت</string>
     <string name="interlocutor">المحاور</string>
     <string name="voice_message">رسالة صوتية</string>
+    <string name="text_copied">تم نسخ النص</string>
 </resources>

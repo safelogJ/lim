@@ -1,6 +1,8 @@
 package com.safelogj.lim.adapters;
 
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -11,13 +13,19 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
+import android.text.Selection;
+import android.text.Spannable;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -48,6 +56,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
 
     private final int userId;
     private final int chatColor;
+    private ClipboardManager clipboard;
     private MediaPlayer mediaPlayer;
     private long playingMsgId = -1;
     private ItemMessageBinding playingBinding;
@@ -74,6 +83,9 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
     @NonNull
     @Override
     public MessageViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (clipboard == null) {
+            clipboard = (ClipboardManager) parent.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        }
         ItemMessageBinding binding = ItemMessageBinding.inflate(
                 LayoutInflater.from(parent.getContext()), parent, false);
         return new MessageViewHolder(binding);
@@ -135,6 +147,7 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             } else {
                 binding.messageText.setText(message.text);
                 binding.textWrapper.setVisibility(View.VISIBLE);
+                setTextSelectListener(adapter);
             }
             // 2. Контент: Картинка или Файл
             if (Message.TYPE_IMAGE.equals(message.type) && message.isLocalFile()) {
@@ -294,7 +307,29 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
         private void updateTime(long timestamp) {
             binding.messageTime.setText(AppController.formatSmartTime(itemView.getContext(), timestamp));
         }
+
+        private void setTextSelectListener(MsgAdapter adapter) {
+            binding.messageText.setOnLongClickListener(v -> {
+                if (adapter.clipboard != null) {
+                    adapter.clipboard.setPrimaryClip(ClipData.newPlainText("Lim Message Copy", binding.messageText.getText()));
+                    Toast.makeText(v.getContext(), R.string.text_copied, Toast.LENGTH_SHORT).show();
+                }
+                return true; 
+            });
+
+            binding.messageText.setMovementMethod(new LinkMovementMethod() {
+                @Override
+                public boolean onTouchEvent(TextView widget, Spannable buffer, MotionEvent event) {
+                    if (event.getAction() == MotionEvent.ACTION_UP && (event.getEventTime() - event.getDownTime()) > ViewConfiguration.getLongPressTimeout()) {
+                        Selection.removeSelection(buffer); // Убираем выделение ссылки (подсветку) и поглощаем событие, не вызывая super.
+                        return true;
+                    }
+                    return super.onTouchEvent(widget, buffer, event);
+                }
+            });
+        }
     }
+
     /**
      * Класс для сравнения старого и нового списков
      */
@@ -321,7 +356,8 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
             Bundle diff = new Bundle();
             if (oldItem.sendStatus != newItem.sendStatus) diff.putBoolean(STATUS, true);
             if (oldItem.timestamp != newItem.timestamp) diff.putBoolean(TIME, true);
-            if (!Objects.equals(oldItem.filePath, newItem.filePath)) diff.putBoolean(FILE_PATH, true);
+            if (!Objects.equals(oldItem.filePath, newItem.filePath))
+                diff.putBoolean(FILE_PATH, true);
             return diff.isEmpty() ? null : diff;
         }
     }
@@ -365,10 +401,14 @@ public class MsgAdapter extends ListAdapter<Message, MsgAdapter.MessageViewHolde
                     binding.audioPlayer.tvAudioTime.setText(formatDuration(progress));
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {
-               //
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                //
             }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
                 if (playingMsgId != msg.localId) {
                     seekBar.setProgress(0);
                     binding.audioPlayer.tvAudioTime.setText(R.string.zero_time);

@@ -1,12 +1,41 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/interlocutor_bubble_pink_a" />
+            <corners android:radius="4dp" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/main_background" />
+        </shape>
+    </item>
 
-    <solid android:color="@color/interlocutor_bubble_pink" />
+    <item
+        android:bottom="2dp"
+        android:left="4dp"
+        android:right="4dp"
+        android:top="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:centerColor="@color/interlocutor_bubble_pink"
+                android:endColor="@color/interlocutor_bubble_pink_a"
+                android:startColor="@color/interlocutor_bubble_pink_a"
+                android:type="linear" />
+            <corners android:radius="2dp" />
+        </shape>
+    </item>
+</layer-list>
 
-    <corners android:radius="4dp" />
+<!--<shape xmlns:android="http://schemas.android.com/apk/res/android"-->
+<!--    android:shape="rectangle">-->
 
-    <stroke
-        android:width="1dp"
-        android:color="@color/interlocutor_bubble_pink" />
+<!--    <solid android:color="@color/interlocutor_bubble_pink" />-->
 
-</shape>
+<!--    <corners android:radius="4dp" />-->
+
+<!--    <stroke-->
+<!--        android:width="1dp"-->
+<!--        android:color="@color/interlocutor_bubble_pink" />-->
+
+<!--</shape>-->

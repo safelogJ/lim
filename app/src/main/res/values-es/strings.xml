@@ -80,4 +80,5 @@
     <string name="you">Tú</string>
     <string name="interlocutor">Interlocutor</string>
     <string name="voice_message">Mensaje de voz</string>
+    <string name="text_copied">Texto copiado</string>
 </resources>

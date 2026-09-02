@@ -14,9 +14,17 @@
     <color name="redA200">#FFFF5252</color>
     <color name="pink120">#FFF8BBD0</color>
     <color name="interlocutor_bubble_pink">#FACDDC</color>
+    <color name="interlocutor_bubble_pink_a">#F4BDD8</color>
+    <color name="interlocutor_bubble_pink_b">#F8B9D0</color>
     <color name="interlocutor_bubble_green">#DCEDC8</color>
+    <color name="interlocutor_bubble_green_a">#CEE7B3</color>
+    <color name="interlocutor_bubble_green_b">#BCD99C</color>
     <color name="interlocutor_bubble_blue">#C1E2FD</color>
+    <color name="interlocutor_bubble_blue_a">#A7CCED</color>
+    <color name="interlocutor_bubble_blue_b">#95BEE0</color>
     <color name="interlocutor_bubble_yellow">#FFF9C4</color>
+    <color name="interlocutor_bubble_yellow_a">#F8F1B6</color>
+    <color name="interlocutor_bubble_yellow_b">#EFE8A9</color>
     <color name="pink200">#F06292</color>
     <color name="green_50">#C8E6C9</color>
     <color name="green_50tr">#E2E4FFE4</color>
