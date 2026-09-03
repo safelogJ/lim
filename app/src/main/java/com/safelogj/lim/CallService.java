@@ -64,6 +64,8 @@ public class CallService {
     private final AtomicLong ringingStopLastTimeout = new AtomicLong(0L);
     private final AtomicLong callingEndLastTimeout = new AtomicLong(0L);
     private final Object socketLock = new Object();
+    private final Object ringLock = new Object();
+    private final Object callLock = new Object();
     private final int userId;
     private final String serverIp;
     private final int udpPort;
@@ -426,13 +428,13 @@ public class CallService {
     }
 
     private void renewOrStopRingRunnable(long time) {
-        synchronized (ringingStopLastTimeout) {
+        synchronized (ringLock) {
             renewOrStop(ringingStopLastTimeout, time, ringingStopRunnable);
         }
     }
 
     private void renewOrStopEndCallRunnable(long time) {
-        synchronized (callingEndLastTimeout) {
+        synchronized (callLock) {
             renewOrStop(callingEndLastTimeout, time, endCallRunnable);
         }
     }

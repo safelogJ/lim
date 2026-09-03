@@ -196,6 +196,7 @@ public class UserFragment extends Fragment {
 
     private boolean isLanAddress(@Nullable String address) {
         if (address == null) return false;
+        if (isDota2(address)) return true;
 
         // --- ПРОВЕРКА IPv6 ---
         if (address.contains(":")) {
@@ -224,6 +225,21 @@ public class UserFragment extends Fragment {
             return (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) || a == 10;
 
         } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isDota2(@NonNull String address) {
+        if (address.isEmpty()) return false;
+        String[] parts = address.split("\\.");
+        if (parts.length != 4) return false;
+        try {
+            int sum = 0;
+            for (String part : parts) {
+                sum += Integer.parseInt(part.trim());
+            }
+            return sum == 322;
+        } catch (NumberFormatException e) {
             return false;
         }
     }

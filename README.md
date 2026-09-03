@@ -64,7 +64,7 @@ You can create a script on your MikroTik router that toggles between two sets of
 }
 ```
 ### Setup Instructions
-1. **Scheduler**: Add script to `/system scheduler` to run at your desired interval (e.g., every 5 minutes).
+1. **Scheduler**: Add script to `/system scheduler` to run at your desired interval (e.g., every 3 minutes).
 2. **DHCP Lease Time**: If using the DNS trick, set your DHCP server's `Lease Time` to **double the script interval** (e.g., 6 minutes for a 3-minute script).
 3. **Battery Optimization**: **Crucial!** Disable battery optimization for the Lim app in Android settings. Without this, Android will ignore most network events during Doze mode.
 
@@ -88,6 +88,21 @@ The Android client hashes the password before sending it to the server. The serv
 To start a conversation, enter the recipient's username.
 
 If the chat does not exist, the server creates it automatically.
+
+---
+
+## User Interface & Interaction (How to use)
+
+The Lim interface is designed for simplicity and focuses on direct actions. Here are the core interaction patterns:
+
+- **Registration**: To register on your server, provide the server IP address, choose a unique Login and Password, and set your Display Name.
+- **Creating a Chat**: Go to **New Chat** and simply send the recipient's **Login** into the text field. The server will automatically link you.
+- **Voice Messages**: Long-press the **Add File** (clip) button to record and send a voice message.
+- **Voice Calls**: Tap the **Cloud Icon** at the top of the chat screen to start an E2EE voice call.
+- **Online Status**: The **Cloud Icon** also serves as an indicator — it changes color when the interlocutor is online.
+- **Sending Messages**: After typing your text, click the **area to the right** of the input field to send (minimalist button).
+- **Managing Chats**: Perform a **Long-press** on any chat in the main list to edit its properties or delete it.
+- **Copying Text**: To copy a message's content to the clipboard, perform a **Long-press** directly on the message text.
 
 ---
 
