@@ -20,11 +20,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        # Это позволяет собирать образы для ARM64 на обычных серверах Intel
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        # Это включает поддержку многоархитектурных сборок
         uses: docker/setup-buildx-action@v3
 
       - name: Set up JDK 21
@@ -40,6 +38,13 @@ jobs:
       - name: Build Minified Jar
         run: ./gradlew :limserver:minifyJar
 
+      - name: Extract version from Gradle
+        id: get_version
+        run: |
+          # Вытаскиваем версию из build.gradle.kts сервера
+          VERSION=$(./gradlew :limserver:properties | grep ^version: | awk '{print $2}')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -51,9 +56,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./limserver
-          # Указываем обе архитектуры: CHR и ARM64 роутеры
           platforms: linux/amd64,linux/arm64
           push: true
+          # Отключаем создание лишних метаданных, которые создают unknown/unknown
+          provenance: false
           tags: |
             ghcr.io/safelogj/lim-server:latest
+            ghcr.io/safelogj/lim-server:${{ steps.get_version.outputs.VERSION }}
             ghcr.io/safelogj/lim-server:${{ github.sha }}
