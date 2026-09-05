@@ -1,5 +1,5 @@
 # Шаг 1: Сборка кастомной JRE (Tree Shaking)
-FROM docker.io/library/arm32v7/eclipse-temurin:17-resolute AS jre-builder
+FROM arm32v7/eclipse-temurin:17-resolute AS jre-builder
 
 RUN $JAVA_HOME/bin/jlink \
     --add-modules \
@@ -18,7 +18,7 @@ jdk.unsupported \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ
-FROM docker.io/library/arm32v7/alpine
+FROM arm32v7/alpine:latest
 WORKDIR /app
 
 # Устанавливаем совместимость с glibc (критично для нативной либки SQLite в Alpine)
