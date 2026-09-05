@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - '.github/workflows/publish-server.yml'
       - 'limserver/build.gradle.kts'
   workflow_dispatch:
 
