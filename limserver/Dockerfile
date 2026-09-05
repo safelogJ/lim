@@ -21,10 +21,9 @@ jdk.unsupported \
 FROM docker.io/library/alpine:latest
 WORKDIR /app
 
-# Устанавливаем совместимость с glibc (критично для нативной либки SQLite в Alpine)
+# Устанавливаем совместимость с glibc (для SQLite в Alpine)
 RUN apk add --no-cache gcompat libstdc++
 
-# Копируем кастомную JRE и твой JAR
 COPY --from=jre-builder /javaruntime /javaruntime
 COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
