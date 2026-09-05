@@ -1,5 +1,6 @@
 # Шаг 1: Сборка кастомной JRE (Tree Shaking)
-FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS jre-builder
+# Используем Liberica JDK, так как она поддерживает arm/v7 (32-bit ARM) на Alpine
+FROM bellsoft/liberica-openjdk-alpine:21 AS jre-builder
 
 RUN $JAVA_HOME/bin/jlink \
     --add-modules \
