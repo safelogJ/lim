@@ -1,6 +1,5 @@
 # Шаг 1: Сборка кастомной JRE (Tree Shaking)
-# Используем образ на базе Debian, так как он поддерживает amd64, arm64 и arm/v7
-FROM bellsoft/liberica-openjdk-debian:21 AS jre-builder
+FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS jre-builder
 
 RUN $JAVA_HOME/bin/jlink \
     --add-modules \
@@ -18,20 +17,21 @@ jdk.unsupported \
     --compress=zip-9 \
     --output /javaruntime
 
-# Шаг 2: Финальный легковесный образ на базе Debian Slim
-FROM debian:bookworm-slim
+# Шаг 2: Финальный легковесный образ
+FROM docker.io/library/alpine:latest
 WORKDIR /app
 
-# Копируем кастомную JRE из первого этапа
+# Устанавливаем совместимость с glibc (критично для нативной либки SQLite в Alpine)
+RUN apk add --no-cache gcompat libstdc++
+
+# Копируем кастомную JRE и твой JAR
 COPY --from=jre-builder /javaruntime /javaruntime
+COPY limserver-chr-small.jar /app/limserver.jar
 
-# Копируем ваш сжатый через ProGuard JAR
-COPY build/libs/limserver-chr-small.jar /app/limserver.jar
-
-# Создаем папки для монтирования
+# Создаем папки для монтирования (чтобы права доступа были верные)
 RUN mkdir -p /app/db /app/media
 
-# Запуск с оптимизированными параметрами памяти
+# Запуск с ограничением памяти для роутера
 CMD ["/javaruntime/bin/java", \
      "-Dsun.net.httpserver.maxReqTime=180", \
      "-Dsun.net.httpserver.maxRspTime=180", \
