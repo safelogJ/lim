@@ -66,13 +66,13 @@ public class CallService {
     private final Object socketLock = new Object();
     private final Object ringLock = new Object();
     private final Object callLock = new Object();
+    private final Object muteLock = new Object();
     private final int userId;
     private final String serverIp;
     private final int udpPort;
     private volatile int interlocutorId = INVALID_ID;
     private final DatagramPacket packetOut;
     private final DatagramPacket packetIn = new DatagramPacket(new byte[BUFFER_SIZE], BUFFER_SIZE);
-    private final Object muteLock = new Object();
     private volatile AtomicReferenceArray<Mute> mutedUsers = new AtomicReferenceArray<>(20);
     private long ringingStartTimestamp = 0;
     private final Handler callHandler = new Handler(Looper.getMainLooper());
