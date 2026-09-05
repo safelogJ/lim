@@ -3,9 +3,6 @@ FROM docker.io/arm32v7/eclipse-temurin:17-resolute AS jre-builder
 
 WORKDIR /app
 
-# Устанавливаем совместимость с glibc (критично для нативной либки SQLite в Alpine)
-RUN apk add --no-cache gcompat libstdc++
-
 COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
 # Создаем папки для монтирования (чтобы права доступа были верные)
