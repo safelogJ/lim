@@ -14,7 +14,7 @@ jdk.unsupported \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
-    --compress=zip-9 \
+    --compress=2 \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ
