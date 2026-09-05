@@ -26,7 +26,7 @@ RUN apk add --no-cache gcompat libstdc++
 
 # Копируем кастомную JRE и твой JAR
 COPY --from=jre-builder /javaruntime /javaruntime
-COPY limserver-chr-small.jar /app/limserver.jar
+COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
 # Создаем папки для монтирования (чтобы права доступа были верные)
 RUN mkdir -p /app/db /app/media
