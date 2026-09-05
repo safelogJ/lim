@@ -18,7 +18,7 @@ jdk.unsupported \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ
-FROM docker.io/library/arm32v7/alpine:latest
+FROM docker.io/library/arm32v7/alpine
 WORKDIR /app
 
 # Устанавливаем совместимость с glibc (критично для нативной либки SQLite в Alpine)
