@@ -1,5 +1,5 @@
 # Шаг 1: Сборка кастомной JRE (Tree Shaking)
-FROM arm32v7/eclipse-temurin:17-resolute AS jre-builder
+FROM arm32v7/eclipse-temurin:21.0.12_8-jre-ubi10-minimal AS jre-builder
 
 RUN $JAVA_HOME/bin/jlink \
     --add-modules \
