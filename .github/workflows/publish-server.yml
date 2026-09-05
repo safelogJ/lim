@@ -4,8 +4,7 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - 'limserver/**'
-      - '.github/workflows/publish-server.yml'
+      - 'limserver/build.gradle.kts'
   workflow_dispatch:
 
 jobs:
@@ -41,7 +40,6 @@ jobs:
       - name: Extract version from Gradle
         id: get_version
         run: |
-          # Вытаскиваем версию из build.gradle.kts сервера
           VERSION=$(./gradlew :limserver:properties | grep ^version: | awk '{print $2}')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
@@ -58,7 +56,6 @@ jobs:
           context: ./limserver
           platforms: linux/amd64,linux/arm64
           push: true
-          # Полностью отключаем генерацию метаданных аттестации и SBOM
           provenance: false
           sbom: false
           tags: |
