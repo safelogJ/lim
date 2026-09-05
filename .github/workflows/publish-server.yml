@@ -51,7 +51,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./limserver
-          # Указываем обе архитектуры: обычные серверы/CHR и ARM64 роутеры
+          # Указываем обе архитектуры: CHR и ARM64 роутеры
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
