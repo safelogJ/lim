@@ -115,9 +115,6 @@ public class NetworkService {
                 controller.setUserId(user.id);
                 controller.writeSettingsToFile();
                 Log.i(AppController.LOG_TAG, res.message());
-                Log.e(AppController.LOG_TAG, res.privateHash());
-                Log.e(AppController.LOG_TAG, "публичный автор,рега " + res.publicKey());
-
             } else {
                 sendError(callback, SERVER_RETURNED_ERROR + res.message());
             }

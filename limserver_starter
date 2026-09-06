@@ -1,0 +1,38 @@
+:local cName "limserver"
+:local count 0
+:local isAvailable false
+:local isStopped do={
+    :local data [/container/print as-value where name=$1]
+    :if ([:len $data] > 0) do={
+        :return ($data->0->"stopped")
+    }
+    :return false
+}
+:while (!$isAvailable && $count < 30) do={
+    :delay 20s
+    :do {
+        if ([/tool/ping address=ghcr.io count=1] = 1) do={
+            :set isAvailable true
+        }
+    } on-error={
+        :log info "Waiting for DNS/Registry..."
+    }
+    :set count ($count + 1)
+}
+:if ($isAvailable && [$isStopped $cName]) do={
+    /container/repull [find name=$cName]
+    :delay 60s
+    :local startTry 0
+    :while (![$isStopped $cName] && $startTry < 20) do={
+        :delay 15s
+        :set startTry ($startTry + 1)
+    }
+    :if ([$isStopped $cName]) do={
+        :delay 2s
+        /container/start [find name=$cName]
+    } else={
+        :log error "Limserver_starter: Repull failed or timed out!"
+    }
+} else={
+    :log error "Limserver_starter: Autostart failed"
+}

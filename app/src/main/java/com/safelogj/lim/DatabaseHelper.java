@@ -240,7 +240,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     }
                     setCallerPublicKey(user.id, user.publicKey);
                 } else {
-                    if (user.id > 1) {
+                    if (controller.userId() != 0 && user.id != controller.userId()) {
                        addCaller(new Caller(user.id, user.displayName, user.publicKey));
                     }
                 }
