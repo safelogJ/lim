@@ -11,8 +11,8 @@ configure<ApplicationExtension> {
         applicationId = "com.safelogj.lim"
         minSdk = 29
         targetSdk = 37
-        versionCode = 16
-        versionName = "app-1.15-c15"
+        versionCode = 17
+        versionName = "app-1.17-c15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
