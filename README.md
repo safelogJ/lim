@@ -110,7 +110,11 @@ The Lim interface is designed for simplicity and focuses on direct actions. Here
 
 Each user generates their own public/private key pair.
 
-The server stores only public keys.
+The server stores:
+- **Public keys** (required for message encryption by other users).
+- **Encrypted private keys**: The private key is encrypted on the user's device with their password before being uploaded to the server. This allows for secure key synchronization when logging in from a new device.
+
+The server never has access to the plain-text private key.
 
 When sending a message or media file:
 
