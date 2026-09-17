@@ -20,7 +20,7 @@ The server stores messages, transfers media files and manages user accounts. Com
 Step-by-step video instructions for setting up the Lim server are available on our [YouTube channel](https://www.youtube.com/watch?v=Rf0qV1bF3Vc&list=PLDrcG0N5RKyo):
 
 - **For MikroTik CHR (AMD64)**: Manual installation using a `.tar` container file.
-- **For hAP ax2 & ARM64 devices**: Automatic installation from the GitHub repository (GHCR) using the [MikroTik App YAML](https://raw.githubusercontent.com/safelogj/Lim/master/lim_mikrotik_app.yml).
+- **For hAP ax2 & ARM64 devices**: Automatic installation from the GitHub repository (GHCR) using the [Container link from](https://github.com/safelogJ/lim/pkgs/container/lim-server).
 
 ---
 
