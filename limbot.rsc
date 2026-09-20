@@ -33,7 +33,7 @@
 # Recipients (comma-separated WITHOUT spaces)
 :local interlocutors "redmi,huawei"
 # Message text or $message from logs
-:local message "ALARM: Ether1 link down! а русский?"
+:local message "ALARM: Ether1 link down!"
 :local logins ""
 
 :foreach r in=[:toarray $interlocutors] do={
