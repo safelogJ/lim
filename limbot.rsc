@@ -23,17 +23,17 @@
 }
 
 # Chat name
-:local routerName "gcore"
+:local routerName "hexs"
 # regex ^[a-z0-9]{3,20}$
-:local botLogin "gcorebot"
-:local botPassword "gcore_bot_password"
+:local botLogin "hexs"
+:local botPassword "hexshexs"
 :local certName "44limcert.crt"
 :local serverIp "192.168.10.3"
 :local myIp "192.168.88.2"
 # Recipients (comma-separated WITHOUT spaces)
 :local interlocutors "redmi,huawei"
 # Message text or $message from logs
-:local message "ALARM: Ether1 link down!"
+:local message "ALARM: Ether1 link down! а русский?"
 :local logins ""
 
 :foreach r in=[:toarray $interlocutors] do={
