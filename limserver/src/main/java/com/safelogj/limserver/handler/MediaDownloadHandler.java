@@ -31,7 +31,7 @@ public class MediaDownloadHandler extends BaseHandler {
                 return;
             }
             // 3. Авторизация
-            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            User user = LimController.dbManager.authenticateUserAndBot(req.username(), req.password(), false);
             if (user == null) {
                 sendUnauthorizedError(exchange, response);
                 return;

@@ -28,7 +28,7 @@ public class SendMessageHandler extends BaseHandler {
                 sendFieldMissingError(exchange, response);
                 return;
             }
-            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            User user = LimController.dbManager.authenticateUserAndBot(req.username(), req.password(), false);
             if (user == null || !LimController.dbManager.isMemberOfChat(user.id, req.chatId())) {
                 LimController.log.error("sendUnauthorizedError ");
                 sendUnauthorizedError(exchange, response);

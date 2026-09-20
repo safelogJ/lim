@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.shadow)
 }
 
-version = "1.15"
+version = "1.18"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21

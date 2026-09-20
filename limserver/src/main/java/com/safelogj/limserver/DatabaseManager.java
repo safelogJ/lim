@@ -226,12 +226,21 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public User registerUser(@NotNull String username, @NotNull String clientPasswordHash, @NotNull String displayName,
-                             @NotNull String publicKey, @NotNull String privateHash) throws SQLException {
+    public User registerUserAndBot(@NotNull String username, @NotNull String clientPasswordHash, @NotNull String displayName,
+                                   @NotNull String publicKey, @NotNull String privateHash, boolean isBot) throws SQLException {
         if (usersCount.get() == Integer.MAX_VALUE) {
             LimController.log.error("Database full. Cannot register user '{}'", username);
             return null;
         }
+
+        User user = new User();
+        user.publicKey = publicKey;
+        user.privateHash = privateHash;
+        if (isBot != user.isBot()) {
+            LimController.log.warn("Account type mismatch for user '{}'", username);
+            return null;
+        }
+
         String serverPasswordHash = hashPassword(clientPasswordHash);
         if (serverPasswordHash.isEmpty()) {
             throw new SQLException("critical error: password hashing failed");
@@ -270,7 +279,6 @@ public class DatabaseManager {
                     throw new SQLException("failed to retrieve new user id");
                 }
                 conn.commit();
-                User user = new User();
                 user.id = userId;
                 user.displayName = displayName;
                 usersCount.set(userId);
@@ -301,11 +309,12 @@ public class DatabaseManager {
     }
 
     @Nullable
-    public User authenticateUser(@NotNull String username, @NotNull String clientHash) {
+    public User authenticateUserAndBot(@NotNull String username, @NotNull String clientHash, boolean isBot) {
         UserCacheEntry entry = authCache.get(username);
-        if (entry != null && !entry.isExpired() && entry.clientHash().equals(clientHash)) {
+        if (entry != null && !entry.isExpired() && entry.clientHash().equals(clientHash) && isBot == entry.user().isBot()) {
             return entry.user();
         }
+
         String serverPasswordHash = hashPassword(clientHash);
         if (serverPasswordHash.isEmpty()) return null;
 
@@ -320,6 +329,10 @@ public class DatabaseManager {
                     user.displayName = rs.getString(2);
                     user.publicKey = rs.getString(4);
                     user.privateHash = rs.getString(5);
+                    if(isBot != user.isBot()) {
+                        LimController.log.warn("Wrong authenticate attempt: login '{}'", username);
+                        return null;
+                    }
                     authCache.put(username, new UserCacheEntry(user, clientHash, System.currentTimeMillis()));
                     return user;
                 } else {

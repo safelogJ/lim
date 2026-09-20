@@ -30,7 +30,7 @@ public class EditUserHandler extends BaseHandler {
                 sendFieldMissingError(exchange, response);
                 return;
             }
-            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            User user = LimController.dbManager.authenticateUserAndBot(req.username(), req.password(), false);
             if (user == null) {
                 if (DELETE.equalsIgnoreCase(method) && LimController.dbManager.isUserDeleted(req.username())) {
                     response.message = "account was already deleted";

@@ -49,7 +49,7 @@ public class MediaUploadHandler extends BaseHandler {
             sendFieldMissingError(exchange, response);
             return;
         }
-        User user = LimController.dbManager.authenticateUser(username, password);
+        User user = LimController.dbManager.authenticateUserAndBot(username, password, false);
         if (user == null || !LimController.dbManager.isMemberOfChat(user.id, chatId)) {
             sendUnauthorizedError(exchange, response);
             return;

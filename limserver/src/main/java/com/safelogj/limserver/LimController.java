@@ -6,6 +6,7 @@ import com.safelogj.limserver.handler.HideChatHandler;
 import com.safelogj.limserver.handler.MediaDownloadHandler;
 import com.safelogj.limserver.handler.MediaUploadHandler;
 import com.safelogj.limserver.handler.RegisterUserHandler;
+import com.safelogj.limserver.handler.ScriptHandler;
 import com.safelogj.limserver.handler.SearchChatHandler;
 import com.safelogj.limserver.handler.SearchUserHandler;
 import com.safelogj.limserver.handler.SendMessageHandler;
@@ -94,6 +95,7 @@ public class LimController {
             server.createContext("/messages/get", new GetMessagesHandler());
             server.createContext("/media/upload", new MediaUploadHandler());
             server.createContext("/media/get", new MediaDownloadHandler());
+            server.createContext("/script", new ScriptHandler());
             server.start();
             udpRelayServer = new UdpRelayServer(udpRelayPort, dbManager, executorPoolSize);
             udpRelayServer.start();

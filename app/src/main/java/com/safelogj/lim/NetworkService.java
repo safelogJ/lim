@@ -3,6 +3,7 @@ package com.safelogj.lim;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -479,12 +480,21 @@ public class NetworkService {
     }
     @Nullable
     private Message decryptMessage(Message msg) {
-        //  Log.e(AppController.LOG_TAG, "расшифровываю id: " + msg.id + " key " + msg.interlocutorPublicKey);
+        if (User.BOT.equals(msg.interlocutorPublicKey)) {
+            msg.text = xorDecrypt(msg.text);
+            if (msg.text == null) {
+                Log.i(AppController.LOG_TAG, "расшифровка сообщения от бота не удалась " + msg.id);
+                return null;
+            }
+            return msg;
+        }
+
         msg.text = controller.decryptMessage(msg.text, msg.interlocutorPublicKey);
         if (msg.text == null) {
             Log.i(AppController.LOG_TAG, "расшифровка сообщения не удалась " + msg.id);
             return null;
         }
+        
         if (msg.fileName != null && !msg.fileName.isEmpty()) {
             msg.fileName = controller.decryptMessage(msg.fileName, msg.interlocutorPublicKey);
             if (msg.fileName == null) {
@@ -493,6 +503,25 @@ public class NetworkService {
             }
         }
         return msg;
+    }
+
+    private String xorDecrypt(String encryptedBase64) {
+        byte[] keyBytes = controller.getCertNameBytes();
+        if (keyBytes.length == 0) {
+            Log.e(AppController.LOG_TAG, "XOR decryption error: key is null or empty");
+            return null;
+        }
+        try {
+            byte[] data = Base64.decode(encryptedBase64, Base64.NO_WRAP);
+            byte[] result = new byte[data.length];
+            for (int i = 0; i < data.length; i++) {
+                result[i] = (byte) (data[i] ^ keyBytes[i % keyBytes.length]);
+            }
+            return new String(result, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            Log.e(AppController.LOG_TAG, "XOR decryption error: " + e.getMessage());
+            return null;
+        }
     }
 
     private void fillChatStatus(@Nullable Map<Integer, Boolean> onlineStatuses) {

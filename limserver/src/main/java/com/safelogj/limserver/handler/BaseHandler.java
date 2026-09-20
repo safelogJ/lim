@@ -83,6 +83,12 @@ public abstract class BaseHandler implements HttpHandler {
         sendResponse(exchange, 404, response);
     }
 
+    protected void sendScriptError(HttpExchange exchange, BaseResponse response, String message) throws IOException {
+        response.status = BaseResponse.ERROR;
+        response.message = message;
+        sendResponse(exchange, 250, response);
+    }
+
     @NotNull
     private String sanitizeDisplayName(@NotNull String displayName) {
         String clean = displayName.replaceAll("\\p{Cc}", LimController.EMPTY_STRING);

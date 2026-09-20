@@ -36,6 +36,7 @@ import com.bumptech.glide.Glide;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.MediaLatch;
 import com.safelogj.lim.model.Message;
+import com.safelogj.lim.model.User;
 
 import org.json.JSONObject;
 
@@ -202,6 +203,8 @@ public class AppController extends Application {
     private volatile byte[] certBytes;
     @NonNull
     private volatile String certName = EMPTY_STRING;
+    @NonNull
+    private volatile byte[] certNameBytes = new byte[0];
     @NonNull
     private volatile String username = EMPTY_STRING;
     private volatile int userId;
@@ -377,6 +380,7 @@ public class AppController extends Application {
 
     public void setCertName(@NonNull String certName) {
         this.certName = certName;
+        certNameBytes = certName.getBytes(StandardCharsets.UTF_8);
     }
 
     public void setUsername(@NonNull String username) {
@@ -425,6 +429,10 @@ public class AppController extends Application {
     @NonNull
     public String getCertName() {
         return certName;
+    }
+    @NonNull
+    public byte[] getCertNameBytes() {
+        return certNameBytes;
     }
 
     @NonNull
@@ -613,6 +621,7 @@ public class AppController extends Application {
             serverIp = json.optString(SERVER_IP, EMPTY_STRING);
             udpRelayPort = json.optInt(UDP_PORT, 0);
             certName = json.optString(SERVER_CERT_NAME, EMPTY_STRING);
+            certNameBytes = certName.getBytes(StandardCharsets.UTF_8);
             e2eePrivateKey = json.optString(E2EE_PRIVATE_KEY, EMPTY_STRING);
             e2eePublicKey = json.optString(E2EE_PUBLIC_KEY, EMPTY_STRING);
             String cert = json.optString(SERVER_CERT, EMPTY_STRING);
@@ -1070,7 +1079,7 @@ public class AppController extends Application {
     @Nullable
     public SecretKey getChatSecretKey(int interlocutorId) {
         String publicKey = dbHelper.getUserPublicKey(interlocutorId);
-        if (publicKey == null || publicKey.isEmpty()) return null;
+        if (publicKey == null || publicKey.isEmpty() || User.BOT.equals(publicKey)) return null;
         try {
             return getSharedKey(publicKey);
         } catch (Exception e) {

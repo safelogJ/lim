@@ -45,7 +45,7 @@ public class RegisterUserHandler extends BaseHandler {
                 return;
             }
 
-            User user = LimController.dbManager.authenticateUser(username, req.password());
+            User user = LimController.dbManager.authenticateUserAndBot(username, req.password(), false);
             if (user != null) {
                 response.userId = user.id;
                 response.displayName = user.displayName;
@@ -64,7 +64,7 @@ public class RegisterUserHandler extends BaseHandler {
                 sendResponse(exchange, 400, response);
                 return;
             }
-            user = LimController.dbManager.registerUser(username, req.password(), req.displayName(), req.publicKey(), req.privateHash());
+            user = LimController.dbManager.registerUserAndBot(username, req.password(), req.displayName(), req.publicKey(), req.privateHash(), false);
             if (user != null) {
                 response.userId = user.id;
                 response.displayName = user.displayName;

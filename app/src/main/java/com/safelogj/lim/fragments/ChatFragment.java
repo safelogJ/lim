@@ -48,6 +48,7 @@ import com.safelogj.lim.adapters.MsgAdapter;
 import com.safelogj.lim.databinding.FragmentChatBinding;
 import com.safelogj.lim.model.Chat;
 import com.safelogj.lim.model.Message;
+import com.safelogj.lim.model.User;
 import com.safelogj.lim.viewmodels.ChatViewModel;
 
 import java.io.File;
@@ -231,7 +232,7 @@ public class ChatFragment extends Fragment {
             } else if (currentChatId != Chat.INVALID_ID) { // РЕЖИМ ОТПРАВКИ
                 if (interlocutorPublicKey.isEmpty()) {
                     chatViewModel.searchInterlocutorOnServer(null, currentChatId);
-                } else {
+                } else if (!User.BOT.equals(interlocutorPublicKey)) {
                     sendMessage();
                 }
             }
@@ -266,7 +267,7 @@ public class ChatFragment extends Fragment {
     private void setCallBtnListener() {
         mBinding.onlineContainer.setOnClickListener(v -> {
             Integer interlocutorId = controller.getOnlineInterlocutorId(currentChatId);
-            if (currentChatId != Chat.INVALID_ID && interlocutorId != null && !controller.getDbHelper().isInterlocutorBlocked(interlocutorId)
+            if (currentChatId != Chat.INVALID_ID && interlocutorId != null && !User.BOT.equals(interlocutorPublicKey) && !controller.getDbHelper().isInterlocutorBlocked(interlocutorId)
                     && controller.hasMic() && controller.hasAudioOut() && !controller.isLineBusy() && controller.hasVoiceCipher(interlocutorId) ) {
                 stopRecordAndPlay();
                 ((MainActivity) requireActivity()).showFragment(CallFragment.newInstance(interlocutorId, currentChatName, true));
@@ -392,7 +393,9 @@ public class ChatFragment extends Fragment {
         chatViewModel.getInterlocutorPublicKey().observe(getViewLifecycleOwner(), publicKey -> {
             if (publicKey != null) {
                 interlocutorPublicKey = publicKey;
-                sendMessage();
+                if (!User.BOT.equals(interlocutorPublicKey)) {
+                    sendMessage();
+                }
             }
         });
     }

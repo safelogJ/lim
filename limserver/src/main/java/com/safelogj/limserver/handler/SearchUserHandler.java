@@ -27,7 +27,7 @@ public class SearchUserHandler extends BaseHandler {
                 return;
             }
             // 2. Встроенная авторизация на лету
-            User user = LimController.dbManager.authenticateUser(req.username(), req.password());
+            User user = LimController.dbManager.authenticateUserAndBot(req.username(), req.password(), false);
             if (user == null) {
                 sendUnauthorizedError(exchange, response);
                 return;

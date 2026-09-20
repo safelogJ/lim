@@ -24,6 +24,28 @@ Step-by-step video instructions for setting up the Lim server are available on o
 
 ---
 
+## Bots and System Notifications
+
+Lim supports automated notifications from your MikroTik router (or any device capable of sending HTTPS POST requests) via built-in bot functionality.
+
+### How it works
+To maintain privacy, bot messages are not stored in plain text. They are encrypted using a **XOR algorithm** where the **filename of the server certificate** acts as the encryption key.
+
+1.  **Security**: The server never sees the raw message or the bot password in the database; they are stored in an obfuscated format.
+2.  **Decryption**: Only users who have imported the server certificate and named it correctly in their app can read the messages.
+
+### Setup Instructions
+1.  **On the Phone**:
+    *   Import your server's `.crt` file into the Lim app.
+    *   **Tip**: Rename the certificate file before import (e.g., to `my_secret_code.crt`). This filename will serve as your "password" for bot messages.
+2.  **In the Script**:
+    *   Download the [limbot.rsc](limbot.rsc) script from the root of this repository.
+    *   Set `:local certName "my_secret_code.crt"` (must match the name in the app).
+    *   Configure `botLogin`, `botPassword`, and the list of `interlocutors` (recipients).
+3.  **Run**: Schedule the script in WinBox (`System -> Scheduler`) or trigger it via Netwatch.
+
+---
+
 ## Features
 
 - Personal messaging
