@@ -3,15 +3,8 @@ FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
 
 # Собираем минимальную JRE
 RUN $JAVA_HOME/bin/jlink \
-    --add-modules \
-java.base,\
-java.sql,\
-java.naming,\
-java.management,\
-java.logging,\
-jdk.httpserver,\
-jdk.crypto.ec,\
-jdk.unsupported \
+    --module-path "$JAVA_HOME/jmods" \
+    --add-modules java.base,java.sql,java.naming,java.management,java.logging,jdk.httpserver,jdk.crypto.ec,jdk.unsupported \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
