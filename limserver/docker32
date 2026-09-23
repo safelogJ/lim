@@ -12,7 +12,7 @@ RUN $JAVA_HOME/bin/jlink \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ на базе Debian Slim
-FROM --platform=linux/arm/v7 docker.io/library/debian:bookworm-slim
+FROM docker.io/library/alpine:latest
 WORKDIR /app
 
 # Устанавливаем необходимые библиотеки
