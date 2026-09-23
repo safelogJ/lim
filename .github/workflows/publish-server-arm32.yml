@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - 'limserver/build.gradle.kts'
+      - 'limserver/build.gradle.kts1'
   workflow_dispatch:
 
 jobs:
