@@ -1,5 +1,5 @@
 # Шаг 1: Сборка кастомной JRE для ARM32 (linux/arm/v7)
-FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
+FROM --platform=linux/arm/v7 docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
 
 # Собираем минимальную JRE
 RUN echo "JAVA_HOME=$JAVA_HOME" && \
