@@ -1,4 +1,4 @@
-name: Publish Lim Server Multi-Arch
+name: Publish Lim Server ARM32
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-and-push-arm32:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,14 +50,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Multi-Arch Image
+      - name: Build and push ARM32 Image
         uses: docker/build-push-action@v7
         with:
           context: ./limserver
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm/v7
           push: true
           provenance: false
           sbom: false
           tags: |
-            ghcr.io/safelogj/lim-server:latest
-            ghcr.io/safelogj/lim-server:${{ steps.get_version.outputs.VERSION }}
+            ghcr.io/safelogj/lim-server:latest-arm32
+            ghcr.io/safelogj/lim-server:arm32
+            ghcr.io/safelogj/lim-server:${{ steps.get_version.outputs.VERSION }}-arm32
