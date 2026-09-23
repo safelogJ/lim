@@ -1,31 +1,36 @@
 # Шаг 1: Сборка кастомной JRE (Tree Shaking)
-# Используем BellSoft, так как он поддерживает и x86_64, и arm64, и arm/v7 на Alpine
-FROM bellsoft/liberica-openjdk-alpine:17 AS jre-builder
+FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS jre-builder
 
 RUN $JAVA_HOME/bin/jlink \
-    --module-path "$JAVA_HOME/jmods" \
-    --add-modules java.base,java.sql,java.naming,java.management,java.logging,jdk.httpserver,jdk.crypto.ec,jdk.unsupported \
+    --add-modules \
+java.base,\
+java.sql,\
+java.naming,\
+java.management,\
+java.logging,\
+jdk.httpserver,\
+jdk.crypto.ec,\
+jdk.unsupported \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
-    --compress=2 \
+    --compress=zip-9 \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ
-FROM alpine:latest
+FROM docker.io/library/alpine:latest
 WORKDIR /app
 
-# Устанавливаем совместимость с glibc (для SQLite)
+# Устанавливаем совместимость с glibc (для SQLite в Alpine)
 RUN apk add --no-cache gcompat libstdc++
 
-# Копируем кастомную JRE и JAR
 COPY --from=jre-builder /javaruntime /javaruntime
-COPY limserver-chr-small.jar /app/limserver.jar
+COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
-# Создаем папки
+# Создаем папки для монтирования (чтобы права доступа были верные)
 RUN mkdir -p /app/db /app/media
 
-# Запуск
+# Запуск с ограничением памяти для роутера
 CMD ["/javaruntime/bin/java", \
      "-Dsun.net.httpserver.maxReqTime=180", \
      "-Dsun.net.httpserver.maxRspTime=180", \
