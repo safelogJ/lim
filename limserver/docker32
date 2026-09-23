@@ -1,7 +1,6 @@
-# Шаг 1: Сборка кастомной JRE для ARM32 (linux/arm/v7)
-FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
+# Шаг 1: Сборка кастомной JRE (Tree Shaking)
+FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS jre-builder
 
-# Собираем минимальную JRE
 RUN $JAVA_HOME/bin/jlink \
     --add-modules \
 java.base,\
@@ -18,23 +17,21 @@ jdk.unsupported \
     --compress=2 \
     --output /javaruntime
 
-# Шаг 2: Финальный легковесный образ на базе Debian Slim
-FROM --platform=linux/arm/v7 docker.io/library/debian:bookworm-slim
+# Шаг 2: Финальный легковесный образ
+FROM --platform=linux/arm/v7 docker.io/library/alpine:latest
 WORKDIR /app
 
-# Устанавливаем необходимые библиотеки
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsqlite3-0 \
-    && rm -rf /var/lib/apt/lists/*
+# Устанавливаем совместимость с glibc (для SQLite)
+RUN apk add --no-cache gcompat libstdc++
 
-# Копируем кастомную JRE
+# Копируем кастомную JRE и JAR
 COPY --from=jre-builder /javaruntime /javaruntime
-COPY limserver-chr-small.jar /app/limserver.jar
+COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
-# Подготовка структуры папок
+# Создаем папки
 RUN mkdir -p /app/db /app/media
 
-# Настройки запуска
+# Запуск
 CMD ["/javaruntime/bin/java", \
      "-Dsun.net.httpserver.maxReqTime=180", \
      "-Dsun.net.httpserver.maxRspTime=180", \
