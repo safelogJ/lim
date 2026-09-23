@@ -1,11 +1,13 @@
-# Шаг 1: Сборка кастомной JRE для ARM32 (linux/arm/v7)
-FROM --platform=linux/arm/v7 docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
+FROM --platform=linux/arm/v7 docker.io/arm32v7/eclipse-temurin:17-jdk-jammy AS jre-builder
 
-# Собираем минимальную JRE
-RUN echo "JAVA_HOME=$JAVA_HOME" && \
+RUN echo "=== SYSTEM ===" && \
     uname -a && \
+    echo "=== JAVA ===" && \
     java -version && \
-    $JAVA_HOME/bin/jlink \
+    echo "=== JLINK ===" && \
+    $JAVA_HOME/bin/jlink --version
+
+RUN $JAVA_HOME/bin/jlink \
     --add-modules \
 java.base,\
 java.sql,\
@@ -18,29 +20,25 @@ jdk.unsupported \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
-    --compress=2 \
+    --compress=0 \
     --output /javaruntime
 
-# Шаг 2: Финальный легковесный образ на базе Debian Slim
 FROM --platform=linux/arm/v7 docker.io/library/debian:bookworm-slim
+
 WORKDIR /app
 
-# Устанавливаем необходимые библиотеки
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем кастомную JRE
 COPY --from=jre-builder /javaruntime /javaruntime
 COPY build/libs/limserver-chr-small.jar /app/limserver.jar
 
-# Подготовка структуры папок
 RUN mkdir -p /app/db /app/media
 
-# Настройки запуска
 CMD ["/javaruntime/bin/java", \
-     "-Dsun.net.httpserver.maxReqTime=180", \
-     "-Dsun.net.httpserver.maxRspTime=180", \
-     "-Dsun.net.httpserver.nodelay=true", \
-     "-Xms32m", "-Xmx96m", \
-     "-jar", "/app/limserver.jar"]
+    "-Dsun.net.httpserver.maxReqTime=180", \
+    "-Dsun.net.httpserver.maxRspTime=180", \
+    "-Dsun.net.httpserver.nodelay=true", \
+    "-Xms32m", "-Xmx96m", \
+    "-jar", "/app/limserver.jar"]
