@@ -3,8 +3,15 @@ FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
 
 # Собираем минимальную JRE
 RUN $JAVA_HOME/bin/jlink \
-    --module-path "$JAVA_HOME/jmods" \
-    --add-modules java.base,java.sql,java.naming,java.management,java.logging,jdk.httpserver,jdk.crypto.ec,jdk.unsupported \
+    --add-modules \
+java.base,\
+java.sql,\
+java.naming,\
+java.management,\
+java.logging,\
+jdk.httpserver,\
+jdk.crypto.ec,\
+jdk.unsupported \
     --strip-debug \
     --no-man-pages \
     --no-header-files \
@@ -12,7 +19,7 @@ RUN $JAVA_HOME/bin/jlink \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ на базе Debian Slim
-FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute
+FROM --platform=linux/arm/v7 docker.io/library/debian:bookworm-slim
 WORKDIR /app
 
 # Устанавливаем необходимые библиотеки
