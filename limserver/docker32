@@ -12,7 +12,7 @@ RUN $JAVA_HOME/bin/jlink \
     --output /javaruntime
 
 # Шаг 2: Финальный легковесный образ на базе Debian Slim
-FROM docker.io/library/alpine:latest
+FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute
 WORKDIR /app
 
 # Устанавливаем необходимые библиотеки
