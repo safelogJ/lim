@@ -2,7 +2,10 @@
 FROM docker.io/arm32v7/eclipse-temurin:17-jdk-resolute AS jre-builder
 
 # Собираем минимальную JRE
-RUN $JAVA_HOME/bin/jlink \
+RUN echo "JAVA_HOME=$JAVA_HOME" && \
+    uname -a && \
+    java -version && \
+    $JAVA_HOME/bin/jlink \
     --add-modules \
 java.base,\
 java.sql,\
