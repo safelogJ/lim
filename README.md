@@ -19,8 +19,8 @@ The server stores messages, transfers media files and manages user accounts. Com
 
 Step-by-step video instructions for setting up the Lim server are available on our [YouTube channel](https://www.youtube.com/watch?v=Rf0qV1bF3Vc&list=PLDrcG0N5RKyo):
 
-- **For MikroTik CHR (AMD64)**: Manual installation using a `.tar` container file.
-- **For hAP ax2 & ARM64 devices**: Automatic installation from the GitHub repository (GHCR) using the [Container link from](https://github.com/safelogJ/lim/pkgs/container/lim-server).
+- **For ARM32 devices (hAP ac²) **: Manual installation using a `.tar` container file.
+- **For MikroTik CHR (AMD64) & ARM64 devices (hAP ax2)**: Automatic installation from the GitHub repository (GHCR) using the [Container link from](https://github.com/safelogJ/lim/pkgs/container/lim-server).
 
 ---
 
@@ -55,7 +55,7 @@ To maintain privacy, bot messages are not stored in plain text. They are encrypt
 - Automatic chat creation
 - User authentication
 - Android client (API 29+)
-- Java server for MikroTik (AMD64 & ARM64)
+- Java server for MikroTik (AMD64, ARM64 & ARM32 / tested on hAP ac²)
 - HTTPS communication
 - Local network operation only
 

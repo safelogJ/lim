@@ -13,7 +13,7 @@ Features:
 • Secure HTTPS communication
 
 Multi-Architecture Support:
-The server container is lightweight and optimized for low memory usage. It supports both x86_64 and ARM64 architectures, allowing you to run it on MikroTik CHR (VPS/VM) or directly on hardware routers such as hAP ax², hAP ax³, Chateau, and other ARM64 MikroTik models with Container support.
+The server container is lightweight and optimized for low memory usage. It supports x86_64, ARM64, and ARM32 architectures, allowing you to run it on MikroTik CHR (VPS/VM) or directly on hardware routers such as hAP ax², hAP ax³, hAP ac², Chateau, and other MikroTik models with Container support.
 
 How conversations start:
 To start a conversation, simply send the username of the recipient in a new chat. If the chat does not already exist, the server creates it automatically.
@@ -27,7 +27,7 @@ Lim does not use Google Firebase (FCM) or any other third-party services. All co
 Because Android limits background network activity for applications without push services, the client checks the server for new messages approximately every 15 minutes while in the background. When the application is open, messages are delivered immediately.
 
 Requirements:
-• MikroTik CHR or ARM64 RouterOS device with Container package enabled.
+• MikroTik CHR or ARM64/ARM32 RouterOS device with Container package enabled.
 
 The server files for Docker containers and installation instructions can be found on the project page:
 https://github.com/safelogJ/lim
