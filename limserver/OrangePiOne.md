@@ -29,7 +29,19 @@ sudo mkdir -p /opt/limserver/db /opt/limserver/media
 
 ---
 
-## 3. Копирование файлов на Orange Pi / Copying Files to Orange Pi
+## 3. Генерация SSL-сертификата (если нет готового) / Generating SSL Certificate (Optional)
+
+Если у вас нет готового SSL-сертификата `.p12` (например, из MikroTik), сгенерируйте его одной командой с помощью утилиты `keytool` (выполнять в `cmd` или `PowerShell` на ПК):
+If you do not have a ready-made `.p12` SSL certificate (e.g. from MikroTik), generate one using Java's `keytool` utility (run in `cmd` or `PowerShell` on PC):
+
+```cmd
+# Генерация SSL-сертификата .p12 с явным указанием пути / Generating .p12 SSL certificate with explicit output path
+keytool -genkeypair -alias limserver -keyalg RSA -keysize 2048 -storetype PKCS12 -keystore "C:\Users\attl\Downloads\limcert.p12" -validity 3650 -storepass limservercert -ext SAN=ip:192.168.88.4 -dname "CN=LimServer"
+```
+
+---
+
+## 4. Копирование файлов на Orange Pi / Copying Files to Orange Pi
 
 Скопируйте с вашего компьютера файлы проекта в соответствующие директории (выполнять в `cmd` или `PowerShell` на ПК):
 Copy project files from your PC to corresponding directories (run in `cmd` or `PowerShell` on PC):
@@ -45,7 +57,7 @@ C:\Windows\System32\OpenSSH\scp.exe "C:\Users\attl\Downloads\limcert.p12" root@1
 
 ---
 
-## 4. Настройка автозапуска через systemd / Configuring Auto-start via systemd
+## 5. Настройка автозапуска через systemd / Configuring Auto-start via systemd
 
 Создаем файл службы systemd:
 Create systemd service file:
@@ -78,7 +90,8 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 ```
-
+(Чтобы сохранить и выйти в nano: нажмите Ctrl + O, затем Enter, затем Ctrl + X).
+(To save and exit nano: press Ctrl + O, then Enter, then Ctrl + X).
 Применяем конфигурацию и запускаем службу:
 Apply configuration and start the service:
 
@@ -95,7 +108,7 @@ sudo systemctl start limserver
 
 ---
 
-## 5. Управление службой и просмотр логов / Managing Service & Viewing Logs
+## 6. Управление службой и просмотр логов / Managing Service & Viewing Logs
 
 - **Проверить статус работы сервера / Check server status:**
   ```bash
